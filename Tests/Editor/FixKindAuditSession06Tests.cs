@@ -371,14 +371,10 @@ namespace ApexForge.ProjectOptimizer.Tests
                         output.Write(png, chunkStart, chunkBytes);
                         sawHeader |= type == "IHDR";
                         sawData |= type == "IDAT";
-                        if (type == "IEND")
-                        {
-                            sawEnd = true;
-                            offset += chunkBytes;
-                            break;
-                        }
+                        if (type == "IEND") sawEnd = true;
                     }
                     offset += chunkBytes;
+                    if (type == "IEND") break;
                 }
                 if (!sawHeader || !sawData || !sawEnd || offset != png.Length)
                     throw new InvalidDataException("PNG fixture is incomplete or has trailing bytes.");
