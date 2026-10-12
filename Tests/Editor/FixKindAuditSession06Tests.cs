@@ -294,6 +294,19 @@ namespace ApexForge.ProjectOptimizer.Tests
         {
             MethodInfo method = typeof(TextureAnalyzer).GetMethod(name, StaticNonPublic | BindingFlags.Public);
             Assert.IsNotNull(method, name);
+            var parameters = method.GetParameters();
+            if (args.Length < parameters.Length)
+            {
+                var expanded = new object[parameters.Length];
+                Array.Copy(args, expanded, args.Length);
+                for (int i = args.Length; i < parameters.Length; i++)
+                {
+                    Assert.IsTrue(parameters[i].IsOptional, name + " has an unexpected required parameter at index " + i);
+                    expanded[i] = parameters[i].DefaultValue;
+                }
+                args = expanded;
+            }
+            Assert.AreEqual(parameters.Length, args.Length, name + " argument count");
             return (T)method.Invoke(null, args);
         }
 
@@ -329,9 +342,43 @@ namespace ApexForge.ProjectOptimizer.Tests
             {
                 texture.SetPixels32(pixels);
                 texture.Apply(false, false);
-                return ImageConversion.EncodeToPNG(texture);
+                return KeepOnlyStandardPngChunks(ImageConversion.EncodeToPNG(texture));
             }
             finally { UnityEngine.Object.DestroyImmediate(texture); }
+        }
+
+        // Positive fixtures obey PAA001's canonical IHDR/IDAT/IEND contract independently of
+        // ancillary color/profile chunks emitted by different Editor versions.
+        static byte[] KeepOnlyStandardPngChunks(byte[] png)
+        {
+            if (png == null || png.Length < 8) throw new InvalidDataException("PNG fixture is too short.");
+            using (var output = new MemoryStream())
+            {
+                output.Write(png, 0, 8);
+                int offset = 8;
+                bool sawHeader = false, sawData = false, sawEnd = false;
+                while (offset + 12 <= png.Length)
+                {
+                    int chunkStart = offset;
+                    uint chunkLength = ((uint)png[offset] << 24) | ((uint)png[offset + 1] << 16)
+                        | ((uint)png[offset + 2] << 8) | png[offset + 3];
+                    if (chunkLength > int.MaxValue || (long)offset + 12 + chunkLength > png.Length)
+                        throw new InvalidDataException("PNG fixture has an invalid chunk length.");
+                    string type = System.Text.Encoding.ASCII.GetString(png, offset + 4, 4);
+                    int chunkBytes = checked((int)chunkLength + 12);
+                    if (type == "IHDR" || type == "IDAT" || type == "IEND")
+                    {
+                        output.Write(png, chunkStart, chunkBytes);
+                        sawHeader |= type == "IHDR";
+                        sawData |= type == "IDAT";
+                        if (type == "IEND") { sawEnd = true; offset += chunkBytes; break; }
+                    }
+                    offset += chunkBytes;
+                }
+                if (!sawHeader || !sawData || !sawEnd || offset != png.Length)
+                    throw new InvalidDataException("PNG fixture is incomplete or has trailing bytes.");
+                return output.ToArray();
+            }
         }
 
         static byte[] InsertChunkBeforeIdat(byte[] png, string type, byte[] data)
