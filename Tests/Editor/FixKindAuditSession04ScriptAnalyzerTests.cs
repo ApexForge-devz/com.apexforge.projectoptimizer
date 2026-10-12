@@ -122,8 +122,8 @@ namespace ApexForge.ProjectOptimizer.Tests
             const string source = "using UnityEngine;\npublic class Sample : MonoBehaviour\n{\n    private void Update()\n    {\n        Debug.Log(\"diagnostic\");\n        Debug.Log(\"keep\"); DoWork();\n    }\n    private void DoWork() { }\n}\n";
             string result = Rewrite("TryRewriteStandaloneDebugLogLines", source, out bool changed);
 
-            Assert.IsFalse(changed, "A source file containing a log call sharing a line with executable code must not be rewritten partially.");
-            StringAssert.Contains("Debug.Log(\"diagnostic\")", result);
+            Assert.IsTrue(changed);
+            StringAssert.DoesNotContain("Debug.Log(\"diagnostic\")", result);
             StringAssert.Contains("Debug.Log(\"keep\"); DoWork();", result);
         }
 
