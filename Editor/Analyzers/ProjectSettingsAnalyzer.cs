@@ -3551,7 +3551,10 @@ namespace ApexForge.ProjectOptimizer
 		/// <summary>Policy helper: raise only Disabled/Minimal to the user's preferred Low; preserve Low and stronger levels.</summary>
 		internal static ManagedStrippingLevel PreferredManagedStrippingLevel(ManagedStrippingLevel current)
 		{
-			return (int)current < (int)ManagedStrippingLevel.Low ? ManagedStrippingLevel.Low : current;
+			// Apply the policy by named state, not by numeric enum ordering.
+			return current == ManagedStrippingLevel.Disabled || current == ManagedStrippingLevel.Minimal
+				? ManagedStrippingLevel.Low
+				: current;
 		}
 
 		internal static int ClampUrpMobileMsaa(int current) => current > 4 ? 4 : current;
