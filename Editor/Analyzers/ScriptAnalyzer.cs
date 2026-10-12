@@ -1895,21 +1895,26 @@ namespace ApexForge.ProjectOptimizer
 				int after = close + 1;
 				while (after < range.CloseBrace && (code[after] == ' ' || code[after] == '\t' || code[after] == '\r')) after++;
 				if (after >= range.CloseBrace || code[after] != ';') continue;
+
 				int lineStart = source.LastIndexOf('\n', Math.Max(0, match.Index - 1)) + 1;
-				int lineEnd = after + 1;
-				while (lineEnd < source.Length && (source[lineEnd] == ' ' || source[lineEnd] == '\t')) lineEnd++;
+				int lineContentEnd = source.IndexOf('\n', after + 1);
+				if (lineContentEnd < 0) lineContentEnd = source.Length;
+				if (lineContentEnd > lineStart && source[lineContentEnd - 1] == '\r') lineContentEnd--;
+
+				// Only remove log calls that occupy the whole physical line. Preserve any executable
+				// statement after the semicolon, e.g. "Debug.Log(...); DoWork();".
+				if (!string.IsNullOrWhiteSpace(code.Substring(lineStart, match.Index - lineStart))) continue;
+				if (!string.IsNullOrWhiteSpace(code.Substring(after + 1, lineContentEnd - (after + 1)))) continue;
+
+				int lineEnd = lineContentEnd;
 				if (lineEnd < source.Length && source[lineEnd] == '\r') lineEnd++;
 				if (lineEnd < source.Length && source[lineEnd] == '\n') lineEnd++;
-				// A standalone statement occupies its whole line; don't delete multiple statements together.
-				if (!string.IsNullOrWhiteSpace(code.Substring(lineStart, match.Index - lineStart))) continue;
-				if (!string.IsNullOrWhiteSpace(code.Substring(after + 1, (lineEnd > after + 1 && source[lineEnd - 1] == '\n' ? lineEnd - 1 : lineEnd) - (after + 1)))) continue;
-				edits.Add(new SourceEdit { Start = lineStart, Length = lineEnd - lineStart });
+				edits.Add(new SourceEdit { Start = lineStart, Length = lineEnd - lineStart, Replacement = string.Empty });
 			}
 			if (edits.Count == 0) return false;
 			foreach (var edit in edits.OrderByDescending(e => e.Start)) rewritten = rewritten.Remove(edit.Start, edit.Length);
 			return true;
 		}
-
 		static void ApplyStandaloneDebugLogFix(FixContext context)
 			=> ApplySourceRewrite(context, "SCR005", TryRewriteStandaloneDebugLogLines);
 
