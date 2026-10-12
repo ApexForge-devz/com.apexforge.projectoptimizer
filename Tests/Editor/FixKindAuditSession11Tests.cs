@@ -4,6 +4,7 @@ using System.IO;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.U2D;
 using UnityEngine;
 using UnityEngine.U2D;
