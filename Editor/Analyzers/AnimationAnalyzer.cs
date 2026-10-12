@@ -112,8 +112,9 @@ namespace ApexForge.ProjectOptimizer
 							why: "Optimize Game Objects can flatten transform-only parts of an imported character hierarchy, reducing Animator CPU work. It can also break scripts or systems that expect those transforms to exist as GameObjects.",
 							fix: "Enable Optimize Game Objects for eligible Generic/Humanoid imports; expose required transform paths or revert the setting on exceptional assets.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Verified,
-							confidence: OptimizationConfidence.Heuristic,
+							fixKind: FixKind.Review,
+							confidence: OptimizationConfidence.HighConfidence,
+							recommendationConfidence: OptimizationConfidence.Heuristic,
 							risk: FixRisk.Medium,
 							backupRequired: true
 							);
@@ -122,10 +123,11 @@ namespace ApexForge.ProjectOptimizer
 							why: "Humanoid retargeting already resamples animation during import. Oversampling at 4x or 8x can substantially increase the number of sampled keys and the resulting animation data size; Unity documents 4x/8x as options for very fast motions and explicitly cautions that 8x can produce a large output file.",
 							fix: "Set Humanoid Oversampling to X1 by default; restore higher sampling on any asset where motion quality requires it.",
 							severity: IssueSeverity.Warning,
-							fixKind: FixKind.Verified,
-							confidence: OptimizationConfidence.Heuristic,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							fixKind: FixKind.Review,
+							confidence: OptimizationConfidence.HighConfidence,
+							recommendationConfidence: OptimizationConfidence.Heuristic,
+							risk: FixRisk.Medium,
+							backupRequired: true
 							);
 		}
 
