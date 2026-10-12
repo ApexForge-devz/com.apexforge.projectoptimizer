@@ -371,7 +371,12 @@ namespace ApexForge.ProjectOptimizer.Tests
                         output.Write(png, chunkStart, chunkBytes);
                         sawHeader |= type == "IHDR";
                         sawData |= type == "IDAT";
-                        if (type == "IEND") { sawEnd = true; offset += chunkBytes; break; }
+                        if (type == "IEND")
+                        {
+                            sawEnd = true;
+                            offset += chunkBytes;
+                            break;
+                        }
                     }
                     offset += chunkBytes;
                 }
