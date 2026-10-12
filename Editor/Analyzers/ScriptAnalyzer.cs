@@ -243,7 +243,7 @@ namespace ApexForge.ProjectOptimizer
 							why: "Resources.Load is an explicit dependency on Unity's Resources system. Assets in Resources are made independently loadable and can contribute to the build's resources data; widespread use can complicate memory, build-size, and asset-management control.",
 							fix: "For production content, prefer explicit references or the project's asset-management system such as Addressables where appropriate. If Resources is intentional, keep loads out of hot paths and manage lifetime explicitly.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.None,
 							confidence: OptimizationConfidence.Diagnostic,
 							risk: FixRisk.Unspecified,
 							backupRequired: false
