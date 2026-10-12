@@ -1895,17 +1895,14 @@ namespace ApexForge.ProjectOptimizer
 				int after = close + 1;
 				while (after < range.CloseBrace && (code[after] == ' ' || code[after] == '\t' || code[after] == '\r')) after++;
 				if (after >= range.CloseBrace || code[after] != ';') continue;
-
 				int lineStart = source.LastIndexOf('\n', Math.Max(0, match.Index - 1)) + 1;
 				int lineContentEnd = source.IndexOf('\n', after + 1);
 				if (lineContentEnd < 0) lineContentEnd = source.Length;
 				if (lineContentEnd > lineStart && source[lineContentEnd - 1] == '\r') lineContentEnd--;
-
-				// Only remove log calls that occupy the whole physical line. Preserve any executable
-				// statement after the semicolon, e.g. "Debug.Log(...); DoWork();".
+				// Only remove log calls that occupy the entire physical line. Never erase another
+				// executable statement sharing that line, such as "Debug.Log(...); DoWork();".
 				if (!string.IsNullOrWhiteSpace(code.Substring(lineStart, match.Index - lineStart))) continue;
 				if (!string.IsNullOrWhiteSpace(code.Substring(after + 1, lineContentEnd - (after + 1)))) continue;
-
 				int lineEnd = lineContentEnd;
 				if (lineEnd < source.Length && source[lineEnd] == '\r') lineEnd++;
 				if (lineEnd < source.Length && source[lineEnd] == '\n') lineEnd++;
