@@ -378,11 +378,37 @@ namespace ApexForge.ProjectOptimizer.Tests
             var textureSettings = atlas.GetTextureSettings();
             textureSettings.generateMipMaps = false;
             atlas.SetTextureSettings(textureSettings);
+
+            // Avoid platform settings whose serialized format is unset (0), which makes Unity's
+            // packer emit "Image invalid format!" before atlas analyzer assertions can execute.
+            SetExplicitPackFormat(atlas, "DefaultTexturePlatform");
+            string activePlatform = NamedBuildTarget.FromBuildTargetGroup(
+                BuildPipeline.GetBuildTargetGroup(EditorUserBuildSettings.activeBuildTarget)).TargetName;
+            SetExplicitPackFormat(atlas, activePlatform);
+            string selectedPlatform = PlatformUtility.GetAnalyzerTargetPlatform(
+                new ScanContext { Settings = m_Settings }, "DefaultTexturePlatform");
+            if (!string.IsNullOrEmpty(selectedPlatform)) SetExplicitPackFormat(atlas, selectedPlatform);
+
             AssetDatabase.SaveAssets();
             SpriteAtlasUtility.PackAtlases(new[] { atlas }, EditorUserBuildSettings.activeBuildTarget, false);
             AssetDatabase.SaveAssets();
             AssetDatabase.ImportAsset(atlasPath, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+            atlas = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(atlasPath);
+            Assert.IsNotNull(atlas, "Packed Sprite Atlas fixture could not be reloaded.");
+            Assert.Greater(atlas.spriteCount, 0, "Sprite Atlas fixture must contain packed sprite content.");
             return atlasPath;
+        }
+
+        static void SetExplicitPackFormat(SpriteAtlas atlas, string platform)
+        {
+            if (atlas == null || string.IsNullOrWhiteSpace(platform)) return;
+            var settings = atlas.GetPlatformSettings(platform);
+            settings.name = platform;
+            settings.overridden = true;
+            settings.textureCompression = TextureImporterCompression.Uncompressed;
+            settings.format = TextureImporterFormat.RGBA32;
+            settings.crunchedCompression = false;
+            atlas.SetPlatformSettings(settings);
         }
 
         static void SetPlatformCompression(SpriteAtlas atlas, string platform, TextureImporterCompression compression)

@@ -261,9 +261,8 @@ namespace ApexForge.ProjectOptimizer.Tests
 
             try
             {
-                // LoadPrefabContents returns the root; Transform.Find paths are relative to it.
-                // PathsAreAbsent compares the same root-qualified hierarchy paths used by Path(Transform).
-                var paths = new List<string> { "Root/GameObject" };
+                // Path(Transform) omits the prefab root object, so this child's stored path is just its name.
+                var paths = new List<string> { "GameObject" };
                 Assert.IsFalse(InvokeAnalyzerHelper<bool>("PathsAreAbsent", new object[] { assetPath, false, paths }),
                     "The postcondition must fail while a captured target path still exists.");
                 var editable = PrefabUtility.LoadPrefabContents(assetPath);

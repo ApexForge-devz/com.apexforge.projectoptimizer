@@ -1314,6 +1314,20 @@ namespace ApexForge.ProjectOptimizer
 				return false;
 			}
 
+			// A Verified finding's captured asset identity can only authorize a mutation on that
+			// same asset. Revalidating the signature against Issue.AssetEvidencePath alone is
+			// insufficient if a caller pairs the issue with another Entry in the same request.
+			if (!string.IsNullOrEmpty(issue.AssetEvidencePath)
+				&& !string.Equals(issue.AssetEvidencePath.Replace('\\', '/'),
+					request.Entry.Path.Replace('\\', '/'), StringComparison.Ordinal))
+			{
+				if (report != null) report.Blocked++;
+				report?.Errors.Add("Blocked fix " + (issue.RuleId ?? "<unknown>") + " on " + request.Entry.Path
+					+ ": the finding's asset evidence belongs to " + issue.AssetEvidencePath
+					+ " and cannot authorize a mutation of a different asset.");
+				return false;
+			}
+
 			if (issue.Stale)
 			{
 				if (report != null) report.Blocked++;

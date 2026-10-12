@@ -211,8 +211,10 @@ namespace ApexForge.ProjectOptimizer.Tests
             // Pair evidence captured for one asset with a different target path; the fix must not run.
             var request = new FixRequest { Entry = wrongEntry, Issue = issue };
             var report = FixEngine.Apply(new[] { request }, true, FixExecutionMode.VerifiedSingle);
+            Assert.AreEqual(1, report.Blocked,
+                "Evidence attached to a different asset must be blocked before any action begins. Errors: " + string.Join("\n", report.Errors));
             Assert.AreEqual(0, report.AppliedVerified + report.AppliedUnverified,
-                "Wrong-target evidence must not result in a verified or unverified mutation. Errors: " + string.Join("\n", report.Errors));
+                "Wrong-target evidence must not result in a verified or unverified mutation.");
             Assert.IsTrue(ReadEffectiveSampleSettings((AudioImporter)AssetImporter.GetAtPath(wrongPath)).preloadAudioData,
                 "Evidence for one clip must never authorize mutation of another clip.");
         }

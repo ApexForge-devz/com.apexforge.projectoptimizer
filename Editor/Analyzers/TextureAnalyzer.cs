@@ -2000,8 +2000,15 @@ namespace ApexForge.ProjectOptimizer
                 if (type == "IHDR")
                 {
                     if (seenHeader || length != 13) return false;
-                    int bitDepth = bytes[offset]; colorType = bytes[offset + 1];
-                    if (bitDepth != 8 || (colorType != 2 && colorType != 6) || bytes[offset + 2] != 0 || bytes[offset + 3] != 0 || bytes[offset + 4] != 0) return false;
+                    uint width = ReadBigEndianUInt32(bytes, offset);
+                    uint height = ReadBigEndianUInt32(bytes, offset + 4);
+                    int bitDepth = bytes[offset + 8];
+                    colorType = bytes[offset + 9];
+                    // IHDR begins with 4-byte width and height; bit depth, color type, compression,
+                    // filter and interlace follow those eight bytes. Validate the actual IHDR fields.
+                    if (width == 0 || height == 0 || width > int.MaxValue || height > int.MaxValue
+                        || bitDepth != 8 || (colorType != 2 && colorType != 6)
+                        || bytes[offset + 10] != 0 || bytes[offset + 11] != 0 || bytes[offset + 12] != 0) return false;
                     seenHeader = true;
                 }
                 else if (type == "IDAT") { if (!seenHeader || seenEnd) return false; seenData = true; }
