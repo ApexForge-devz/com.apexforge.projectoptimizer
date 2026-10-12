@@ -1,0 +1,36 @@
+/* Theme: Silver - Neutral silver surfaces with a crisp steel accent and cool violet support.
+ *
+ * Light editor palette with soft surfaces, clear hierarchy, and a readable accent.
+ * This file defines only ProjectOptimizer's --po-* theme tokens; layout remains in the base stylesheet.
+ */
+
+.po-root {
+    --po-bg: rgb(231, 233, 236);
+    --po-panel: rgb(240, 241, 243);
+    --po-panel-2: rgb(248, 248, 249);
+    --po-panel-3: rgb(221, 223, 225);
+    --po-panel-4: rgb(207, 209, 211);
+    --po-border: rgb(203, 205, 208);
+    --po-border-soft: rgba(0, 0, 0, 0.05);
+    --po-text: rgb(25, 26, 26);
+    --po-text-dim: rgb(88, 89, 90);
+    --po-text-faint: rgb(134, 135, 137);
+
+    --po-accent: rgb(83, 103, 125);
+    --po-accent-2: rgb(117, 108, 182);
+    --po-accent-soft: rgba(83, 103, 125, 0.12);
+    --po-accent-soft-2: rgba(83, 103, 125, 0.22);
+    --po-accent-strong: rgb(72, 90, 109);
+
+    --po-critical: rgb(198, 57, 72);
+    --po-critical-soft: rgba(198, 57, 72, 0.12);
+    --po-warning: rgb(165, 103, 0);
+    --po-warning-soft: rgba(165, 103, 0, 0.12);
+    --po-info: rgb(105, 97, 164);
+    --po-info-soft: rgba(105, 97, 164, 0.12);
+    --po-success: rgb(27, 137, 98);
+    --po-success-soft: rgba(27, 137, 98, 0.12);
+
+    --po-select-bg: rgb(190, 197, 205);
+    --po-select-bg-inactive: rgb(208, 210, 212);
+}

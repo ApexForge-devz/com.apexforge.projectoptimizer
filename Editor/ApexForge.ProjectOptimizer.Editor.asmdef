@@ -1,0 +1,14 @@
+{
+  "name": "ApexForge.ProjectOptimizer.Editor",
+  "rootNamespace": "ApexForge.ProjectOptimizer",
+  "references": ["UnityEngine.UI"],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": ["UNITY_6000_0_OR_NEWER"],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

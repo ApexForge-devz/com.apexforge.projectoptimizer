@@ -1,0 +1,41 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using UnityEditor;
+using UnityEngine;
+namespace ApexForge.ProjectOptimizer
+{
+    public static class RuntimeReportImporter
+    {
+        [Serializable] sealed class Report { public int version; public string generatedAtUtc; public string unityVersion; public string platform; public string scenario; public string buildId; public string commitId; public string captureMode; public bool isPlayerBuild; public string projectFingerprint; public string buildProfilePath; public string buildProfileGuid; public string contentIdentity; public string captureCharacteristics; public double warmupSeconds; public bool warmupCompleted; public bool captureCompleted; public string completionReason; public List<Sample> samples = new List<Sample>(); }
+        [Serializable] sealed class Sample { public double timestamp; public float frameTimeMs,cpuTotalFrameMs,mainThreadMs,renderThreadMs,gpuMs; public long gcBytes,totalUsedMemoryBytes,textureBytes,batches,vertices,visibleSkinnedMeshes; public bool frameTimeValid,cpuTotalFrameValid,mainThreadValid,renderThreadValid,gpuValid,gcValid,totalMemoryValid,textureValid,batchesValid,verticesValid,visibleSkinnedMeshesValid; public string frameTimeEvidence,cpuTotalEvidence,mainThreadEvidence,renderThreadEvidence,gpuEvidence,metricEvidence; public string frameTimeQuality,cpuTotalQuality,mainThreadQuality,renderThreadQuality,gpuQuality; public string metricEvidenceGc,metricEvidenceMemory,metricEvidenceTexture,metricEvidenceBatches,metricEvidenceVertices,metricEvidenceVisibleSkinned; }
+        public static void Import()
+        {
+            string path=EditorUtility.OpenFilePanel("Import Project Optimizer Runtime Report",Application.dataPath,"json"); if(string.IsNullOrEmpty(path))return;
+            try { var report=JsonUtility.FromJson<Report>(File.ReadAllText(path)); if(report==null||report.version<6||report.samples==null||report.samples.Count==0){Debug.LogWarning(ProjectOptimizerConstants.LogPrefix + " Runtime report is empty or invalid.");return;} RuntimeEvidenceSnapshot snapshot=Build(report,path); RuntimeEvidenceStore.Save(snapshot); Feedback.Success("Imported Player runtime evidence: "+report.samples.Count.ToString("N0",CultureInfo.InvariantCulture)+" samples."); }
+            catch(Exception e){Debug.LogWarning(ProjectOptimizerConstants.LogPrefix + " Runtime report import failed: "+e.Message);}
+        }
+        static RuntimeEvidenceSnapshot Build(Report r,string sourcePath)
+        {
+            var buildReport = BuildReportStore.LoadLatest();
+            bool buildMatches = buildReport != null && buildReport.summary != null && !string.IsNullOrEmpty(r.buildId) && string.Equals(buildReport.summary.guid, r.buildId, StringComparison.OrdinalIgnoreCase);
+            string profilePath = string.IsNullOrEmpty(r.buildProfilePath) && buildMatches ? buildReport.summary.buildProfilePath : r.buildProfilePath;
+            string profileGuid = string.IsNullOrEmpty(r.buildProfileGuid) && buildMatches ? buildReport.summary.buildProfileGuid : r.buildProfileGuid;
+            string contentIdentity = string.IsNullOrEmpty(r.contentIdentity) && buildMatches ? buildReport.summary.contentIdentity : r.contentIdentity;
+            string commitId = string.IsNullOrEmpty(r.commitId) && buildMatches ? buildReport.summary.commitId : r.commitId;
+            string projectFingerprint = string.IsNullOrEmpty(r.projectFingerprint) && buildMatches ? buildReport.summary.projectFingerprint : r.projectFingerprint;
+            bool complete = r.captureCompleted && r.warmupCompleted && r.samples.Count >= 2;
+            var s=new RuntimeEvidenceSnapshot{Version=6,UnityVersion=r.unityVersion,TimestampUtc=string.IsNullOrEmpty(r.generatedAtUtc)?DateTime.UtcNow.ToString("O",CultureInfo.InvariantCulture):r.generatedAtUtc,Platform=r.platform,CaptureMode=string.IsNullOrEmpty(r.captureMode)?"Imported Player report":r.captureMode,Scenario=r.scenario,BuildId=r.buildId,CommitId=commitId,ProjectFingerprint=projectFingerprint,BuildProfilePath=profilePath,BuildProfileGuid=profileGuid,ContentIdentity=contentIdentity,CaptureCharacteristics=string.IsNullOrEmpty(r.captureCharacteristics)?"Imported report; collector-defined capture characteristics unavailable":r.captureCharacteristics,SourcePath=sourcePath,IsPlayerBuild=r.isPlayerBuild||string.Equals(r.platform,"Player",StringComparison.OrdinalIgnoreCase),WarmupSeconds=Math.Max(0,r.warmupSeconds),FrameSamples=r.samples.Count,IsComplete=complete,EvidenceQuality=complete?"Unconfirmed":"InsufficientSamples",CompletionReason=string.IsNullOrEmpty(r.completionReason)?"Runtime capture did not provide a sufficient-sample completion state.":r.completionReason,DurationSeconds=r.samples.Count>1?Math.Max(0,r.samples[r.samples.Count-1].timestamp-r.samples[0].timestamp):0,Note="Imported runtime collector report. Build identity is corroborated only when the build GUID and stored Unity BuildReport identity agree."};
+            s.EvidenceState = RuntimeEvidenceStore.EvaluateState(s, out var reason);
+            s.EvidenceQuality = s.EvidenceState.ToString();
+            s.Note += " State=" + s.EvidenceState + ". " + reason;
+            Add(s,"CPU Frame Time","ms",r.samples.Where(x=>x.frameTimeValid).Select(x=>(double)x.frameTimeMs),EvidenceWithQuality(r.samples.Select(x=>x.frameTimeEvidence), r.samples.Select(x=>x.frameTimeQuality))); Add(s,"CPU Total Frame","ms",r.samples.Where(x=>x.cpuTotalFrameValid).Select(x=>(double)x.cpuTotalFrameMs),EvidenceWithQuality(r.samples.Select(x=>x.cpuTotalEvidence), r.samples.Select(x=>x.cpuTotalQuality))); Add(s,"Main Thread","ms",r.samples.Where(x=>x.mainThreadValid).Select(x=>(double)x.mainThreadMs),Evidence(r.samples.Select(x=>x.mainThreadEvidence))); Add(s,"Render Thread","ms",r.samples.Where(x=>x.renderThreadValid).Select(x=>(double)x.renderThreadMs),Evidence(r.samples.Select(x=>x.renderThreadEvidence))); Add(s,"GPU Frame","ms",r.samples.Where(x=>x.gpuValid).Select(x=>(double)x.gpuMs),Evidence(r.samples.Select(x=>x.gpuEvidence))); Add(s,"GC Allocated In Frame","bytes",r.samples.Where(x=>x.gcValid).Select(x=>(double)x.gcBytes),Evidence(r.samples.Select(x=>x.metricEvidenceGc))); Add(s,"Total Used Memory","bytes",r.samples.Where(x=>x.totalMemoryValid).Select(x=>(double)x.totalUsedMemoryBytes),Evidence(r.samples.Select(x=>x.metricEvidenceMemory))); Add(s,"Texture Memory","bytes",r.samples.Where(x=>x.textureValid).Select(x=>(double)x.textureBytes),Evidence(r.samples.Select(x=>x.metricEvidenceTexture))); Add(s,"Batches Count","count",r.samples.Where(x=>x.batchesValid).Select(x=>(double)x.batches),Evidence(r.samples.Select(x=>x.metricEvidenceBatches))); Add(s,"Vertices Count","count",r.samples.Where(x=>x.verticesValid).Select(x=>(double)x.vertices),Evidence(r.samples.Select(x=>x.metricEvidenceVertices))); Add(s,"Visible Skinned Meshes Count","count",r.samples.Where(x=>x.visibleSkinnedMeshesValid).Select(x=>(double)x.visibleSkinnedMeshes),Evidence(r.samples.Select(x=>x.metricEvidenceVisibleSkinned))); return s;
+        }
+        static void Add(RuntimeEvidenceSnapshot s,string n,string u,IEnumerable<double> values,string evidence){var v=values.Where(x=>x>=0).ToArray();if(v.Length==0)return;Array.Sort(v);double sum=0,max=double.MinValue;foreach(var x in v){sum+=x;if(x>max)max=x;}s.Metrics.Add(new RuntimeEvidenceMetric{Name=n,Unit=u,Samples=v.Length,Average=sum/v.Length,Max=max,Last=v[v.Length-1],P50=At(v,.5),P95=At(v,.95),Evidence=evidence});}
+        static string Evidence(IEnumerable<string> values){var set=new HashSet<string>(values.Where(x=>!string.IsNullOrEmpty(x))); if(set.Count==0)return "Unavailable"; return string.Join(" + ",set.ToArray());}
+        static string EvidenceWithQuality(IEnumerable<string> evidence,IEnumerable<string> quality){string e=Evidence(evidence); var q=new HashSet<string>(quality.Where(x=>!string.IsNullOrEmpty(x))); return q.Count==0?e:e+" ["+string.Join(" + ",q.ToArray())+"]";}
+        static double At(double[] a,double p){if(a.Length==0)return 0;double i=(a.Length-1)*p;int lo=(int)Math.Floor(i),hi=(int)Math.Ceiling(i);return lo==hi?a[lo]:a[lo]+(a[hi]-a[lo])*(i-lo);}
+    }
+}

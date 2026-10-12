@@ -1,0 +1,35 @@
+/* Theme: Amethyst (Dark) - muted purple-grey panels with a soft lavender accent.
+ * Softer and calmer than Nebula's saturated magenta. See ProjectOptimizerTheme_Obsidian.uss for
+ * what these tokens mean.
+ */
+
+.po-root {
+    --po-bg: rgb(16, 14, 20);
+    --po-panel: rgb(22, 19, 28);
+    --po-panel-2: rgb(29, 25, 36);
+    --po-panel-3: rgb(40, 34, 50);
+    --po-panel-4: rgb(51, 44, 64);
+    --po-border: rgb(48, 41, 60);
+    --po-border-soft: rgba(255, 255, 255, 0.05);
+    --po-text: rgb(228, 224, 238);
+    --po-text-dim: rgb(162, 154, 182);
+    --po-text-faint: rgb(110, 102, 130);
+
+    --po-accent: rgb(170, 140, 255);
+    --po-accent-2: rgb(255, 160, 210);
+    --po-accent-soft: rgba(170, 140, 255, 0.16);
+    --po-accent-soft-2: rgba(170, 140, 255, 0.28);
+    --po-accent-strong: rgb(190, 165, 255);
+
+    --po-critical: rgb(255, 100, 110);
+    --po-critical-soft: rgba(255, 100, 110, 0.16);
+    --po-warning: rgb(240, 180, 90);
+    --po-warning-soft: rgba(240, 180, 90, 0.16);
+    --po-info: rgb(140, 180, 255);
+    --po-info-soft: rgba(140, 180, 255, 0.16);
+    --po-success: rgb(120, 215, 165);
+    --po-success-soft: rgba(120, 215, 165, 0.16);
+
+    --po-select-bg: rgb(80, 65, 115);
+    --po-select-bg-inactive: rgb(50, 44, 62);
+}

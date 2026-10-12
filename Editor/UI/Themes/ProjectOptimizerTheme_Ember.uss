@@ -1,0 +1,34 @@
+/* Theme: Ember (Dark) - warm charcoal-brown panels with a glowing orange accent.
+ * See ProjectOptimizerTheme_Obsidian.uss for what these tokens mean.
+ */
+
+.po-root {
+    --po-bg: rgb(19, 15, 13);
+    --po-panel: rgb(27, 21, 18);
+    --po-panel-2: rgb(35, 27, 23);
+    --po-panel-3: rgb(47, 36, 30);
+    --po-panel-4: rgb(59, 45, 38);
+    --po-border: rgb(55, 42, 35);
+    --po-border-soft: rgba(255, 255, 255, 0.05);
+    --po-text: rgb(238, 228, 220);
+    --po-text-dim: rgb(180, 158, 142);
+    --po-text-faint: rgb(126, 108, 94);
+
+    --po-accent: rgb(255, 140, 55);
+    --po-accent-2: rgb(255, 90, 90);
+    --po-accent-soft: rgba(255, 140, 55, 0.18);
+    --po-accent-soft-2: rgba(255, 140, 55, 0.30);
+    --po-accent-strong: rgb(255, 165, 90);
+
+    --po-critical: rgb(255, 90, 80);
+    --po-critical-soft: rgba(255, 90, 80, 0.16);
+    --po-warning: rgb(255, 195, 70);
+    --po-warning-soft: rgba(255, 195, 70, 0.16);
+    --po-info: rgb(110, 190, 210);
+    --po-info-soft: rgba(110, 190, 210, 0.16);
+    --po-success: rgb(140, 210, 120);
+    --po-success-soft: rgba(140, 210, 120, 0.16);
+
+    --po-select-bg: rgb(120, 75, 40);
+    --po-select-bg-inactive: rgb(60, 46, 38);
+}

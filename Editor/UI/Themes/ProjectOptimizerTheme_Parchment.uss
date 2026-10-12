@@ -1,0 +1,36 @@
+/* Theme: Parchment - Old-paper cream surfaces with a sepia accent and restrained forest-green support.
+ *
+ * Light editor palette with soft surfaces, clear hierarchy, and a readable accent.
+ * This file defines only ProjectOptimizer's --po-* theme tokens; layout remains in the base stylesheet.
+ */
+
+.po-root {
+    --po-bg: rgb(240, 232, 212);
+    --po-panel: rgb(246, 241, 228);
+    --po-panel-2: rgb(250, 248, 242);
+    --po-panel-3: rgb(229, 222, 202);
+    --po-panel-4: rgb(215, 208, 190);
+    --po-border: rgb(211, 204, 187);
+    --po-border-soft: rgba(0, 0, 0, 0.05);
+    --po-text: rgb(26, 26, 23);
+    --po-text-dim: rgb(91, 88, 81);
+    --po-text-faint: rgb(139, 135, 123);
+
+    --po-accent: rgb(139, 99, 39);
+    --po-accent-2: rgb(79, 121, 87);
+    --po-accent-soft: rgba(139, 99, 39, 0.12);
+    --po-accent-soft-2: rgba(139, 99, 39, 0.22);
+    --po-accent-strong: rgb(121, 86, 34);
+
+    --po-critical: rgb(198, 57, 72);
+    --po-critical-soft: rgba(198, 57, 72, 0.12);
+    --po-warning: rgb(165, 103, 0);
+    --po-warning-soft: rgba(165, 103, 0, 0.12);
+    --po-info: rgb(71, 109, 78);
+    --po-info-soft: rgba(71, 109, 78, 0.12);
+    --po-success: rgb(27, 137, 98);
+    --po-success-soft: rgba(27, 137, 98, 0.12);
+
+    --po-select-bg: rgb(212, 195, 164);
+    --po-select-bg-inactive: rgb(216, 209, 191);
+}

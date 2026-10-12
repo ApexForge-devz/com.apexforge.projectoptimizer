@@ -1,0 +1,35 @@
+/* Theme: Crimson (Dark) - black with a deep red undertone, a bold crimson accent.
+ * The most aggressive of the dark themes by design. See ProjectOptimizerTheme_Obsidian.uss for
+ * what these tokens mean.
+ */
+
+.po-root {
+    --po-bg: rgb(18, 10, 11);
+    --po-panel: rgb(26, 15, 17);
+    --po-panel-2: rgb(34, 20, 23);
+    --po-panel-3: rgb(46, 28, 31);
+    --po-panel-4: rgb(58, 36, 40);
+    --po-border: rgb(54, 32, 36);
+    --po-border-soft: rgba(255, 255, 255, 0.05);
+    --po-text: rgb(240, 225, 226);
+    --po-text-dim: rgb(178, 148, 150);
+    --po-text-faint: rgb(122, 96, 98);
+
+    --po-accent: rgb(235, 64, 78);
+    --po-accent-2: rgb(255, 150, 60);
+    --po-accent-soft: rgba(235, 64, 78, 0.18);
+    --po-accent-soft-2: rgba(235, 64, 78, 0.30);
+    --po-accent-strong: rgb(245, 100, 112);
+
+    --po-critical: rgb(255, 80, 90);
+    --po-critical-soft: rgba(255, 80, 90, 0.18);
+    --po-warning: rgb(255, 176, 80);
+    --po-warning-soft: rgba(255, 176, 80, 0.16);
+    --po-info: rgb(120, 190, 220);
+    --po-info-soft: rgba(120, 190, 220, 0.16);
+    --po-success: rgb(110, 210, 140);
+    --po-success-soft: rgba(110, 210, 140, 0.16);
+
+    --po-select-bg: rgb(110, 40, 50);
+    --po-select-bg-inactive: rgb(60, 38, 42);
+}

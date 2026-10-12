@@ -1,0 +1,36 @@
+/* Theme: Sandstone (Light) - a warm, paper-toned light theme with an amber accent.
+ *
+ * Daylight's warm counterpart: cream/tan surfaces instead of cool neutrals. See
+ * ProjectOptimizerTheme_Obsidian.uss for what these tokens mean.
+ */
+
+.po-root {
+    --po-bg: rgb(240, 232, 219);
+    --po-panel: rgb(247, 241, 230);
+    --po-panel-2: rgb(252, 247, 238);
+    --po-panel-3: rgb(232, 221, 202);
+    --po-panel-4: rgb(220, 206, 184);
+    --po-border: rgb(214, 199, 174);
+    --po-border-soft: rgba(80, 55, 20, 0.06);
+    --po-text: rgb(58, 44, 30);
+    --po-text-dim: rgb(120, 100, 78);
+    --po-text-faint: rgb(150, 132, 108);
+
+    --po-accent: rgb(200, 100, 30);
+    --po-accent-2: rgb(20, 130, 130);
+    --po-accent-soft: rgba(200, 100, 30, 0.14);
+    --po-accent-soft-2: rgba(200, 100, 30, 0.24);
+    --po-accent-strong: rgb(180, 85, 20);
+
+    --po-critical: rgb(196, 60, 50);
+    --po-critical-soft: rgba(196, 60, 50, 0.13);
+    --po-warning: rgb(180, 120, 10);
+    --po-warning-soft: rgba(180, 120, 10, 0.14);
+    --po-info: rgb(20, 130, 140);
+    --po-info-soft: rgba(20, 130, 140, 0.12);
+    --po-success: rgb(70, 140, 60);
+    --po-success-soft: rgba(70, 140, 60, 0.13);
+
+    --po-select-bg: rgb(232, 196, 150);
+    --po-select-bg-inactive: rgb(224, 213, 196);
+}

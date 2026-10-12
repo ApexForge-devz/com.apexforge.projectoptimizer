@@ -1,0 +1,36 @@
+/* Theme: Royal - Rich blue-plum surfaces with a regal sapphire accent and soft gold highlights.
+ *
+ * Dark editor palette with deliberately separated surface values and a focused accent.
+ * This file defines only ProjectOptimizer's --po-* theme tokens; layout remains in the base stylesheet.
+ */
+
+.po-root {
+    --po-bg: rgb(16, 13, 24);
+    --po-panel: rgb(29, 26, 37);
+    --po-panel-2: rgb(45, 42, 52);
+    --po-panel-3: rgb(61, 59, 68);
+    --po-panel-4: rgb(81, 78, 86);
+    --po-border: rgb(57, 54, 63);
+    --po-border-soft: rgba(255, 255, 255, 0.06);
+    --po-text: rgb(238, 238, 239);
+    --po-text-dim: rgb(164, 163, 167);
+    --po-text-faint: rgb(109, 107, 114);
+
+    --po-accent: rgb(111, 121, 255);
+    --po-accent-2: rgb(217, 175, 91);
+    --po-accent-soft: rgba(111, 121, 255, 0.16);
+    --po-accent-soft-2: rgba(111, 121, 255, 0.28);
+    --po-accent-strong: rgb(133, 141, 255);
+
+    --po-critical: rgb(255, 102, 112);
+    --po-critical-soft: rgba(255, 102, 112, 0.16);
+    --po-warning: rgb(255, 190, 86);
+    --po-warning-soft: rgba(255, 190, 86, 0.16);
+    --po-info: rgb(217, 175, 91);
+    --po-info-soft: rgba(217, 175, 91, 0.16);
+    --po-success: rgb(91, 224, 164);
+    --po-success-soft: rgba(91, 224, 164, 0.16);
+
+    --po-select-bg: rgb(65, 69, 144);
+    --po-select-bg-inactive: rgb(59, 57, 66);
+}

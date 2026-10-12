@@ -1,0 +1,36 @@
+/* Theme: Butter - Creamy yellow-white surfaces with a golden accent and cool slate secondary.
+ *
+ * Light editor palette with soft surfaces, clear hierarchy, and a readable accent.
+ * This file defines only ProjectOptimizer's --po-* theme tokens; layout remains in the base stylesheet.
+ */
+
+.po-root {
+    --po-bg: rgb(244, 239, 217);
+    --po-panel: rgb(248, 245, 231);
+    --po-panel-2: rgb(252, 250, 244);
+    --po-panel-3: rgb(233, 228, 207);
+    --po-panel-4: rgb(218, 214, 194);
+    --po-border: rgb(215, 210, 191);
+    --po-border-soft: rgba(0, 0, 0, 0.05);
+    --po-text: rgb(27, 26, 24);
+    --po-text-dim: rgb(93, 91, 82);
+    --po-text-faint: rgb(142, 139, 126);
+
+    --po-accent: rgb(168, 115, 8);
+    --po-accent-2: rgb(85, 117, 143);
+    --po-accent-soft: rgba(168, 115, 8, 0.12);
+    --po-accent-soft-2: rgba(168, 115, 8, 0.22);
+    --po-accent-strong: rgb(146, 100, 7);
+
+    --po-critical: rgb(198, 57, 72);
+    --po-critical-soft: rgba(198, 57, 72, 0.12);
+    --po-warning: rgb(165, 103, 0);
+    --po-warning-soft: rgba(165, 103, 0, 0.12);
+    --po-info: rgb(76, 105, 129);
+    --po-info-soft: rgba(76, 105, 129, 0.12);
+    --po-success: rgb(27, 137, 98);
+    --po-success-soft: rgba(27, 137, 98, 0.12);
+
+    --po-select-bg: rgb(223, 204, 158);
+    --po-select-bg-inactive: rgb(220, 215, 195);
+}

@@ -1,0 +1,39 @@
+/* Theme: Obsidian (Dark) - the tool's default look.
+ *
+ * Near-black elevated panels with one vivid violet-blue accent. See ProjectOptimizerStyles.uss for
+ * how these tokens are consumed, and OptimizerThemes.cs for how this file is selected and loaded -
+ * exactly one theme stylesheet is attached to the window at a time, this being the default.
+ */
+
+.po-root {
+    --po-bg: rgb(15, 16, 20);
+    --po-panel: rgb(21, 23, 28);
+    --po-panel-2: rgb(28, 31, 38);
+    --po-panel-3: rgb(38, 42, 50);
+    --po-panel-4: rgb(48, 52, 62);
+    --po-border: rgb(45, 49, 58);
+    --po-border-soft: rgba(255, 255, 255, 0.06);
+    --po-text: rgb(232, 234, 240);
+    --po-text-dim: rgb(160, 166, 180);
+    --po-text-faint: rgb(106, 112, 128);
+
+    --po-accent: rgb(138, 121, 255);
+    --po-accent-2: rgb(64, 210, 255);
+    --po-accent-soft: rgba(138, 121, 255, 0.16);
+    --po-accent-soft-2: rgba(138, 121, 255, 0.28);
+    --po-accent-strong: rgb(160, 145, 255);
+
+    --po-critical: rgb(255, 89, 92);
+    --po-critical-soft: rgba(255, 89, 92, 0.16);
+    --po-warning: rgb(255, 181, 71);
+    --po-warning-soft: rgba(255, 181, 71, 0.16);
+    --po-info: rgb(64, 202, 255);
+    --po-info-soft: rgba(64, 202, 255, 0.16);
+    --po-success: rgb(60, 217, 146);
+    --po-success-soft: rgba(60, 217, 146, 0.16);
+
+    /* Solid blends for a selected table row - not derivable from the accent by formula, so each
+       theme tunes its own rather than computing one from --po-accent at runtime (USS cannot). */
+    --po-select-bg: rgb(70, 60, 128);
+    --po-select-bg-inactive: rgb(56, 58, 70);
+}

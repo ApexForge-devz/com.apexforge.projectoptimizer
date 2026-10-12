@@ -1,0 +1,36 @@
+/* Theme: Sky - Open airy blue surfaces with a vivid azure accent and cool indigo secondary.
+ *
+ * Light editor palette with soft surfaces, clear hierarchy, and a readable accent.
+ * This file defines only ProjectOptimizer's --po-* theme tokens; layout remains in the base stylesheet.
+ */
+
+.po-root {
+    --po-bg: rgb(230, 238, 245);
+    --po-panel: rgb(240, 244, 249);
+    --po-panel-2: rgb(248, 250, 252);
+    --po-panel-3: rgb(220, 227, 234);
+    --po-panel-4: rgb(206, 213, 219);
+    --po-border: rgb(202, 209, 216);
+    --po-border-soft: rgba(0, 0, 0, 0.05);
+    --po-text: rgb(25, 26, 27);
+    --po-text-dim: rgb(87, 90, 93);
+    --po-text-faint: rgb(133, 138, 142);
+
+    --po-accent: rgb(25, 123, 196);
+    --po-accent-2: rgb(91, 97, 181);
+    --po-accent-soft: rgba(25, 123, 196, 0.12);
+    --po-accent-soft-2: rgba(25, 123, 196, 0.22);
+    --po-accent-strong: rgb(22, 107, 171);
+
+    --po-critical: rgb(198, 57, 72);
+    --po-critical-soft: rgba(198, 57, 72, 0.12);
+    --po-warning: rgb(165, 103, 0);
+    --po-warning-soft: rgba(165, 103, 0, 0.12);
+    --po-info: rgb(82, 87, 163);
+    --po-info-soft: rgba(82, 87, 163, 0.12);
+    --po-success: rgb(27, 137, 98);
+    --po-success-soft: rgba(27, 137, 98, 0.12);
+
+    --po-select-bg: rgb(173, 206, 231);
+    --po-select-bg-inactive: rgb(207, 214, 220);
+}

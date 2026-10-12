@@ -1,0 +1,35 @@
+/* Theme: Rose (Light) - soft pink-white surfaces with an elegant rose accent.
+ * See ProjectOptimizerTheme_Obsidian.uss for what these tokens mean, and
+ * ProjectOptimizerTheme_Daylight.uss for the light-theme panel/hover ordering.
+ */
+
+.po-root {
+    --po-bg: rgb(242, 231, 233);
+    --po-panel: rgb(248, 240, 241);
+    --po-panel-2: rgb(253, 247, 248);
+    --po-panel-3: rgb(233, 216, 219);
+    --po-panel-4: rgb(220, 199, 203);
+    --po-border: rgb(224, 202, 206);
+    --po-border-soft: rgba(90, 20, 40, 0.05);
+    --po-text: rgb(48, 28, 32);
+    --po-text-dim: rgb(120, 88, 94);
+    --po-text-faint: rgb(150, 120, 126);
+
+    --po-accent: rgb(210, 60, 110);
+    --po-accent-2: rgb(150, 90, 200);
+    --po-accent-soft: rgba(210, 60, 110, 0.12);
+    --po-accent-soft-2: rgba(210, 60, 110, 0.22);
+    --po-accent-strong: rgb(190, 45, 95);
+
+    --po-critical: rgb(196, 50, 60);
+    --po-critical-soft: rgba(196, 50, 60, 0.12);
+    --po-warning: rgb(185, 115, 15);
+    --po-warning-soft: rgba(185, 115, 15, 0.13);
+    --po-info: rgb(100, 110, 190);
+    --po-info-soft: rgba(100, 110, 190, 0.12);
+    --po-success: rgb(60, 145, 100);
+    --po-success-soft: rgba(60, 145, 100, 0.12);
+
+    --po-select-bg: rgb(230, 175, 195);
+    --po-select-bg-inactive: rgb(222, 205, 209);
+}

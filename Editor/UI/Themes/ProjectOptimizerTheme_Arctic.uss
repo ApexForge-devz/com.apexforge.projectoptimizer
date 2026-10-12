@@ -1,0 +1,36 @@
+/* Theme: Arctic (Light) - very pale, minimal blue-grey with a teal accent.
+ * The lowest-contrast, most minimal theme of the set. See ProjectOptimizerTheme_Obsidian.uss for
+ * what these tokens mean, and ProjectOptimizerTheme_Daylight.uss for the light-theme panel/hover
+ * ordering.
+ */
+
+.po-root {
+    --po-bg: rgb(232, 236, 238);
+    --po-panel: rgb(241, 244, 245);
+    --po-panel-2: rgb(250, 252, 252);
+    --po-panel-3: rgb(216, 223, 225);
+    --po-panel-4: rgb(200, 209, 212);
+    --po-border: rgb(202, 211, 213);
+    --po-border-soft: rgba(10, 40, 45, 0.05);
+    --po-text: rgb(26, 36, 38);
+    --po-text-dim: rgb(85, 103, 106);
+    --po-text-faint: rgb(122, 138, 140);
+
+    --po-accent: rgb(0, 145, 140);
+    --po-accent-2: rgb(60, 130, 200);
+    --po-accent-soft: rgba(0, 145, 140, 0.12);
+    --po-accent-soft-2: rgba(0, 145, 140, 0.22);
+    --po-accent-strong: rgb(0, 125, 120);
+
+    --po-critical: rgb(200, 60, 55);
+    --po-critical-soft: rgba(200, 60, 55, 0.12);
+    --po-warning: rgb(175, 125, 10);
+    --po-warning-soft: rgba(175, 125, 10, 0.13);
+    --po-info: rgb(45, 130, 190);
+    --po-info-soft: rgba(45, 130, 190, 0.12);
+    --po-success: rgb(20, 150, 110);
+    --po-success-soft: rgba(20, 150, 110, 0.12);
+
+    --po-select-bg: rgb(150, 205, 200);
+    --po-select-bg-inactive: rgb(196, 208, 210);
+}

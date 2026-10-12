@@ -1,0 +1,17 @@
+using System;
+namespace ApexForge.ProjectOptimizer
+{
+	public static class DisplayUtility
+	{
+		public static string FormatBytes(long bytes) { if (bytes < 0) return "-"; double kb=bytes/1024.0; if(bytes<1024)return bytes+" B"; if(kb<1024)return kb.ToString("0.#")+" KB"; double mb=kb/1024.0; if(mb<1024)return mb.ToString("0.##")+" MB"; return (mb/1024.0).ToString("0.##")+" GB"; }
+		public static string FormatDuration(double seconds) { if(seconds<0||double.IsNaN(seconds)) return "-"; int total=(int)Math.Round(seconds); if(total<1)return "under a second"; if(total<60)return total+"s"; int minutes=total/60, rest=total%60; if(minutes<60)return rest==0?minutes+"m":minutes+"m "+rest+"s"; int hours=minutes/60, restMinutes=minutes%60; return restMinutes==0?hours+"h":hours+"h "+restMinutes+"m"; }
+		public static string FormatCountdown(double seconds) { if(seconds<0||double.IsNaN(seconds))return "-"; int total=(int)Math.Ceiling(seconds); if(total<=5)return "a few seconds"; if(total<60){int rounded=total<=30?RoundTo(total,5):RoundTo(total,10); return rounded<60?rounded+"s":"1m";} int minutes=total/60, rest=RoundTo(total%60,15); if(rest>=60){minutes++;rest=0;} if(minutes>=10)return minutes+"m"; return rest==0?minutes+"m":minutes+"m "+rest+"s"; }
+		static int RoundTo(int value,int step)=>((value+step-1)/step)*step;
+		public static string FormatCount(long value) { if(value<1000)return value.ToString(); if(value<1000000)return (value/1000.0).ToString("0.#")+"k"; return (value/1000000.0).ToString("0.##")+"M"; }
+		public static string SeverityLabel(IssueSeverity severity)=>severity==IssueSeverity.Critical?"Critical":severity==IssueSeverity.Warning?"Warning":"Info";
+		public static string ConfidenceLabel(OptimizationConfidence confidence)=>confidence==OptimizationConfidence.Proven?"proven":confidence==OptimizationConfidence.HighConfidence?"measured":confidence==OptimizationConfidence.Heuristic?"heuristic":"for review";
+		public static string ConfidenceExplanation(OptimizationConfidence confidence){switch(confidence){case OptimizationConfidence.Proven:return "Established by direct comparison - identical bytes, a resolved null reference, a one-to-one object mapping. Not an inference.";case OptimizationConfidence.HighConfidence:return "Read straight off the asset or its importer. The condition is what Unity reports; whether it is worth changing is still yours to judge.";case OptimizationConfidence.Heuristic:return "A pattern inferred from names, text or shape. Usually right, and unable to see how the asset is actually used - check before acting.";default:return "Reported so you can look at it. The tool is not claiming anything is wrong.";}}
+		public static string SeverityClass(IssueSeverity severity)=>severity==IssueSeverity.Critical?"sev-critical":severity==IssueSeverity.Warning?"sev-warning":"sev-info";
+		public static string CategoryLabel(AssetCategory category){switch(category){case AssetCategory.ProjectSetting:return "Project Setting";case AssetCategory.SpriteAtlas:return "Sprite Atlas";case AssetCategory.Controller:return "Animator Controller";case AssetCategory.Build:return "Build";case AssetCategory.Package:return "Package";case AssetCategory.BuildStep:return "Build Step";case AssetCategory.BuildFile:return "Build Output";case AssetCategory.Addressables:return "Addressables";case AssetCategory.Other:return "World Data";case AssetCategory.UIToolkit:return "UI Toolkit";case AssetCategory.Rendering:return "Rendering";default:return category.ToString();}}
+	}
+}

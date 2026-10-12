@@ -1,0 +1,2504 @@
+/* Project Optimizer - editor window styling
+ *
+ * Structure only: spacing, sizing, layout and component rules, all expressed in terms of the
+ * --po-* custom properties. Every actual colour value lives in one of the theme stylesheets under
+ * UI/Themes (see OptimizerThemes.cs) - exactly one of those is loaded alongside this file at a
+ * time, chosen from the Rules & Thresholds page, so this file never needs to change for a new
+ * theme to exist. The fallback values below only cover the (should-never-happen) case of a theme
+ * failing to load, so the window still renders something legible rather than going blank.
+ *
+ * Every interactive element gets a short transition so state changes read as motion rather than a
+ * jump cut; nothing loops or draws attention on its own except the progress fill while a scan is
+ * actually running.
+ */
+
+.po-root {
+    flex-grow: 1;
+    background-color: var(--po-bg, #0f1014);
+    color: var(--po-text, #e8eaf0);
+    font-size: 12px;
+}
+
+/* ---------------- toolbar ---------------- */
+
+.po-toolbar {
+    flex-direction: row;
+    align-items: center;
+    height: 34px;
+    padding-left: 10px;
+    padding-right: 10px;
+    background-color: var(--po-panel);
+    border-bottom-width: 1px;
+    border-bottom-color: var(--po-border);
+    flex-shrink: 0;
+}
+
+.po-title {
+    -unity-font-style: bold;
+    font-size: 14px;
+    color: var(--po-text);
+    margin-right: 4px;
+}
+
+.po-title-mark {
+    color: var(--po-accent);
+    -unity-font-style: bold;
+    font-size: 14px;
+    margin-right: 14px;
+}
+
+.po-spacer {
+    flex-grow: 1;
+}
+
+/* ---------------- buttons ---------------- */
+
+.po-button {
+    height: 26px;
+    min-width: 0;
+    padding-left: 10px;
+    padding-right: 10px;
+    margin-left: 4px;
+    margin-right: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: var(--po-border);
+    background-color: var(--po-panel-2);
+    color: var(--po-text);
+    -unity-text-align: middle-center;
+    transition-property: background-color, border-color, color;
+    transition-duration: 0.12s;
+    transition-timing-function: ease-out;
+}
+
+.po-button:hover {
+    background-color: var(--po-panel-3);
+    border-color: var(--po-text-faint);
+}
+
+.po-button:active {
+    background-color: var(--po-panel-4);
+    transition-duration: 0.05s;
+}
+
+.po-button:disabled {
+    opacity: 0.4;
+}
+
+.po-button-primary {
+    background-color: var(--po-accent);
+    border-color: var(--po-accent);
+    color: rgb(255, 255, 255);
+    -unity-font-style: bold;
+}
+
+.po-button-primary:hover {
+    background-color: var(--po-accent-strong);
+    border-color: var(--po-accent-strong);
+}
+
+.po-button-danger {
+    color: var(--po-critical);
+    border-color: var(--po-critical);
+    background-color: var(--po-critical-soft);
+}
+
+.po-button-danger:hover {
+    background-color: var(--po-critical);
+    border-color: var(--po-critical);
+    color: rgb(255, 255, 255);
+}
+
+.po-button-review {
+    color: var(--po-accent-2);
+    border-color: var(--po-accent-2);
+    background-color: rgba(64, 210, 255, 0.12);
+}
+
+.po-button-review:hover {
+    background-color: var(--po-accent-2);
+    border-color: var(--po-accent-2);
+    color: rgb(10, 20, 26);
+}
+
+.po-button-small {
+    height: 22px;
+    font-size: 11px;
+    padding-left: 9px;
+    padding-right: 9px;
+    border-radius: 5px;
+}
+
+/* ---------------- pills and chips ---------------- */
+
+.po-pill {
+    flex-shrink: 0;
+    border-radius: 9px;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 1px;
+    padding-bottom: 1px;
+    font-size: 10px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    letter-spacing: 0.5px;
+    align-self: center;
+}
+
+.po-pill.sev-critical {
+    background-color: var(--po-critical-soft);
+    color: var(--po-critical);
+}
+
+.po-pill.sev-warning {
+    background-color: var(--po-warning-soft);
+    color: var(--po-warning);
+}
+
+.po-pill.sev-info {
+    background-color: var(--po-info-soft);
+    color: var(--po-info);
+}
+
+.po-pill.sev-clean {
+    background-color: var(--po-success-soft);
+    color: var(--po-success);
+}
+
+.po-stat {
+    flex-direction: row;
+    align-items: center;
+    height: 26px;
+    padding-left: 8px;
+    padding-right: 8px;
+    margin-left: 6px;
+    border-radius: 6px;
+    transition-property: background-color;
+    transition-duration: 0.12s;
+}
+
+.po-stat:hover {
+    background-color: var(--po-panel-2);
+}
+
+.po-stat-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 4px;
+    margin-right: 6px;
+}
+
+.po-stat-dot.sev-critical { background-color: var(--po-critical); }
+.po-stat-dot.sev-warning { background-color: var(--po-warning); }
+.po-stat-dot.sev-info { background-color: var(--po-info); }
+.po-stat-dot.sev-savings { background-color: var(--po-success); }
+
+.po-stat-label {
+    color: var(--po-text-dim);
+    font-size: 11px;
+}
+
+.po-stat-value {
+    color: var(--po-text);
+    -unity-font-style: bold;
+    font-size: 11px;
+    margin-right: 3px;
+}
+
+/* ---------------- nav rail ---------------- */
+
+.po-body {
+    flex-direction: row;
+    flex-grow: 1;
+}
+
+.po-nav {
+    width: 218px;
+    flex-shrink: 0;
+    background-color: var(--po-panel);
+    border-right-width: 1px;
+    border-right-color: var(--po-border);
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+.po-nav-section {
+    font-size: 10px;
+    color: var(--po-text-faint);
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+    margin-left: 14px;
+    margin-top: 4px;
+    margin-bottom: 4px;
+}
+
+.po-nav-item {
+    flex-direction: row;
+    align-items: center;
+    height: 30px;
+    margin-left: 8px;
+    margin-right: 8px;
+    padding-left: 10px;
+    padding-right: 8px;
+    border-radius: 7px;
+    border-left-width: 2px;
+    border-left-color: rgba(0, 0, 0, 0);
+    transition-property: background-color, border-left-color, translate;
+    transition-duration: 0.14s;
+    transition-timing-function: ease-out;
+}
+
+.po-nav-item:hover {
+    background-color: var(--po-panel-2);
+    translate: 2px 0;
+}
+
+.po-nav-item.po-selected {
+    background-color: var(--po-accent-soft);
+    border-left-color: var(--po-accent);
+    translate: 0 0;
+}
+
+.po-nav-item.po-selected .po-nav-label {
+    color: var(--po-text);
+    -unity-font-style: bold;
+}
+
+.po-nav-label {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    height: 18px;
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    color: var(--po-text-dim);
+    font-size: 12px;
+}
+
+.po-nav-badge {
+    min-width: 20px;
+    height: 16px;
+    border-radius: 8px;
+    font-size: 10px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    padding-left: 5px;
+    padding-right: 5px;
+    background-color: var(--po-panel-3);
+    color: var(--po-text-dim);
+    transition-property: background-color, color;
+    transition-duration: 0.14s;
+}
+
+.po-nav-badge.sev-critical {
+    background-color: var(--po-critical-soft);
+    color: var(--po-critical);
+}
+
+.po-nav-badge.sev-warning {
+    background-color: var(--po-warning-soft);
+    color: var(--po-warning);
+}
+
+.po-nav-badge.sev-info {
+    background-color: var(--po-info-soft);
+    color: var(--po-info);
+}
+
+/* ---------------- pages ---------------- */
+
+.po-page {
+    flex-grow: 1;
+    display: flex;
+    transition-property: opacity, translate;
+    transition-duration: 0.18s;
+    transition-timing-function: ease-out;
+}
+
+.po-page-hidden {
+    display: none;
+}
+
+.po-filters {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    background-color: var(--po-panel);
+    border-bottom-width: 1px;
+    border-bottom-color: var(--po-border);
+    flex-shrink: 0;
+}
+
+.po-search {
+    width: 240px;
+    margin-right: 8px;
+}
+
+.po-search > .unity-base-text-field__input {
+    border-radius: 6px;
+    background-color: var(--po-panel-2);
+    border-color: var(--po-border);
+    height: 24px;
+    transition-property: border-color;
+    transition-duration: 0.12s;
+}
+
+.po-search > .unity-base-text-field__input:hover {
+    border-color: var(--po-text-faint);
+}
+
+.po-search > .unity-base-text-field__input:focus {
+    border-color: var(--po-accent);
+}
+
+.unity-base-text-field__input--single-line{
+	background-color: var(--po-panel-2);
+}
+
+.unity-toggle__checkmark{
+	background-color: var(--po-panel-2);
+}
+
+.po-chip {
+    height: 24px;
+    padding-left: 10px;
+    padding-right: 10px;
+    margin-right: 5px;
+    margin-left: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    border-radius: 12px;
+    border-width: 1px;
+    border-color: var(--po-border);
+    background-color: var(--po-panel-2);
+    color: var(--po-text-dim);
+    font-size: 11px;
+    -unity-text-align: middle-center;
+    transition-property: background-color, border-color, color;
+    transition-duration: 0.12s;
+    transition-timing-function: ease-out;
+}
+
+.po-chip:hover {
+    border-color: var(--po-text-faint);
+}
+
+.po-chip.po-chip-on {
+    -unity-font-style: bold;
+}
+
+.po-chip.po-chip-on.sev-critical {
+    background-color: var(--po-critical-soft);
+    border-color: var(--po-critical);
+    color: var(--po-critical);
+}
+
+.po-chip.po-chip-on.sev-warning {
+    background-color: var(--po-warning-soft);
+    border-color: var(--po-warning);
+    color: var(--po-warning);
+}
+
+.po-chip.po-chip-on.sev-info {
+    background-color: var(--po-info-soft);
+    border-color: var(--po-info);
+    color: var(--po-info);
+}
+
+.po-chip.po-chip-on.po-chip-neutral {
+    background-color: var(--po-accent-soft);
+    border-color: var(--po-accent);
+    color: var(--po-accent-strong);
+}
+
+.po-dropdown {
+    min-width: 130px;
+    margin-right: 6px;
+    margin-left: 0;
+}
+
+.po-dropdown > .unity-base-popup-field__input {
+    border-radius: 6px;
+    height: 24px;
+    background-color: var(--po-panel-2);
+    border-color: var(--po-border);
+    transition-property: border-color;
+    transition-duration: 0.12s;
+}
+
+.po-dropdown > .unity-base-popup-field__input:hover {
+    border-color: var(--po-text-faint);
+}
+
+.po-result-count {
+    color: var(--po-text-dim);
+    font-size: 11px;
+    margin-left: 8px;
+    margin-right: 8px;
+    -unity-text-align: middle-left;
+}
+
+/* ---------------- table ---------------- */
+
+.po-table {
+    flex-grow: 1;
+    background-color: var(--po-bg);
+}
+
+.po-table .unity-multi-column-header {
+    background-color: var(--po-panel);
+    border-bottom-width: 1px;
+    border-bottom-color: var(--po-border);
+    height: 28px;
+}
+
+.po-table .unity-multi-column-header__column {
+    font-size: 11px;
+    color: var(--po-text-dim);
+	background-color: var(--po-panel-2);
+}
+
+.po-table .unity-collection-view__item {
+    border-bottom-width: 0;
+    transition-property: background-color;
+    transition-duration: 0.08s;
+}
+
+/*
+ * The zebra stripe and the selection colour are both driven through Unity's own theme
+ * variables, which is why they are set here rather than as plain background-color rules -
+ * overriding the stripe with a class instead would out-specify Unity's own selection rule, and
+ * selected rows on alternate lines would keep their stripe rather than turning to the accent.
+ * --po-select-bg/-inactive and --po-accent-soft-2 are theme tokens like everything else (see the
+ * per-theme stylesheets); the fallbacks here only cover a theme that has not defined them.
+ */
+.po-table {
+    --unity-colors-alternated_rows-background: var(--po-border-soft, rgba(255, 255, 255, 0.05));
+    --unity-colors-highlight-background: var(--po-select-bg, var(--po-accent-soft));
+    --unity-colors-highlight-background-inactive: var(--po-select-bg-inactive, var(--po-panel-3));
+    --unity-colors-highlight-background-hover: var(--po-accent-soft);
+    --unity-colors-highlight-background-hover-lighter: var(--po-accent-soft-2, var(--po-accent-soft));
+}
+
+/* A row that is not selected still answers a hover, so scanning the table with the mouse gives
+   feedback before a click commits to anything - lower specificity than the selection/alternating
+   rules below so a selected row's own colour always wins over this. */
+.po-table .unity-collection-view__item:hover {
+    background-color: var(--po-panel-2);
+}
+
+/*
+ * The editor still paints the stripe from its own opaque colour, so it is toned down here
+ * with a single-class selector (specificity 2). The selection rules below use two row
+ * classes (specificity 3) and therefore always win on alternating rows - getting that
+ * order wrong is what leaves every other selected row unhighlighted.
+ */
+.po-table .unity-collection-view__item--alternative-background,
+.po-table .unity-list-view__item--alternative-background {
+    background-color: var(--po-panel);
+}
+
+.po-table .unity-collection-view__item--selected,
+.po-table .unity-collection-view__item--selected:hover,
+.po-table .unity-collection-view__item--alternative-background.unity-collection-view__item--selected,
+.po-table .unity-collection-view__item--alternative-background.unity-collection-view__item--selected:hover,
+.po-table .unity-list-view__item--selected,
+.po-table .unity-list-view__item--selected:hover,
+.po-table .unity-list-view__item--alternative-background.unity-list-view__item--selected,
+.po-table .unity-list-view__item--alternative-background.unity-list-view__item--selected:hover {
+    background-color: var(--unity-colors-highlight-background);
+}
+
+.po-cell {
+    flex-grow: 1;
+    flex-direction: row;
+    align-items: center;
+    padding-left: 8px;
+    padding-right: 6px;
+    overflow: hidden;
+}
+
+/*
+ * Single-line cell text is given an explicit height and middle alignment. Without it, a flex
+ * child can be shrunk below its font's line height and the glyphs get sliced horizontally.
+ */
+.po-cell-text {
+    color: var(--po-text);
+    font-size: 12px;
+    height: 18px;
+    flex-shrink: 1;
+    min-width: 0;
+    -unity-text-align: middle-left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.po-cell-sub {
+    color: var(--po-text-faint);
+    font-size: 11px;
+    height: 18px;
+    flex-shrink: 1;
+    min-width: 0;
+    margin-left: 7px;
+    -unity-text-align: middle-left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.po-cell-num {
+    -unity-text-align: middle-right;
+}
+
+.po-cell-dim {
+    color: var(--po-text-dim);
+}
+
+.po-cell-good {
+    color: var(--po-success);
+}
+
+.po-cell-bad {
+    color: var(--po-warning);
+}
+
+/* ---------------- details panel ---------------- */
+
+.po-details {
+    background-color: var(--po-panel);
+    border-left-width: 1px;
+    border-left-color: var(--po-border);
+    min-width: 300px;
+}
+
+.po-details-header {
+    padding-left: 14px;
+    padding-right: 14px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--po-border);
+    flex-shrink: 0;
+}
+
+.po-details-title {
+    flex-shrink: 1;
+    min-width: 0;
+    font-size: 14px;
+    -unity-font-style: bold;
+    color: var(--po-text);
+    white-space: normal;
+}
+
+/* Sized up from the usual 22px row icon when it is a real asset preview rather than a type icon -
+   see CategoryPage.GetPreviewTexture - so a texture, material or sprite atlas selection actually
+   shows what it looks like. */
+.po-details-icon {
+    border-radius: 5px;
+}
+
+.po-details-path {
+    flex-shrink: 0;
+    font-size: 10px;
+    color: var(--po-text-faint);
+    white-space: normal;
+    margin-top: 2px;
+    margin-bottom: 8px;
+}
+
+.po-details-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.po-meta-row {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+.po-meta {
+    margin-right: 16px;
+    margin-bottom: 4px;
+}
+
+.po-meta-label {
+    font-size: 9px;
+    color: var(--po-text-faint);
+    letter-spacing: 0.6px;
+}
+
+.po-meta-value {
+    flex-shrink: 0;
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: var(--po-text);
+}
+
+.po-issue-card {
+    background-color: var(--po-panel-2);
+    border-radius: 10px;
+    border-left-width: 3px;
+    border-left-color: var(--po-border);
+    border-top-width: 1px;
+    border-right-width: 1px;
+    border-bottom-width: 1px;
+    border-top-color: var(--po-border-soft);
+    border-right-color: var(--po-border-soft);
+    border-bottom-color: var(--po-border-soft);
+    padding-left: 12px;
+    padding-right: 12px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    margin-left: 10px;
+    margin-right: 10px;
+    margin-top: 8px;
+    transition-property: background-color, translate;
+    transition-duration: 0.12s;
+}
+
+.po-issue-card:hover {
+    background-color: var(--po-panel-3);
+    translate: 0 -1px;
+}
+
+.po-issue-card.sev-critical { border-left-color: var(--po-critical); }
+.po-issue-card.sev-warning { border-left-color: var(--po-warning); }
+.po-issue-card.sev-info { border-left-color: var(--po-info); }
+
+.po-issue-head {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.po-issue-title {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    -unity-font-style: bold;
+    font-size: 12px;
+    color: var(--po-text);
+    white-space: normal;
+    margin-left: 7px;
+}
+
+/* Fixed slot on the right of an issue card, so the rule id never gets pushed out. */
+/* How sure the tool is, set apart from how much it costs. Deliberately quiet: it qualifies the
+   finding rather than competing with the severity pill for attention. */
+.po-issue-confidence {
+    flex-shrink: 0;
+    margin-left: 8px;
+    height: 18px;
+    -unity-text-align: middle-right;
+    font-size: 9px;
+    color: var(--po-text-faint);
+    letter-spacing: 0.5px;
+}
+
+/* Where a platform- and quality-level-specific reading came from. */
+.po-issue-scope {
+    flex-shrink: 0;
+    font-size: 10px;
+    color: var(--po-text-faint);
+    white-space: normal;
+    margin-bottom: 4px;
+}
+
+.po-issue-code {
+    width: 46px;
+    flex-shrink: 0;
+    margin-left: 8px;
+    height: 18px;
+    -unity-text-align: middle-right;
+    font-size: 9px;
+    color: var(--po-text-faint);
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.po-issue-rule {
+    font-size: 9px;
+    color: var(--po-text-faint);
+    letter-spacing: 0.5px;
+}
+
+.po-change {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 2px;
+    margin-bottom: 6px;
+}
+
+.po-change-from {
+    color: var(--po-critical);
+    font-size: 11px;
+    -unity-font-style: bold;
+}
+
+.po-change-arrow {
+    color: var(--po-text-faint);
+    font-size: 11px;
+    margin-left: 6px;
+    margin-right: 6px;
+}
+
+.po-change-to {
+    color: var(--po-success);
+    font-size: 11px;
+    -unity-font-style: bold;
+}
+
+.po-issue-why {
+    flex-shrink: 0;
+    color: var(--po-text-dim);
+    font-size: 11px;
+    white-space: normal;
+    margin-bottom: 6px;
+}
+
+.po-issue-fixhint {
+    flex-shrink: 0;
+    color: var(--po-text-dim);
+    font-size: 11px;
+    white-space: normal;
+    margin-bottom: 8px;
+    -unity-font-style: italic;
+}
+
+.po-issue-footer {
+    flex-direction: row;
+    align-items: center;
+}
+
+.po-saving {
+    color: var(--po-success);
+    font-size: 11px;
+    -unity-font-style: bold;
+    flex-grow: 1;
+}
+
+.po-empty {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+    padding-top: 40px;
+}
+
+.po-empty-title {
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: var(--po-text-dim);
+    margin-bottom: 6px;
+}
+
+.po-empty-sub {
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--po-text-faint);
+    white-space: normal;
+    -unity-text-align: middle-center;
+    max-width: 380px;
+}
+
+/* ---------------- overview ---------------- */
+
+.po-scroll {
+    flex-grow: 1;
+}
+
+.po-tiles {
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 10px;
+}
+
+.po-tile {
+    width: 168px;
+    background-color: var(--po-panel);
+    border-radius: 12px;
+    border-width: 1px;
+    border-color: var(--po-border);
+    padding-left: 14px;
+    padding-right: 14px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    margin-left: 8px;
+    margin-bottom: 10px;
+    transition-property: border-color, translate, background-color;
+    transition-duration: 0.14s;
+    transition-timing-function: ease-out;
+}
+
+.po-tile:hover {
+    border-color: var(--po-text-faint);
+    background-color: var(--po-panel-2);
+    translate: 0 -2px;
+}
+
+.po-tile-label {
+    font-size: 10px;
+    color: var(--po-text-faint);
+    letter-spacing: 0.8px;
+    margin-bottom: 4px;
+}
+
+.po-tile-value {
+    flex-shrink: 0;
+    font-size: 25px;
+    -unity-font-style: bold;
+    color: var(--po-text);
+}
+
+.po-tile-value.sev-critical { color: var(--po-critical); }
+.po-tile-value.sev-warning { color: var(--po-warning); }
+.po-tile-value.sev-info { color: var(--po-info); }
+.po-tile-value.sev-savings { color: var(--po-success); }
+
+.po-tile-sub {
+    font-size: 10px;
+    color: var(--po-text-faint);
+    margin-top: 2px;
+}
+
+/* Trend sparkline on the Overview page - one bar per recent scan, most recent (this scan) in the
+   accent colour. See OverviewPage.BuildSparkline. */
+.po-spark-bar {
+    width: 9px;
+    margin-right: 3px;
+    border-radius: 2px;
+    background-color: var(--po-panel-4);
+    transition-property: height;
+    transition-duration: 0.2s;
+    transition-timing-function: ease-out;
+}
+
+.po-spark-bar-current {
+    background-color: var(--po-accent);
+}
+
+.po-section-title {
+    flex-shrink: 0;
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: var(--po-text);
+    margin-left: 16px;
+    margin-top: 10px;
+    margin-bottom: 8px;
+}
+
+.po-card {
+    background-color: var(--po-panel);
+    border-radius: 12px;
+    border-width: 1px;
+    border-color: var(--po-border);
+    margin-left: 16px;
+    margin-right: 16px;
+    margin-bottom: 10px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+}
+
+.po-row {
+    flex-direction: row;
+    align-items: center;
+    height: 30px;
+    padding-left: 10px;
+    padding-right: 10px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--po-border-soft);
+    transition-property: background-color;
+    transition-duration: 0.1s;
+}
+
+.po-row:hover {
+    background-color: var(--po-panel-2);
+}
+
+.po-row-name {
+    width: 190px;
+    flex-shrink: 0;
+    height: 18px;
+    -unity-text-align: middle-left;
+    color: var(--po-text);
+    font-size: 12px;
+}
+
+.po-row-dim {
+    flex-shrink: 0;
+    height: 18px;
+    -unity-text-align: middle-left;
+    color: var(--po-text-dim);
+    font-size: 11px;
+}
+
+/*
+ * Fixed-width slots so every row in the overview lines up in real columns, whatever
+ * the severity label reads and whether or not the row has an auto-fix.
+ */
+.po-slot-severity {
+    width: 78px;
+    flex-shrink: 0;
+    flex-direction: row;
+    align-items: center;
+}
+
+.po-slot-title {
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-basis: 0;
+    min-width: 100px;
+    height: 18px;
+    -unity-text-align: middle-left;
+    color: var(--po-text);
+    font-size: 12px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.po-slot-path {
+    width: 320px;
+    flex-shrink: 1;
+    min-width: 80px;
+    height: 18px;
+    margin-left: 10px;
+    -unity-text-align: middle-left;
+    color: var(--po-text-faint);
+    font-size: 11px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.po-slot-value {
+    width: 92px;
+    flex-shrink: 0;
+    height: 18px;
+    margin-left: 10px;
+    -unity-text-align: middle-right;
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: var(--po-success);
+}
+
+.po-slot-counts {
+    width: 210px;
+    flex-shrink: 0;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.po-slot-count {
+    width: 66px;
+    flex-shrink: 0;
+    -unity-text-align: middle-center;
+    margin-left: 4px;
+}
+
+.po-slot-actions {
+    width: 116px;
+    flex-shrink: 0;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+/* A Fix button kept in the layout but not drawn, so Select stays in the same column. */
+.po-button-placeholder {
+    visibility: hidden;
+}
+
+.po-bar-track {
+    flex-grow: 1;
+    height: 6px;
+    border-radius: 3px;
+    background-color: var(--po-panel-3);
+    margin-left: 10px;
+    margin-right: 10px;
+    overflow: hidden;
+}
+
+.po-bar-fill {
+    height: 6px;
+    border-radius: 3px;
+    background-color: var(--po-accent);
+    transition-property: width;
+    transition-duration: 0.2s;
+    transition-timing-function: ease-out;
+}
+
+.po-bar-fill.sev-critical { background-color: var(--po-critical); }
+.po-bar-fill.sev-warning { background-color: var(--po-warning); }
+.po-bar-fill.sev-info { background-color: var(--po-info); }
+
+/* ---------------- rules page ---------------- */
+
+.po-rule-row {
+    flex-direction: row;
+    align-items: center;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--po-border-soft);
+    transition-property: background-color;
+    transition-duration: 0.1s;
+}
+
+.po-rule-row:hover {
+    background-color: var(--po-panel-2);
+}
+
+.po-rule-id {
+    width: 56px;
+    flex-shrink: 0;
+    height: 18px;
+    -unity-text-align: middle-left;
+    font-size: 10px;
+    color: var(--po-text-faint);
+    -unity-font-style: bold;
+}
+
+.po-field-label {
+    width: 230px;
+    flex-shrink: 0;
+    height: 20px;
+    -unity-text-align: middle-left;
+    color: var(--po-text-dim);
+    font-size: 11px;
+}
+
+.po-rule-body {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    margin-right: 10px;
+}
+
+.po-rule-title {
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--po-text);
+    white-space: normal;
+}
+
+.po-rule-why {
+    flex-shrink: 0;
+    font-size: 10px;
+    color: var(--po-text-faint);
+    white-space: normal;
+    margin-top: 1px;
+}
+
+.po-settings-group {
+    background-color: var(--po-panel);
+    border-radius: 12px;
+    border-width: 1px;
+    border-color: var(--po-border);
+    margin-left: 16px;
+    margin-right: 16px;
+    margin-bottom: 10px;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+.po-field {
+    margin-bottom: 3px;
+}
+
+.po-field .unity-base-field__label {
+    min-width: 230px;
+    color: var(--po-text-dim);
+    font-size: 11px;
+}
+
+.po-progress {
+    height: 4px;
+    background-color: var(--po-panel-3);
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.po-progress-fill {
+    height: 4px;
+    background-color: var(--po-accent);
+    width: 0;
+    opacity: 1;
+    transition-property: width, opacity;
+    transition-duration: 0.12s, 0.55s;
+    transition-timing-function: ease-out, ease-in-out;
+}
+
+/* While a scan is running, the fill breathes gently between full and dimmed opacity - see
+   ProjectOptimizerWindow.PulseProgressWhileScanning - so a long stretch at the same percentage
+   still reads as "working", not "stuck". */
+.po-progress-fill.po-progress-pulse-dim {
+    opacity: 0.5;
+}
+
+.po-status {
+    font-size: 10px;
+    color: var(--po-text-faint);
+    margin-left: 10px;
+    overflow: hidden;
+    max-width: 340px;
+}
+
+/* ---------------- multi-selection summary ---------------- */
+
+.po-summary-row {
+    flex-direction: row;
+    align-items: center;
+    padding-left: 10px;
+    padding-right: 10px;
+    height: 26px;
+}
+
+.po-summary-path {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    height: 18px;
+    -unity-text-align: middle-left;
+    color: var(--po-text-dim);
+    font-size: 11px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.po-rule-group {
+    flex-direction: row;
+    align-items: center;
+    background-color: var(--po-panel-2);
+    border-radius: 8px;
+    border-left-width: 3px;
+    border-left-color: var(--po-border);
+    margin-left: 10px;
+    margin-right: 10px;
+    margin-top: 6px;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 7px;
+    padding-bottom: 7px;
+    min-height: 32px;
+    transition-property: background-color;
+    transition-duration: 0.1s;
+}
+
+.po-rule-group:hover {
+    background-color: var(--po-panel-3);
+}
+
+.po-rule-group.sev-critical { border-left-color: var(--po-critical); }
+.po-rule-group.sev-warning { border-left-color: var(--po-warning); }
+.po-rule-group.sev-info { border-left-color: var(--po-info); }
+
+.po-rule-group-title {
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-basis: 0;
+    min-width: 0;
+    height: auto;
+    min-height: 18px;
+    margin-left: 8px;
+    margin-top: 1px;
+    margin-bottom: 1px;
+    -unity-text-align: middle-left;
+    color: var(--po-text);
+    font-size: 12px;
+    white-space: normal;
+}
+
+.po-rule-group-count {
+    min-width: 34px;
+    width: auto;
+    flex-shrink: 0;
+    padding-left: 7px;
+    padding-right: 7px;
+    height: 22px;
+    -unity-text-align: middle-center;
+    color: var(--po-text);
+    font-size: 11px;
+    -unity-font-style: bold;
+    background-color: var(--po-panel);
+
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-color: var(--po-border);
+    border-right-color: var(--po-border);
+    border-top-color: var(--po-border);
+    border-bottom-color: var(--po-border);
+    border-top-left-radius: 11px;
+    border-top-right-radius: 11px;
+    border-bottom-left-radius: 11px;
+    border-bottom-right-radius: 11px;
+}
+
+.po-rule-group-saving {
+    width: 5px;
+    max-width: 76px;
+    flex-shrink: 0;
+    margin-left: 8px;
+    -unity-text-align: middle-right;
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: var(--po-success);
+}
+
+.po-rule-group-action {
+    width: 80px;
+    flex-shrink: 0;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    margin-left: 0px;
+}
+
+.po-rule-group-action .po-button {
+    flex-shrink: 0;
+    margin-left: 0;
+}
+
+.po-rule-group-action-status {
+    flex-shrink: 0;
+    width: 112px;
+    -unity-text-align: middle-right;
+    color: var(--po-text-faint);
+    font-size: 10px;
+    white-space: normal;
+}
+
+/* ---------------- configuration foldouts ---------------- */
+
+.po-config-foldout, .po-threshold-group, .po-rule-category-foldout { flex-shrink: 1; min-width: 0; max-width: 100%; overflow: hidden; }
+.po-config-foldout { margin-left: 16px; margin-right: 16px; margin-bottom: 12px; padding: 6px 10px 8px 10px; background-color: var(--po-panel); border-width: 1px; border-color: var(--po-border); border-radius: 12px; }
+.po-foldout-toolbar { min-height: 31px; align-items: center; padding-left: 7px; padding-right: 3px; margin-bottom: 4px; border-bottom-width: 1px; border-bottom-color: var(--po-border-soft); }
+.po-foldout-toolbar-label { min-width: 0; flex-grow: 1; color: var(--po-text-faint); font-size: 10px; white-space: normal; }
+.po-threshold-group, .po-rule-category-foldout { margin-top: 6px; padding: 4px 5px 5px 5px; background-color: var(--po-panel-2); border-width: 1px; border-color: var(--po-border-soft); border-radius: 9px; }
+.po-threshold-group > .unity-foldout__toggle, .po-rule-category-foldout > .unity-foldout__toggle { min-height: 28px; }
+
+.po-field { margin-bottom: 3px; }
+.po-field .unity-base-field__label { width: 230px; flex-shrink: 0; color: var(--po-text-dim); font-size: 11px; }
+.po-rule-item-off { opacity: 0.62; }
+.po-rule-row { overflow: hidden; min-width: 0; }
+.po-rule-row .po-rule-body { min-width: 0; overflow: hidden; }
+
+.po-runtime-hero { margin: 14px 16px 6px 16px; padding: 16px; background-color: var(--po-panel); border-width: 1px; border-color: var(--po-border); border-radius: 16px; min-width: 0; }
+.po-runtime-hero-header { align-items: flex-start; min-width: 0; flex-wrap: wrap; justify-content: space-between; }
+.po-runtime-hero-heading { flex-grow: 1; flex-shrink: 1; min-width: 0; padding-right: 8px; }
+.po-runtime-hero-actions { flex-shrink: 0; width: 210px; max-width: 100%; min-width: 0; align-items: stretch; margin-left: 18px; }
+.po-runtime-hero-actions .po-button { width: 100%; max-width: 100%; margin-bottom: 6px; }
+.po-runtime-hero-note { margin-top: 7px; max-width: 900px; color: var(--po-text-faint); font-size: 10px; white-space: normal; }
+.po-runtime-meta-grid { margin-top: 15px; padding-top: 11px; border-top-width: 1px; border-top-color: var(--po-border-soft); flex-wrap: wrap; }
+.po-runtime-meta-grid .po-meta { min-width: 120px; flex-shrink: 1; }
+.po-runtime-meta-grid .po-meta-value { white-space: normal; max-width: 260px; }
+.po-runtime-option { margin-top: 12px; padding-top: 10px; border-top-width: 1px; border-top-color: var(--po-border-soft); }
+.po-runtime-option .unity-base-field { margin-bottom: 2px; }
+.po-runtime-option .unity-toggle { flex-shrink: 1; min-width: 0; }
+.po-runtime-option-help, .po-runtime-note-text { color: var(--po-text-faint); font-size: 10px; white-space: normal; }
+.po-runtime-info-title, .po-runtime-note-kicker { color: var(--po-text-dim); font-size: 10px; -unity-font-style: bold; letter-spacing: 0.8px; }
+.po-runtime-evidence-note { margin: 0 16px 12px 16px; padding: 10px 12px 11px 12px; background-color: var(--po-panel); border-width: 1px; border-color: var(--po-border-soft); border-left-width: 3px; border-left-color: var(--po-accent); border-radius: 9px; }
+.po-runtime-metric-header, .po-runtime-metric-row { flex-direction: row; align-items: center; min-width: 0; padding-left: 10px; padding-right: 10px; }
+.po-runtime-metric-header { min-height: 28px; border-bottom-width: 1px; border-bottom-color: var(--po-border-soft); background-color: var(--po-panel-2); }
+.po-runtime-metric-header .po-runtime-metric-name, .po-runtime-metric-header .po-runtime-metric-value, .po-runtime-metric-header .po-runtime-metric-stat { color: var(--po-text-faint); font-size: 9px; -unity-font-style: bold; letter-spacing: 0.5px; }
+.po-runtime-metric-row { min-height: 34px; border-bottom-width: 1px; border-bottom-color: var(--po-border-soft); }
+.po-runtime-metric-last { border-bottom-width: 0; }
+.po-runtime-metric-name { flex-grow: 1; flex-shrink: 1; min-width: 170px; padding-right: 10px; }
+.po-runtime-metric-value { width: 110px; flex-shrink: 0; -unity-text-align: middle-right; color: var(--po-accent-strong); font-size: 11px; -unity-font-style: bold; }
+.po-runtime-metric-stat { width: 105px; flex-shrink: 0; -unity-text-align: middle-right; }
+.po-runtime-metric-header .po-runtime-metric-name { -unity-text-align: middle-left; }
+.po-option-row { min-width: 0; overflow: hidden; }
+.po-option-row .po-button { max-width: 100%; }
+
+/* ---------------- custom cascading dropdown ---------------- */
+
+.po-dd-button {
+    flex-direction: row;
+    align-items: center;
+    height: 25px;
+    min-width: 150px;
+    max-width: 260px;
+    padding-left: 9px;
+    padding-right: 6px;
+    margin-right: 6px;
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: var(--po-border);
+    background-color: var(--po-panel-2);
+    transition-property: border-color, background-color;
+    transition-duration: 0.12s;
+}
+
+.po-dd-button:hover {
+    border-color: var(--po-text-faint);
+}
+
+.po-dd-button.po-dd-open {
+    border-color: var(--po-accent);
+    background-color: var(--po-accent-soft);
+}
+
+.po-dd-button-label {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    height: 18px;
+    -unity-text-align: middle-left;
+    color: var(--po-text);
+    font-size: 11px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.po-dd-button-caret {
+    flex-shrink: 0;
+    margin-left: 6px;
+    height: 18px;
+    -unity-text-align: middle-center;
+    color: var(--po-text-faint);
+    font-size: 9px;
+}
+
+.po-menu-backdrop {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.po-menu-column {
+    position: absolute;
+    max-height: 380px;
+    background-color: var(--po-panel-3);
+    border-width: 1px;
+    border-color: var(--po-border);
+    border-radius: 8px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    overflow: hidden;
+}
+
+.po-menu-scroll {
+    max-height: 372px;
+}
+
+.po-menu-item {
+    flex-direction: row;
+    align-items: center;
+    height: 25px;
+    padding-left: 10px;
+    padding-right: 8px;
+    margin-left: 4px;
+    margin-right: 4px;
+    border-radius: 5px;
+    transition-property: background-color;
+    transition-duration: 0.08s;
+}
+
+.po-menu-item:hover {
+    background-color: var(--po-accent-soft);
+}
+
+.po-menu-item.po-menu-item-open {
+    background-color: var(--po-accent-soft);
+}
+
+.po-menu-item.po-menu-item-current .po-menu-label {
+    color: var(--po-accent-strong);
+    -unity-font-style: bold;
+}
+
+.po-menu-tick {
+    width: 14px;
+    flex-shrink: 0;
+    height: 18px;
+    -unity-text-align: middle-left;
+    color: var(--po-accent-strong);
+    font-size: 11px;
+}
+
+.po-menu-label {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    height: 18px;
+    -unity-text-align: middle-left;
+    color: var(--po-text);
+    font-size: 12px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.po-menu-count {
+    flex-shrink: 0;
+    height: 18px;
+    margin-left: 8px;
+    -unity-text-align: middle-right;
+    color: var(--po-text-faint);
+    font-size: 10px;
+}
+
+.po-menu-arrow {
+    width: 14px;
+    flex-shrink: 0;
+    height: 18px;
+    margin-left: 4px;
+    -unity-text-align: middle-right;
+    color: var(--po-text-faint);
+    font-size: 9px;
+}
+
+.po-menu-separator {
+    height: 1px;
+    margin-top: 3px;
+    margin-bottom: 3px;
+    margin-left: 8px;
+    margin-right: 8px;
+    background-color: var(--po-border);
+}
+
+/* --- Scan scope page ------------------------------------------------------- */
+
+/* A checkbox or radio with a title and an explanation beside it. Aligned to the top
+   so the control sits with the title, not with the middle of a wrapped paragraph. */
+.po-option-row {
+    align-items: flex-start;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.po-preset {
+    width: 260px;
+    max-width: 100%;
+    flex-shrink: 1;
+    min-height: 130px;
+    background-color: var(--po-panel-2);
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: var(--po-border);
+    padding: 10px;
+    margin-right: 10px;
+    margin-bottom: 8px;
+    transition-property: border-color, translate;
+    transition-duration: 0.12s;
+}
+
+.po-preset:hover {
+    border-color: var(--po-text-faint);
+}
+
+/* ---------------- feedback: toasts and the stale-results banner ---------------- */
+
+/* Overlay pinned to the bottom-right of the window. Ignores picking so it never
+   swallows a click aimed at the rows underneath; the toasts themselves opt back in. */
+.po-toast-host {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    align-items: flex-end;
+}
+
+.po-toast {
+    position: relative;
+    flex-direction: row;
+    align-items: center;
+    max-width: 420px;
+    margin-top: 6px;
+    padding-top: 9px;
+    padding-bottom: 11px;
+    padding-left: 12px;
+    padding-right: 12px;
+    border-radius: 9px;
+    border-width: 1px;
+    border-left-width: 3px;
+    background-color: var(--po-panel-3);
+    border-color: var(--po-border);
+    overflow: hidden;
+    transition-property: opacity, translate, scale, border-color;
+    transition-duration: 0.2s;
+    transition-timing-function: ease-out;
+}
+
+.po-toast:hover {
+    border-color: var(--po-text-faint);
+}
+
+.po-toast-text {
+    flex-shrink: 1;
+    white-space: normal;
+    color: var(--po-text);
+    font-size: 11px;
+}
+
+.po-toast-action {
+    flex-shrink: 0;
+    margin-left: 10px;
+    margin-right: 0;
+}
+
+/* ---------------- command palette (Ctrl+K) ---------------- */
+
+.po-palette-backdrop {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.4);
+    align-items: center;
+    padding-top: 90px;
+}
+
+.po-palette-card {
+    width: 540px;
+    max-height: 420px;
+    background-color: var(--po-panel-3);
+    border-width: 1px;
+    border-color: var(--po-border);
+    border-radius: 11px;
+    overflow: hidden;
+}
+
+.po-palette-search {
+    margin: 10px;
+}
+
+.po-palette-search > .unity-base-text-field__input {
+    border-radius: 6px;
+    background-color: var(--po-panel-2);
+    border-color: var(--po-border);
+    height: 32px;
+    font-size: 13px;
+    padding-left: 10px;
+}
+
+.po-palette-search > .unity-base-text-field__input:focus {
+    border-color: var(--po-accent);
+}
+
+.po-palette-list {
+    flex-grow: 1;
+    max-height: 340px;
+    padding-bottom: 8px;
+}
+
+.po-palette-item {
+    flex-direction: row;
+    align-items: center;
+    padding-left: 14px;
+    padding-right: 14px;
+    height: 42px;
+    margin-left: 6px;
+    margin-right: 6px;
+    border-radius: 7px;
+    transition-property: background-color;
+    transition-duration: 0.08s;
+}
+
+.po-palette-item:hover {
+    background-color: var(--po-panel-2);
+}
+
+.po-palette-item.po-palette-item-selected {
+    background-color: var(--po-accent-soft);
+}
+
+.po-palette-item-title {
+    font-size: 12px;
+    color: var(--po-text);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.po-palette-item-subtitle {
+    font-size: 10px;
+    color: var(--po-text-faint);
+    margin-top: 1px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.po-palette-item-category {
+    flex-shrink: 0;
+    font-size: 9px;
+    -unity-font-style: bold;
+    letter-spacing: 0.4px;
+    color: var(--po-text-faint);
+    background-color: var(--po-panel);
+    border-radius: 4px;
+    padding-left: 6px;
+    padding-right: 6px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    margin-left: 10px;
+}
+
+/* Empties from full to nothing over the toast's own lifetime - the duration is set from C# per
+   instance (Feedback.ToastHost.Post), since it differs by message kind and USS has no way to read
+   that. Sits flush along the bottom edge, under the rounded corners thanks to the toast's own
+   overflow: hidden above. */
+.po-toast-countdown {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 2px;
+    width: 0;
+    background-color: rgba(255, 255, 255, 0.28);
+    transition-property: width;
+    transition-timing-function: linear;
+}
+
+.po-toast-info { border-left-color: var(--po-info); }
+.po-toast-success { border-left-color: var(--po-success); }
+.po-toast-warning { border-left-color: var(--po-warning); }
+.po-toast-error { border-left-color: var(--po-critical); }
+
+.po-toast-warning { background-color: var(--po-warning-soft); }
+.po-toast-error { background-color: var(--po-critical-soft); }
+
+/* Strip under the toolbar, shown only when the findings predate the current settings. */
+.po-banner {
+    flex-shrink: 0;
+    align-items: center;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    padding-left: 16px;
+    padding-right: 10px;
+    background-color: var(--po-warning-soft);
+    border-bottom-width: 1px;
+    border-bottom-color: var(--po-border);
+}
+
+.po-banner-text {
+    color: var(--po-warning);
+    font-size: 11px;
+    white-space: normal;
+    flex-shrink: 1;
+}
+
+/* A rule that has been switched off, and one whose severity was re-graded.
+   Both are states someone chose earlier and needs to be able to find again. */
+.po-rule-row.po-rule-off {
+    opacity: 0.45;
+}
+
+.po-rule-row.po-rule-overridden {
+    border-left-width: 2px;
+    border-left-color: var(--po-accent);
+}
+
+/* The preset whose settings are currently in effect. */
+.po-preset.po-preset-active {
+    border-color: var(--po-accent);
+    background-color: var(--po-accent-soft);
+}
+
+/* ---------------- issue evidence ---------------- */
+
+/* The specifics behind a finding: which paths, which objects, which lines. Indented
+   under the explanation so it reads as supporting material rather than more prose. */
+.po-detail-block {
+    flex-shrink: 0;
+    margin-bottom: 8px;
+    padding-left: 8px;
+    border-left-width: 2px;
+    border-left-color: var(--po-border);
+}
+
+.po-detail-row {
+    flex-direction: row;
+    align-items: flex-start;
+    margin-bottom: 2px;
+}
+
+.po-detail-label {
+    width: 60px;
+    flex-shrink: 0;
+    font-size: 9px;
+    color: var(--po-text-faint);
+    -unity-font-style: bold;
+    white-space: normal;
+    margin-top: 1px;
+}
+
+.po-detail-value {
+    flex-shrink: 1;
+    flex-grow: 1;
+    font-size: 11px;
+    white-space: normal;
+}
+
+.po-detail-note { color: var(--po-text-dim); }
+.po-detail-good { color: var(--po-success); }
+.po-detail-bad  { color: var(--po-warning); }
+
+/* A path splits into dimmed folders and a bright file name: the name identifies the
+   asset, the folders are only there to disambiguate. */
+.po-detail-path {
+    flex-direction: row;
+    flex-wrap: wrap;
+    cursor: link;
+}
+
+.po-detail-folder {
+    font-size: 10px;
+    color: var(--po-text-faint);
+    white-space: normal;
+    flex-shrink: 1;
+}
+
+.po-detail-name {
+    font-size: 11px;
+    -unity-font-style: bold;
+    white-space: normal;
+    flex-shrink: 0;
+    transition-property: color;
+    transition-duration: 0.1s;
+}
+
+/* The name inherits its colour from the row's kind; the folders stay neutral. */
+.po-detail-good .po-detail-name { color: var(--po-success); }
+.po-detail-bad .po-detail-name { color: var(--po-warning); }
+.po-detail-note .po-detail-name { color: var(--po-text-dim); }
+
+.po-detail-path:hover .po-detail-name {
+    color: var(--po-accent-strong);
+}
+
+/* ---------------- review fix dialog (pass 6) ---------------- */
+
+.po-dialog {
+    padding: 16px;
+}
+
+.po-dialog-header {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.po-dialog-title {
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: var(--po-text);
+    margin-right: 8px;
+    flex-shrink: 1;
+    white-space: normal;
+}
+
+.po-dialog-section {
+    margin-top: 14px;
+}
+
+.po-dialog-section-title {
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: var(--po-text-dim);
+    letter-spacing: 0.3px;
+    margin-bottom: 6px;
+}
+
+.po-dialog-divider {
+    height: 1px;
+    background-color: var(--po-border);
+    margin-top: 4px;
+    margin-bottom: 4px;
+}
+
+.po-dialog-prose {
+    font-size: 11px;
+    color: var(--po-text-dim);
+    white-space: normal;
+}
+
+/* Compact key/value evidence rows, replacing paragraph dumps where the data is structured. */
+.po-kv-group {
+    background-color: var(--po-panel);
+    border-radius: 9px;
+    border-width: 1px;
+    border-color: var(--po-border);
+    padding: 8px 10px;
+    margin-bottom: 6px;
+}
+
+.po-kv-group-title {
+    font-size: 10px;
+    -unity-font-style: bold;
+    color: var(--po-text-faint);
+    letter-spacing: 0.4px;
+    margin-bottom: 3px;
+}
+
+.po-kv-row {
+    flex-direction: row;
+    padding-top: 2px;
+    padding-bottom: 2px;
+}
+
+.po-kv-key {
+    width: 150px;
+    flex-shrink: 0;
+    color: var(--po-text-faint);
+    font-size: 11px;
+    white-space: normal;
+}
+
+.po-kv-value {
+    flex-shrink: 1;
+    flex-grow: 1;
+    color: var(--po-text);
+    font-size: 11px;
+    white-space: normal;
+}
+
+/* Current vs proposed value cards - the actual decision, made visually dominant. */
+.po-value-pair {
+    flex-direction: row;
+    align-items: stretch;
+}
+
+.po-value-box {
+    flex-grow: 1;
+    flex-basis: 0;
+    background-color: var(--po-panel-2);
+    border-radius: 9px;
+    border-width: 1px;
+    border-color: var(--po-border);
+    padding: 10px 12px;
+}
+
+.po-value-box.po-value-proposed {
+    border-color: var(--po-accent);
+    background-color: var(--po-accent-soft);
+}
+
+.po-value-box-label {
+    font-size: 9px;
+    -unity-font-style: bold;
+    color: var(--po-text-faint);
+    letter-spacing: 0.6px;
+    margin-bottom: 4px;
+}
+
+.po-value-box-value {
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: var(--po-text);
+    white-space: normal;
+}
+
+.po-value-arrow {
+    width: 28px;
+    flex-shrink: 0;
+    -unity-text-align: middle-center;
+    color: var(--po-accent);
+    font-size: 16px;
+    align-self: center;
+}
+
+/* Option comparison cards. */
+.po-option-card {
+    flex-direction: row;
+    background-color: var(--po-panel-2);
+    border-radius: 9px;
+    border-width: 1px;
+    border-color: var(--po-border);
+    padding: 9px 10px;
+    margin-bottom: 6px;
+    transition-property: border-color, background-color, translate;
+    transition-duration: 0.12s;
+}
+
+.po-option-card:hover {
+    border-color: var(--po-text-faint);
+    translate: 0 -1px;
+}
+
+.po-option-card.po-option-selected {
+    border-color: var(--po-accent);
+    background-color: var(--po-accent-soft);
+}
+
+.po-option-radio {
+    width: 14px;
+    height: 14px;
+    border-radius: 7px;
+    border-width: 1px;
+    border-color: var(--po-text-faint);
+    margin-right: 9px;
+    margin-top: 2px;
+    flex-shrink: 0;
+    transition-property: border-color, background-color;
+    transition-duration: 0.12s;
+}
+
+.po-option-card.po-option-selected .po-option-radio {
+    border-color: var(--po-accent);
+    background-color: var(--po-accent);
+}
+
+.po-option-body {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+}
+
+.po-option-title-row {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.po-option-label {
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: var(--po-text);
+}
+
+.po-option-desc {
+    font-size: 10px;
+    color: var(--po-text-dim);
+    white-space: normal;
+    margin-top: 2px;
+}
+
+.po-option-warning {
+    font-size: 10px;
+    color: var(--po-warning);
+    white-space: normal;
+    margin-top: 3px;
+}
+
+.po-option-impact {
+    flex-shrink: 0;
+    margin-left: 10px;
+    align-items: flex-end;
+    align-self: center;
+}
+
+.po-option-impact-value {
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: var(--po-success);
+}
+
+/* Risk badges: separate scale from confidence/severity, so they never share a colour. */
+.po-risk-low { color: var(--po-success); }
+.po-risk-medium { color: var(--po-warning); }
+.po-risk-high { color: var(--po-critical); }
+.po-risk-destructive { color: var(--po-critical); -unity-font-style: bold; }
+
+/* Verification checklist. */
+.po-verify-row {
+    flex-direction: row;
+    align-items: flex-start;
+    margin-bottom: 2px;
+}
+
+.po-verify-mark {
+    width: 16px;
+    flex-shrink: 0;
+    color: var(--po-success);
+    font-size: 11px;
+}
+
+.po-verify-text {
+    flex-shrink: 1;
+    flex-grow: 1;
+    font-size: 11px;
+    color: var(--po-text-dim);
+    white-space: normal;
+}
+
+/* Batch eligibility summary strip. */
+.po-eligibility-strip {
+    flex-direction: row;
+    flex-wrap: wrap;
+    background-color: var(--po-panel);
+    border-radius: 9px;
+    border-width: 1px;
+    border-color: var(--po-border);
+    padding: 8px 10px;
+}
+
+.po-eligibility-stat {
+    margin-right: 18px;
+    margin-bottom: 2px;
+}
+
+.po-eligibility-stat-value {
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: var(--po-text);
+}
+
+.po-eligibility-stat-label {
+    font-size: 9px;
+    color: var(--po-text-faint);
+    letter-spacing: 0.4px;
+}
+
+.po-batch-row {
+    flex-direction: row;
+    align-items: center;
+    height: 25px;
+    padding-left: 8px;
+    padding-right: 8px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--po-border-soft);
+    transition-property: background-color;
+    transition-duration: 0.1s;
+}
+
+.po-batch-row:hover {
+    background-color: var(--po-panel-2);
+}
+
+.po-batch-row-path {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    font-size: 11px;
+    color: var(--po-text-dim);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.po-batch-row-value {
+    width: 130px;
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--po-text-faint);
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.po-batch-row-status {
+    width: 110px;
+    flex-shrink: 0;
+    font-size: 10px;
+    -unity-text-align: middle-right;
+}
+
+/* ================================================================================
+ * Project Optimizer 2.0 visual pass
+ * ================================================================================ */
+.po-root {
+    position: relative;
+    background-color: var(--po-bg);
+    overflow: hidden;
+}
+
+.po-ambient {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+    opacity: 0.9;
+}
+
+.po-ambient-glow-a,
+.po-ambient-glow-b {
+    position: absolute;
+    width: 280px;
+    height: 280px;
+    border-radius: 140px;
+    opacity: 0.045;
+    background-color: var(--po-accent);
+    transition-property: translate, opacity;
+    transition-duration: 1.8s;
+    transition-timing-function: ease-in-out;
+}
+
+.po-ambient-glow-a { left: -120px; top: 34px; }
+.po-ambient-glow-b { right: -140px; bottom: -120px; background-color: var(--po-accent-2); opacity: 0.035; }
+
+.po-toolbar {
+    height: 46px;
+    padding-left: 14px;
+    padding-right: 12px;
+    background-color: var(--po-panel);
+    border-bottom-color: var(--po-border);
+}
+
+.po-title {
+    font-size: 15px;
+    letter-spacing: 0.2px;
+}
+
+.po-title-mark {
+    font-size: 13px;
+    margin-right: 12px;
+    opacity: 0.75;
+}
+
+.po-toolbar .po-button {
+    height: 29px;
+}
+
+.po-toolbar .po-button-report {
+    background-color: var(--po-panel-2);
+    border-color: var(--po-accent-soft-2, var(--po-border));
+}
+
+.po-toolbar .po-button-report:hover {
+    border-color: var(--po-accent);
+    background-color: var(--po-accent-soft);
+}
+
+.po-scanning .po-toolbar {
+    border-bottom-color: var(--po-accent);
+}
+
+.po-status {
+    max-width: 440px;
+    margin-left: 12px;
+    color: var(--po-text-dim);
+    transition-property: color, opacity;
+    transition-duration: 0.18s;
+}
+
+.po-scanning .po-status,
+.po-restoring .po-status {
+    color: var(--po-accent-strong);
+}
+
+.po-progress {
+    height: 3px;
+    background-color: var(--po-panel-2);
+}
+
+.po-progress-fill {
+    height: 3px;
+    border-radius: 2px;
+}
+
+.po-body {
+    background-color: var(--po-bg);
+}
+
+.po-nav {
+    width: 232px;
+    padding-top: 14px;
+    padding-bottom: 12px;
+    background-color: var(--po-panel);
+}
+
+.po-nav-section {
+    margin-left: 16px;
+    margin-top: 8px;
+    margin-bottom: 6px;
+    font-size: 9px;
+    letter-spacing: 1.3px;
+    opacity: 0.72;
+}
+
+.po-nav-item {
+    height: 33px;
+    margin-left: 9px;
+    margin-right: 9px;
+    padding-left: 12px;
+    padding-right: 9px;
+    border-left-width: 2px;
+    border-radius: 8px;
+    transition-property: background-color, border-left-color, translate, scale, color;
+    transition-duration: 0.16s;
+}
+
+.po-nav-item:hover {
+    background-color: var(--po-panel-2);
+    translate: 2px 0;
+}
+
+.po-nav-item.po-selected {
+    background-color: var(--po-accent-soft);
+    border-left-color: var(--po-accent);
+}
+
+.po-nav-item.po-selected .po-nav-label {
+    color: var(--po-text);
+    -unity-font-style: bold;
+}
+
+.po-nav-label {
+    height: 20px;
+    font-size: 11px;
+    color: var(--po-text-dim);
+    transition-property: color;
+    transition-duration: 0.14s;
+}
+
+.po-nav-badge {
+    margin-left: 6px;
+    transition-property: background-color, color;
+    transition-duration: 0.14s;
+}
+
+.po-page {
+    background-color: var(--po-bg);
+    transition-duration: 0.16s;
+}
+
+.po-filters {
+    padding-left: 13px;
+    padding-right: 13px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    background-color: var(--po-panel);
+    border-bottom-color: var(--po-border);
+}
+
+.po-search > .unity-base-text-field__input,
+.po-dropdown > .unity-base-popup-field__input {
+    background-color: var(--po-panel-2);
+    border-color: var(--po-border);
+    transition-property: border-color, background-color;
+    transition-duration: 0.14s;
+}
+
+.po-search > .unity-base-text-field__input:focus,
+.po-dropdown > .unity-base-popup-field__input:focus {
+    background-color: var(--po-panel-3);
+    border-color: var(--po-accent);
+}
+
+.po-button {
+    min-height: 27px;
+    min-width: 0;
+    max-width: 100%;
+    flex-shrink: 1;
+    border-radius: 7px;
+    border-color: var(--po-border);
+    background-color: var(--po-panel-2);
+    transition-property: background-color, border-color, color;
+    transition-duration: 0.14s;
+    transition-timing-function: ease-out;
+}
+
+.po-button:hover {
+    border-color: var(--po-text-faint);
+}
+
+.po-button-primary {
+}
+
+.po-button-primary:hover {
+}
+
+.po-chip {
+    border-radius: 13px;
+    background-color: var(--po-panel-2);
+}
+
+.po-card {
+    background-color: var(--po-panel);
+    border-radius: 14px;
+    border-color: var(--po-border);
+    transition-property: border-color, translate, background-color;
+    transition-duration: 0.15s;
+}
+
+.po-card:hover {
+    border-color: var(--po-text-faint);
+    background-color: var(--po-panel-2);
+}
+
+.po-section-title {
+    margin-left: 16px;
+    margin-top: 14px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    letter-spacing: 0.25px;
+}
+
+.po-tiles {
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 10px;
+}
+
+.po-tile {
+    width: 178px;
+    min-height: 80px;
+    background-color: var(--po-panel);
+    border-radius: 12px;
+    border-color: var(--po-border);
+    padding-left: 14px;
+    padding-right: 14px;
+    padding-top: 12px;
+    padding-bottom: 11px;
+    transition-property: border-color, translate, background-color;
+    transition-duration: 0.15s;
+}
+
+.po-tile:hover {
+    border-color: var(--po-accent-soft-2, var(--po-text-faint));
+    translate: 0 -3px;
+    background-color: var(--po-panel-2);
+}
+
+.po-tile-label { letter-spacing: 1px; }
+.po-tile-value { font-size: 26px; }
+.po-tile-sub { margin-top: 4px; }
+
+.po-hero {
+    flex-direction: row;
+    min-height: 156px;
+    margin-left: 16px;
+    margin-right: 16px;
+    margin-top: 14px;
+    padding: 18px;
+    border-radius: 16px;
+    border-width: 1px;
+    border-color: var(--po-border);
+    background-color: var(--po-panel);
+    transition-property: border-color, translate, background-color;
+    transition-duration: 0.18s;
+}
+
+.po-hero:hover { border-color: var(--po-accent-soft-2, var(--po-border)); translate: 0 -1px; }
+.po-hero-empty { flex-direction: column; justify-content: center; }
+.po-hero-score { width: 164px; flex-shrink: 0; padding-right: 20px; border-right-width: 1px; border-right-color: var(--po-border); }
+.po-hero-copy { flex-grow: 1; padding-left: 20px; justify-content: center; }
+.po-hero-kicker { font-size: 9px; letter-spacing: 1.6px; -unity-font-style: bold; color: var(--po-text-faint); }
+.po-hero-title { margin-top: 4px; font-size: 22px; -unity-font-style: bold; color: var(--po-text); }
+.po-hero-subtitle { margin-top: 3px; font-size: 11px; color: var(--po-text-dim); }
+.po-hero-meta-row { margin-top: 12px; flex-wrap: wrap; }
+.po-health-score { font-size: 47px; -unity-font-style: bold; color: var(--po-accent-strong); margin-top: 2px; line-height-height: 1; }
+.po-health-state { font-size: 9px; letter-spacing: 1.1px; color: var(--po-success); -unity-font-style: bold; margin-top: 1px; }
+.po-hero-status { flex-direction: row; align-items: center; margin-top: 11px; }
+.po-hero-status-text { margin-left: 8px; color: var(--po-text-faint); font-size: 10px; }
+
+.po-meta-row { margin-top: 0; }
+.po-meta { margin-right: 20px; }
+.po-meta-label { font-size: 8px; letter-spacing: 0.9px; }
+.po-meta-value { font-size: 11px; margin-top: 2px; }
+
+.po-spark-bar { border-radius: 3px; }
+.po-spark-bar-current { opacity: 1; }
+
+.po-table {
+    background-color: var(--po-bg);
+}
+
+.po-table .unity-multi-column-header {
+    height: 30px;
+    background-color: var(--po-panel);
+}
+
+.po-table .unity-multi-column-header__column {
+    background-color: var(--po-panel-2);
+    color: var(--po-text-dim);
+}
+
+.po-cell { padding-left: 10px; }
+.po-table .unity-collection-view__item { transition-property: background-color, translate; transition-duration: 0.08s; }
+.po-table .unity-collection-view__item:hover { translate: 1px 0; }
+
+.po-details {
+    background-color: var(--po-panel);
+}
+
+.po-details-header {
+    padding-left: 16px;
+    padding-right: 16px;
+    padding-top: 13px;
+    padding-bottom: 12px;
+}
+
+.po-issue-card,
+.po-rule-group,
+.po-option-card,
+.po-preset {
+}
+
+.po-issue-card:hover,
+.po-rule-group:hover,
+.po-option-card:hover,
+.po-preset:hover {
+}
+
+.po-settings-group {
+    border-radius: 12px;
+    border-color: var(--po-border);
+}
+
+.po-dialog {
+    border-radius: 14px;
+}
+
+.po-palette-backdrop {
+    background-color: rgba(0,0,0,0.52);
+    padding-top: 74px;
+}
+
+.po-palette-card {
+    width: 600px;
+    max-height: 470px;
+    border-radius: 14px;
+    background-color: var(--po-panel-3);
+    transition-property: translate, scale, opacity;
+    transition-duration: 0.16s;
+}
+
+.po-palette-search > .unity-base-text-field__input { height: 36px; font-size: 13px; border-radius: 8px; }
+.po-palette-item { height: 44px; border-radius: 8px; }
+.po-palette-item.po-palette-item-selected { background-color: var(--po-accent-soft); border-left-width: 2px; border-left-color: var(--po-accent); }
+
+.po-toast {
+    border-radius: 11px;
+}
+
+.po-banner {
+    background-color: var(--po-warning-soft);
+    border-bottom-color: var(--po-warning);
+}
+
+/* State-driven breathing: C# only toggles one root class while real work is happening. */
+.po-scanning .po-progress-fill {
+}
+
+.po-restoring .po-toolbar,
+.po-restoring .po-progress {
+    opacity: 0.92;
+}
+
+/* Rules/thresholds keep individual items in the compact inline presentation; only groups fold. */
+.po-rule-row { overflow: hidden; min-width: 0; }
+.po-rule-row .po-rule-body { min-width: 0; overflow: hidden; }
+
+.po-runtime-metric-evidence { flex-grow: 1; min-width: 170px; max-width: 300px; -unity-text-align: middle-left; color: var(--po-text-dim); overflow: hidden; }

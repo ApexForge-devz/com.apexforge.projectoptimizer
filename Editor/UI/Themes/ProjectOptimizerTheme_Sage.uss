@@ -1,0 +1,36 @@
+/* Theme: Sage - Quiet grey-green surfaces with a grounded sage accent and eucalyptus support.
+ *
+ * Light editor palette with soft surfaces, clear hierarchy, and a readable accent.
+ * This file defines only ProjectOptimizer's --po-* theme tokens; layout remains in the base stylesheet.
+ */
+
+.po-root {
+    --po-bg: rgb(231, 236, 230);
+    --po-panel: rgb(240, 243, 240);
+    --po-panel-2: rgb(248, 249, 248);
+    --po-panel-3: rgb(221, 225, 220);
+    --po-panel-4: rgb(207, 211, 206);
+    --po-border: rgb(203, 208, 202);
+    --po-border-soft: rgba(0, 0, 0, 0.05);
+    --po-text: rgb(25, 26, 25);
+    --po-text-dim: rgb(88, 90, 87);
+    --po-text-faint: rgb(134, 137, 133);
+
+    --po-accent: rgb(92, 138, 88);
+    --po-accent-2: rgb(45, 140, 122);
+    --po-accent-soft: rgba(92, 138, 88, 0.12);
+    --po-accent-soft-2: rgba(92, 138, 88, 0.22);
+    --po-accent-strong: rgb(80, 120, 77);
+
+    --po-critical: rgb(198, 57, 72);
+    --po-critical-soft: rgba(198, 57, 72, 0.12);
+    --po-warning: rgb(165, 103, 0);
+    --po-warning-soft: rgba(165, 103, 0, 0.12);
+    --po-info: rgb(40, 126, 110);
+    --po-info-soft: rgba(40, 126, 110, 0.12);
+    --po-success: rgb(27, 137, 98);
+    --po-success-soft: rgba(27, 137, 98, 0.12);
+
+    --po-select-bg: rgb(192, 209, 190);
+    --po-select-bg-inactive: rgb(208, 212, 207);
+}

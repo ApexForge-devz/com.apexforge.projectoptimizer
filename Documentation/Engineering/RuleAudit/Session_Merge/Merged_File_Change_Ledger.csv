@@ -1,0 +1,42 @@
+﻿Session_ID,Change_Type,Path,Merged,Note
+01,Modified existing file,Editor/Analyzers/ProjectSettingsAnalyzer.cs,Yes,Analyzer-owned source delta integrated.
+01,Added file,Tests/Editor/FixKindAuditSession01Tests.cs,Yes,Session regression test or associated Unity metadata.
+01,Added file,Tests/Editor/FixKindAuditSession01Tests.cs.meta,Yes,Session regression test or associated Unity metadata.
+03,Modified existing file,Editor/Analyzers/PrefabSceneAnalyzer.cs,Yes,Analyzer-owned source delta integrated.
+03,Added file,Tests/Editor/FixKindAuditSession03Tests.cs,Yes,Session regression test or associated Unity metadata.
+03,Added file,Tests/Editor/FixKindAuditSession03Tests.cs.meta,Yes,Session regression test or associated Unity metadata.
+04,Modified existing file,Editor/Analyzers/ScriptAnalyzer.cs,Yes,Analyzer-owned source delta integrated.
+04,Added file,Tests/Editor/FixKindAuditSession04ScriptAnalyzerTests.cs,Yes,Session regression test or associated Unity metadata.
+04,Added file,Tests/Editor/FixKindAuditSession04ScriptAnalyzerTests.cs.meta,Yes,Session regression test or associated Unity metadata.
+05,Modified existing file,Editor/Analyzers/MaterialShaderAnalyzer.cs,Yes,Analyzer-owned source delta integrated.
+05,Added file,Tests/Editor/MaterialShaderAnalyzerFixKindAuditSession05Tests.cs,Yes,Session regression test or associated Unity metadata.
+05,Added file,Tests/Editor/MaterialShaderAnalyzerFixKindAuditSession05Tests.cs.meta,Yes,Session regression test or associated Unity metadata.
+06,Modified existing file,Editor/Analyzers/TextureAnalyzer.cs,Yes,Analyzer-owned source delta integrated.
+06,Added file,Tests/Editor/FixKindAuditSession06Tests.cs,Yes,Session regression test or associated Unity metadata.
+06,Added file,Tests/Editor/FixKindAuditSession06Tests.cs.meta,Yes,Session regression test or associated Unity metadata.
+07,Modified existing file,Editor/Analyzers/AnimationAnalyzer.cs,Yes,Analyzer-owned source delta integrated.
+07,Modified existing file,Editor/Analyzers/ModelAnalyzer.cs,Yes,Analyzer-owned source delta integrated.
+07,Added file,Tests/Editor/FixKindAuditSession07Tests.cs,Yes,Session regression test or associated Unity metadata.
+07,Added file,Tests/Editor/FixKindAuditSession07Tests.cs.meta,Yes,Session regression test or associated Unity metadata.
+08,Modified existing file,Editor/Analyzers/AudioAnalyzer.cs,Yes,Analyzer-owned source delta integrated.
+08,Modified existing file,Editor/Analyzers/VideoAnalyzer.cs,Yes,Analyzer-owned source delta integrated.
+08,Added file,Tests/Editor/FixKindAuditSession08ApprovedRulesTests.cs,Yes,Session regression test or associated Unity metadata.
+08,Added file,Tests/Editor/FixKindAuditSession08ApprovedRulesTests.cs.meta,Yes,Session regression test or associated Unity metadata.
+08,Added file,Tests/Editor/FixKindAuditSession08AudioPreferenceTests.cs,Yes,Session regression test or associated Unity metadata.
+08,Added file,Tests/Editor/FixKindAuditSession08AudioPreferenceTests.cs.meta,Yes,Session regression test or associated Unity metadata.
+09,Modified existing file,Editor/Analyzers/AnimatorControllerAnalyzer.cs,Yes,Analyzer-owned source delta integrated.
+09,Modified existing file,Editor/Analyzers/DependencyHotspotAnalyzer.cs,Yes,Analyzer-owned source delta integrated.
+09,Modified existing file,Editor/Analyzers/FontAnalyzer.cs,Yes,Analyzer-owned source delta integrated.
+09,Modified existing file,Editor/Analyzers/TextMeshProAnalyzer.cs,Yes,Analyzer-owned source delta integrated.
+09,Added file,Tests/Editor/FixKindAuditSession09Tests.cs,Yes,Session regression test or associated Unity metadata.
+09,Added file,Tests/Editor/FixKindAuditSession09Tests.cs.meta,Yes,Session regression test or associated Unity metadata.
+10,Modified existing file,Editor/Analyzers/AddressablesBuildLayoutAnalyzer.cs,Yes,Analyzer-owned source delta integrated.
+10,Modified existing file,Editor/Analyzers/BuildProfileAnalyzer.cs,Yes,Analyzer-owned source delta integrated.
+10,Modified existing file,Editor/Analyzers/UnusedAnalyzer.cs,Yes,Analyzer-owned source delta integrated.
+10,Modified existing file,Editor/Analyzers/WorldDataAnalyzer.cs,Yes,Analyzer-owned source delta integrated.
+10,Added file,Tests/Editor/FixKindAuditSession10Tests.cs,Yes,Session regression test or associated Unity metadata.
+10,Added file,Tests/Editor/FixKindAuditSession10Tests.cs.meta,Yes,Session regression test or associated Unity metadata.
+11,Modified existing file,Editor/Analyzers/AndroidCompatibilityAnalyzer.cs,Yes,Analyzer-owned source delta integrated.
+11,Modified existing file,Editor/Analyzers/SpriteAtlasAnalyzer.cs,Yes,Analyzer-owned source delta integrated.
+11,Added file,Tests/Editor/FixKindAuditSession11Tests.cs,Yes,Session regression test or associated Unity metadata.
+11,Added file,Tests/Editor/FixKindAuditSession11Tests.cs.meta,Yes,Session regression test or associated Unity metadata.

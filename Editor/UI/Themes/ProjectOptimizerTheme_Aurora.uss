@@ -1,0 +1,36 @@
+/* Theme: Aurora - Charcoal teal surfaces with a shifting green-violet character anchored by an aurora mint.
+ *
+ * Dark editor palette with deliberately separated surface values and a focused accent.
+ * This file defines only ProjectOptimizer's --po-* theme tokens; layout remains in the base stylesheet.
+ */
+
+.po-root {
+    --po-bg: rgb(11, 18, 19);
+    --po-panel: rgb(24, 31, 32);
+    --po-panel-2: rgb(40, 46, 47);
+    --po-panel-3: rgb(57, 63, 64);
+    --po-panel-4: rgb(77, 82, 83);
+    --po-border: rgb(52, 58, 59);
+    --po-border-soft: rgba(255, 255, 255, 0.06);
+    --po-text: rgb(238, 238, 238);
+    --po-text-dim: rgb(162, 165, 165);
+    --po-text-faint: rgb(106, 110, 111);
+
+    --po-accent: rgb(99, 230, 176);
+    --po-accent-2: rgb(154, 124, 255);
+    --po-accent-soft: rgba(99, 230, 176, 0.16);
+    --po-accent-soft-2: rgba(99, 230, 176, 0.28);
+    --po-accent-strong: rgb(122, 234, 188);
+
+    --po-critical: rgb(255, 102, 112);
+    --po-critical-soft: rgba(255, 102, 112, 0.16);
+    --po-warning: rgb(255, 190, 86);
+    --po-warning-soft: rgba(255, 190, 86, 0.16);
+    --po-info: rgb(154, 124, 255);
+    --po-info-soft: rgba(154, 124, 255, 0.16);
+    --po-success: rgb(91, 224, 164);
+    --po-success-soft: rgba(91, 224, 164, 0.16);
+
+    --po-select-bg: rgb(57, 128, 101);
+    --po-select-bg-inactive: rgb(55, 61, 61);
+}

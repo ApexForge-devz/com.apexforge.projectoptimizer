@@ -1,0 +1,35 @@
+/* Theme: Slate (Dark) - cool, neutral blue-grey panels with a steel-blue accent.
+ * The most "professional tool" of the set - low saturation throughout. See
+ * ProjectOptimizerTheme_Obsidian.uss for what these tokens mean.
+ */
+
+.po-root {
+    --po-bg: rgb(20, 23, 28);
+    --po-panel: rgb(27, 31, 37);
+    --po-panel-2: rgb(35, 40, 47);
+    --po-panel-3: rgb(46, 52, 61);
+    --po-panel-4: rgb(58, 65, 75);
+    --po-border: rgb(52, 58, 68);
+    --po-border-soft: rgba(255, 255, 255, 0.05);
+    --po-text: rgb(220, 226, 232);
+    --po-text-dim: rgb(152, 164, 178);
+    --po-text-faint: rgb(100, 112, 126);
+
+    --po-accent: rgb(110, 175, 230);
+    --po-accent-2: rgb(140, 220, 200);
+    --po-accent-soft: rgba(110, 175, 230, 0.16);
+    --po-accent-soft-2: rgba(110, 175, 230, 0.28);
+    --po-accent-strong: rgb(140, 195, 240);
+
+    --po-critical: rgb(230, 110, 110);
+    --po-critical-soft: rgba(230, 110, 110, 0.16);
+    --po-warning: rgb(220, 175, 90);
+    --po-warning-soft: rgba(220, 175, 90, 0.16);
+    --po-info: rgb(110, 175, 230);
+    --po-info-soft: rgba(110, 175, 230, 0.16);
+    --po-success: rgb(130, 200, 155);
+    --po-success-soft: rgba(130, 200, 155, 0.16);
+
+    --po-select-bg: rgb(55, 80, 105);
+    --po-select-bg-inactive: rgb(48, 55, 65);
+}

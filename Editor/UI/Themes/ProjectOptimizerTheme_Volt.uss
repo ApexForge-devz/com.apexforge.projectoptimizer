@@ -1,0 +1,35 @@
+/* Theme: Volt (Dark) - near-black with a neon lime-yellow accent.
+ * The highest-energy theme of the set - a cyberpunk jolt of colour against very dark, slightly
+ * olive-tinted panels. See ProjectOptimizerTheme_Obsidian.uss for what these tokens mean.
+ */
+
+.po-root {
+    --po-bg: rgb(12, 13, 10);
+    --po-panel: rgb(18, 20, 15);
+    --po-panel-2: rgb(24, 27, 20);
+    --po-panel-3: rgb(33, 37, 27);
+    --po-panel-4: rgb(43, 48, 35);
+    --po-border: rgb(42, 48, 32);
+    --po-border-soft: rgba(255, 255, 255, 0.05);
+    --po-text: rgb(230, 236, 215);
+    --po-text-dim: rgb(165, 175, 140);
+    --po-text-faint: rgb(108, 118, 90);
+
+    --po-accent: rgb(200, 255, 60);
+    --po-accent-2: rgb(90, 220, 255);
+    --po-accent-soft: rgba(200, 255, 60, 0.16);
+    --po-accent-soft-2: rgba(200, 255, 60, 0.28);
+    --po-accent-strong: rgb(215, 255, 100);
+
+    --po-critical: rgb(255, 90, 100);
+    --po-critical-soft: rgba(255, 90, 100, 0.16);
+    --po-warning: rgb(255, 195, 60);
+    --po-warning-soft: rgba(255, 195, 60, 0.16);
+    --po-info: rgb(90, 220, 255);
+    --po-info-soft: rgba(90, 220, 255, 0.16);
+    --po-success: rgb(140, 230, 100);
+    --po-success-soft: rgba(140, 230, 100, 0.16);
+
+    --po-select-bg: rgb(90, 105, 40);
+    --po-select-bg-inactive: rgb(42, 48, 34);
+}

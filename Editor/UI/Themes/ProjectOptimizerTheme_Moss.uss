@@ -1,0 +1,36 @@
+/* Theme: Moss - Earthy green-black surfaces with a muted moss accent and warm sandstone secondary.
+ *
+ * Dark editor palette with deliberately separated surface values and a focused accent.
+ * This file defines only ProjectOptimizer's --po-* theme tokens; layout remains in the base stylesheet.
+ */
+
+.po-root {
+    --po-bg: rgb(13, 17, 12);
+    --po-panel: rgb(26, 30, 25);
+    --po-panel-2: rgb(42, 46, 41);
+    --po-panel-3: rgb(59, 62, 58);
+    --po-panel-4: rgb(78, 81, 78);
+    --po-border: rgb(54, 57, 53);
+    --po-border-soft: rgba(255, 255, 255, 0.06);
+    --po-text: rgb(238, 238, 238);
+    --po-text-dim: rgb(163, 165, 163);
+    --po-text-faint: rgb(107, 110, 107);
+
+    --po-accent: rgb(167, 200, 90);
+    --po-accent-2: rgb(210, 168, 102);
+    --po-accent-soft: rgba(167, 200, 90, 0.16);
+    --po-accent-soft-2: rgba(167, 200, 90, 0.28);
+    --po-accent-strong: rgb(180, 208, 115);
+
+    --po-critical: rgb(255, 102, 112);
+    --po-critical-soft: rgba(255, 102, 112, 0.16);
+    --po-warning: rgb(255, 190, 86);
+    --po-warning-soft: rgba(255, 190, 86, 0.16);
+    --po-info: rgb(210, 168, 102);
+    --po-info-soft: rgba(210, 168, 102, 0.16);
+    --po-success: rgb(91, 224, 164);
+    --po-success-soft: rgba(91, 224, 164, 0.16);
+
+    --po-select-bg: rgb(93, 112, 53);
+    --po-select-bg-inactive: rgb(57, 60, 56);
+}

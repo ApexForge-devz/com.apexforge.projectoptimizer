@@ -1,0 +1,9 @@
+{
+  "name": "ApexForge.ProjectOptimizer.Tests",
+  "rootNamespace": "ApexForge.ProjectOptimizer.Tests",
+  "references": ["ApexForge.ProjectOptimizer.Editor"],
+  "includePlatforms": ["Editor"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "autoReferenced": false,
+  "defineConstraints": ["UNITY_6000_0_OR_NEWER"]
+}

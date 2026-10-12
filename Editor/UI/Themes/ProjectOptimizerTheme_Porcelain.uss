@@ -1,0 +1,36 @@
+/* Theme: Porcelain - Cool porcelain surfaces with deep sapphire accents and a clean ceramic-blue secondary.
+ *
+ * Light editor palette with soft surfaces, clear hierarchy, and a readable accent.
+ * This file defines only ProjectOptimizer's --po-* theme tokens; layout remains in the base stylesheet.
+ */
+
+.po-root {
+    --po-bg: rgb(240, 243, 246);
+    --po-panel: rgb(246, 248, 249);
+    --po-panel-2: rgb(250, 251, 252);
+    --po-panel-3: rgb(229, 232, 235);
+    --po-panel-4: rgb(215, 217, 220);
+    --po-border: rgb(211, 214, 216);
+    --po-border-soft: rgba(0, 0, 0, 0.05);
+    --po-text: rgb(26, 27, 27);
+    --po-text-dim: rgb(91, 92, 93);
+    --po-text-faint: rgb(139, 141, 143);
+
+    --po-accent: rgb(49, 95, 175);
+    --po-accent-2: rgb(42, 157, 178);
+    --po-accent-soft: rgba(49, 95, 175, 0.12);
+    --po-accent-soft-2: rgba(49, 95, 175, 0.22);
+    --po-accent-strong: rgb(43, 83, 152);
+
+    --po-critical: rgb(198, 57, 72);
+    --po-critical-soft: rgba(198, 57, 72, 0.12);
+    --po-warning: rgb(165, 103, 0);
+    --po-warning-soft: rgba(165, 103, 0, 0.12);
+    --po-info: rgb(38, 141, 160);
+    --po-info-soft: rgba(38, 141, 160, 0.12);
+    --po-success: rgb(27, 137, 98);
+    --po-success-soft: rgba(27, 137, 98, 0.12);
+
+    --po-select-bg: rgb(187, 202, 226);
+    --po-select-bg-inactive: rgb(216, 219, 221);
+}

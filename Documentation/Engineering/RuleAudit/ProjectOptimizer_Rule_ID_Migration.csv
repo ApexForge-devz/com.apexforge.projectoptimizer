@@ -1,0 +1,459 @@
+﻿Source_Schema_Version,Target_Schema_Version,Old_Rule_ID,Current_Rule_ID,Migration_Type,Previous_Rule_Name,Notes
+0,2,ADR001,ADR001,Canonical ID unchanged,Addressables build contains duplicated implicit dependencies,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ADR002,ADR002,Canonical ID unchanged,Addressables bundle dependency is inefficient,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ADR003,ADR003,Canonical ID unchanged,Addressables build layout is unavailable,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ADR004,ADR004,Canonical ID unchanged,Addressables bundle is oversized,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ADR005,ADR005,Canonical ID unchanged,Addressables bundle is tiny or fragmented,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ADR006,ADR006,Canonical ID unchanged,Addressables bundle has high dependency fan-out,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ADR007,ADR007,Canonical ID unchanged,Addressables Analyze reports duplicate/dependency findings,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ADR008,ADR008,Canonical ID unchanged,Addressables Analyze evidence unavailable or stale,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ADR009,ADR009,Canonical ID unchanged,Addressables BuildLayout provenance does not match the active build context,The canonical ID was already at its final contiguous position in this rule family.
+0,2,AND001,AND001,Canonical ID unchanged,Native Android library is not proven 16 KB page-size compatible,The canonical ID was already at its final contiguous position in this rule family.
+0,2,AND002,AND002,Canonical ID unchanged,Android NDK requires 16 KB native-library compatibility review,The canonical ID was already at its final contiguous position in this rule family.
+0,2,AND003,AND003,Canonical ID unchanged,Custom Android Gradle Plugin is below the 16 KB compatibility baseline,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ANI001,ANI001,Canonical ID unchanged,Model animation compression is not optimal,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ANI002,ANI002,Canonical ID unchanged,Constant scale curves kept on import,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ANI003,ANI003,Canonical ID unchanged,Animation resampling is disabled for rotation curves,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ANI004,ANI004,Canonical ID unchanged,Clip contains non-constant scale animation,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ANI005,ANI005,Canonical ID unchanged,Very high keyframe count,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ANI006,ANI006,Canonical ID unchanged,Safe constant curves stored at full length,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ANI007,ANI007,Canonical ID unchanged,Complex Legacy animation clip,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ANI008,ANI008,Canonical ID unchanged,Clip drives a very large number of curves,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ANI009,ANI009,Canonical ID unchanged,Keys that do not change the animation,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ANI010,ANI010,Canonical ID unchanged,Model GameObjects are not optimized for animation,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ANI011,ANI011,Canonical ID unchanged,Humanoid animation oversampling is high,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ASM001,ASM001,Canonical ID unchanged,Assembly has broad compilation coupling,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ASM002,ASM002,Canonical ID unchanged,Assembly dependency cycle,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ATL001,ATL001,Canonical ID unchanged,Atlas is readable at runtime,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ATL002,ATL002,Canonical ID unchanged,Atlas texture is uncompressed,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ATL003,ATL003,Canonical ID unchanged,Atlas max size above the budget,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ATL004,ATL004,Canonical ID unchanged,Space-saving packing options disabled,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ATL005,ATL005,Canonical ID unchanged,Atlas is included in the build but has no packables,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ATL006,ATL006,Canonical ID unchanged,Atlas mipmaps enabled,The canonical ID was already at its final contiguous position in this rule family.
+0,2,ATL007,ATL007,Canonical ID unchanged,Atlas packing padding is high,The canonical ID was already at its final contiguous position in this rule family.
+0,2,AUD001,AUD001,Canonical ID unchanged,Long clip is not streamed,The canonical ID was already at its final contiguous position in this rule family.
+0,2,AUD002,AUD002,Canonical ID unchanged,Short clip is streamed,The canonical ID was already at its final contiguous position in this rule family.
+0,2,AUD003,AUD003,Canonical ID unchanged,Uncompressed PCM on a long clip,The canonical ID was already at its final contiguous position in this rule family.
+0,2,AUD004,AUD004,Canonical ID unchanged,Compression quality above budget,The canonical ID was already at its final contiguous position in this rule family.
+0,2,AUD005,AUD005,Canonical ID unchanged,Short stereo clip that may not need two channels,The canonical ID was already at its final contiguous position in this rule family.
+0,2,AUD006,AUD006,Canonical ID unchanged,Preload Audio Data enabled on a large clip,The canonical ID was already at its final contiguous position in this rule family.
+0,2,AUD007,AUD007,Canonical ID unchanged,Load In Background disabled on a long clip,The canonical ID was already at its final contiguous position in this rule family.
+0,2,AUD008,AUD008,Canonical ID unchanged,High sample-rate clip is not using Unity's sample-rate optimization,The canonical ID was already at its final contiguous position in this rule family.
+0,2,AUD009,AUD009,Canonical ID unchanged,Very large audio source file,The canonical ID was already at its final contiguous position in this rule family.
+0,2,AUD010,AUD010,Canonical ID unchanged,Ambisonic clip is forced to mono,The canonical ID was already at its final contiguous position in this rule family.
+0,2,AUD011,AUD011,Canonical ID unchanged,Tracker module is set to Decompress On Load,The canonical ID was already at its final contiguous position in this rule family.
+0,2,AUD012,AUD012,Canonical ID unchanged,Target-platform override defeats streaming policy,The canonical ID was already at its final contiguous position in this rule family.
+0,2,AUD013,AUD013,Canonical ID unchanged,WebGL clip uses Streaming load type,The canonical ID was already at its final contiguous position in this rule family.
+0,2,BLD001,BLD001,Canonical ID unchanged,Packed asset is a significant build contributor,The canonical ID was already at its final contiguous position in this rule family.
+0,2,BLD002,BLD002,Canonical ID unchanged,Packed asset is a significant build contributor,The canonical ID was already at its final contiguous position in this rule family.
+0,2,BLD003,BLD003,Canonical ID unchanged,Build step takes a significant amount of time,The canonical ID was already at its final contiguous position in this rule family.
+0,2,BLD004,BLD004,Canonical ID unchanged,Last build evidence is incomplete,The canonical ID was already at its final contiguous position in this rule family.
+0,2,BLD005,BLD005,Canonical ID unchanged,Build changed materially since the previous compatible build,The canonical ID was already at its final contiguous position in this rule family.
+0,2,BLD006,BLD006,Canonical ID unchanged,Last build evidence does not match the current build context,The canonical ID was already at its final contiguous position in this rule family.
+0,2,CTL001,CTL001,Canonical ID unchanged,Many animator layers,The canonical ID was already at its final contiguous position in this rule family.
+0,2,CTL002,CTL002,Canonical ID unchanged,Very large state machine,The canonical ID was already at its final contiguous position in this rule family.
+0,2,CTL003,CTL003,Canonical ID unchanged,Animator parameters not referenced by the controller,The canonical ID was already at its final contiguous position in this rule family.
+0,2,CTL004,CTL004,Canonical ID unchanged,State machine contains many Any State transitions,The canonical ID was already at its final contiguous position in this rule family.
+0,2,CTL005,CTL005,Canonical ID unchanged,Animator layer has IK Pass enabled,The canonical ID was already at its final contiguous position in this rule family.
+0,2,CTL006,CTL006,Canonical ID unchanged,Animator state has excessive transition conditions,The canonical ID was already at its final contiguous position in this rule family.
+0,2,CTL007,,Previously unassigned ID reclaimed; discard old value,No rule registered in previous catalog,This number was absent from the previous catalog and now identifies a different current rule. Old-schema settings/baselines using this ID are discarded rather than applied to the new rule.
+0,2,CTL008,CTL007,Canonical ID migrated through schema 0 to schema 2,Animator states use Write Defaults,Schema-0 identifier CTL008 maps through the prior catalog to current canonical ID CTL007.
+0,2,DEP001,DEP001,Canonical ID unchanged,High dependency fan-in,The canonical ID was already at its final contiguous position in this rule family.
+0,2,DEP002,DEP002,Canonical ID unchanged,Large dependency fan-out,The canonical ID was already at its final contiguous position in this rule family.
+0,2,DUP001,DUP001,Canonical ID unchanged,Duplicate file content,The canonical ID was already at its final contiguous position in this rule family.
+0,2,DUP002,DUP002,Canonical ID unchanged,Duplicate file requires manual handling,The canonical ID was already at its final contiguous position in this rule family.
+0,2,FNT001,FNT001,Canonical ID unchanged,Font atlas exceeds dimension or memory budget,The canonical ID was already at its final contiguous position in this rule family.
+0,2,FNT002,FNT002,Canonical ID unchanged,Font asset uses multiple atlas textures,The canonical ID was already at its final contiguous position in this rule family.
+0,2,FNT003,FNT003,Canonical ID unchanged,Dynamic font asset,The canonical ID was already at its final contiguous position in this rule family.
+0,2,FNT004,FNT004,Canonical ID unchanged,Glyph padding is large for the sampling size,The canonical ID was already at its final contiguous position in this rule family.
+0,2,FNT005,FNT005,Canonical ID unchanged,Monochrome font atlas uses a color texture format,The canonical ID was already at its final contiguous position in this rule family.
+0,2,FNT006,FNT006,Canonical ID unchanged,Dynamic font asset has no source font dependency,The canonical ID was already at its final contiguous position in this rule family.
+0,2,FNT007,FNT007,Canonical ID unchanged,Font atlas texture memory is high,The canonical ID was already at its final contiguous position in this rule family.
+0,2,FNT008,FNT008,Canonical ID unchanged,Font fallback chain is long,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MAT001,MAT001,Canonical ID unchanged,Material has a missing or broken shader,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MAT002,MAT002,Canonical ID unchanged,Built-in pipeline shader in a Scriptable Render Pipeline project,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MAT003,MAT003,Canonical ID unchanged,GPU instancing disabled on an instancing-capable shader,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MAT004,MAT004,Canonical ID unchanged,Duplicate material,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MAT005,MAT005,Canonical ID unchanged,Orphaned texture references,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MAT006,MAT006,Canonical ID unchanged,Transparent material appears fully opaque,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MAT007,MAT007,Canonical ID unchanged,Redundant material render-queue override,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MAT008,MAT008,Canonical ID unchanged,Material has keywords not present in the shader keyword space,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MAT009,MAT009,Canonical ID unchanged,Material is part of a large shared shader-property family,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MAT010,MAT010,Canonical ID unchanged,Material emission GI flags appear inconsistent,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MDL001,MDL001,Canonical ID unchanged,Read/Write enabled,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MDL002,MDL002,Canonical ID unchanged,Mesh compression disabled,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MDL003,MDL003,Canonical ID unchanged,Mesh GPU optimization disabled,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MDL004,MDL004,Canonical ID unchanged,Unnecessary rig on static model,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MDL005,MDL005,Canonical ID unchanged,Animation import enabled with no clips,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MDL006,MDL006,Canonical ID unchanged,Blend shape import enabled but no blend shapes are present,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MDL007,MDL007,Canonical ID unchanged,"DCC cameras, lights or visibility imported",The canonical ID was already at its final contiguous position in this rule family.
+0,2,MDL008,MDL008,Canonical ID unchanged,Tangents imported without detected normal-map usage,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MDL009,MDL009,Canonical ID unchanged,Very high geometry count,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MDL010,MDL010,Canonical ID unchanged,32-bit index buffer where 16-bit is possible,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MDL011,MDL011,Canonical ID unchanged,Many sub-meshes,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MDL012,MDL012,Canonical ID unchanged,Vertex welding disabled,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MDL013,MDL013,Canonical ID unchanged,Materials are imported from the model,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MDL014,MDL014,Canonical ID unchanged,Secondary lightmap UV generation enabled,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MDL015,MDL015,Canonical ID unchanged,Optimize Game Objects disabled on a skinned model,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MDL016,MDL016,Canonical ID unchanged,High maximum bone influences per vertex,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MDL017,MDL017,Canonical ID unchanged,Unreferenced rig bones are imported,The canonical ID was already at its final contiguous position in this rule family.
+0,2,MDL018,MDL018,Canonical ID unchanged,Bone-weight pruning is disabled,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PAA0001,,Previously unassigned ID reclaimed; discard old value,No rule registered in previous catalog,This number was absent from the previous catalog and now identifies a different current rule. Old-schema settings/baselines using this ID are discarded rather than applied to the new rule.
+0,2,PAA0002,,Previously unassigned ID reclaimed; discard old value,No rule registered in previous catalog,This number was absent from the previous catalog and now identifies a different current rule. Old-schema settings/baselines using this ID are discarded rather than applied to the new rule.
+0,2,PAA0003,,Previously unassigned ID reclaimed; discard old value,No rule registered in previous catalog,This number was absent from the previous catalog and now identifies a different current rule. Old-schema settings/baselines using this ID are discarded rather than applied to the new rule.
+0,2,PAA0005,PAA001,Canonical ID migrated through schema 0 to schema 2,Solid-color texture is larger than 1x1,Schema-0 identifier PAA0005 maps through the prior catalog to current canonical ID PAA001.
+0,2,PAA0007,PAA002,Canonical ID migrated through schema 0 to schema 2,Texture Atlas has too much empty space,Schema-0 identifier PAA0007 maps through the prior catalog to current canonical ID PAA002.
+0,2,PAA0008,PAA003,Canonical ID migrated through schema 0 to schema 2,Sprite Atlas has too much empty space,Schema-0 identifier PAA0008 maps through the prior catalog to current canonical ID PAA003.
+0,2,PAA3001,PAA004,Canonical ID migrated through schema 0 to schema 2,Resources asset pulls dependencies into the Resources build data,Schema-0 identifier PAA3001 maps through the prior catalog to current canonical ID PAA004.
+0,2,PAA3002,PAA005,Canonical ID migrated through schema 0 to schema 2,StreamingAssets folder is large,Schema-0 identifier PAA3002 maps through the prior catalog to current canonical ID PAA005.
+0,2,PAP0001,PAP001,Canonical ID migrated through schema 0 to schema 2,Package is not on Unity's recommended version,Schema-0 identifier PAP0001 maps through the prior catalog to current canonical ID PAP001.
+0,2,PAP0002,PAP002,Canonical ID migrated through schema 0 to schema 2,Experimental/Preview package is installed,Schema-0 identifier PAP0002 maps through the prior catalog to current canonical ID PAP002.
+0,2,PAS0001,,Previously unassigned ID reclaimed; discard old value,No rule registered in previous catalog,This number was absent from the previous catalog and now identifies a different current rule. Old-schema settings/baselines using this ID are discarded rather than applied to the new rule.
+0,2,PAS0002,,Previously unassigned ID reclaimed; discard old value,No rule registered in previous catalog,This number was absent from the previous catalog and now identifies a different current rule. Old-schema settings/baselines using this ID are discarded rather than applied to the new rule.
+0,2,PAS0003,PAS001,Canonical ID migrated through schema 0 to schema 2,iOS architecture includes Universal/extra architectures,Schema-0 identifier PAS0003 maps through the prior catalog to current canonical ID PAS001.
+0,2,PAS0004,PAS002,Canonical ID migrated through schema 0 to schema 2,Android architecture includes both ARMv7 and ARM64,Schema-0 identifier PAS0004 maps through the prior catalog to current canonical ID PAS002.
+0,2,PAS0005,PAS003,Canonical ID migrated through schema 0 to schema 2,iOS has both Metal and OpenGLES graphics APIs,Schema-0 identifier PAS0005 maps through the prior catalog to current canonical ID PAS003.
+0,2,PAS0006,PAS004,Canonical ID migrated through schema 0 to schema 2,iOS Metal graphics API is not enabled,Schema-0 identifier PAS0006 maps through the prior catalog to current canonical ID PAS004.
+0,2,PAS0007,,Previously unassigned ID reclaimed; discard old value,No rule registered in previous catalog,This number was absent from the previous catalog and now identifies a different current rule. Old-schema settings/baselines using this ID are discarded rather than applied to the new rule.
+0,2,PAS0008,,Previously unassigned ID reclaimed; discard old value,No rule registered in previous catalog,This number was absent from the previous catalog and now identifies a different current rule. Old-schema settings/baselines using this ID are discarded rather than applied to the new rule.
+0,2,PAS0009,,Previously unassigned ID reclaimed; discard old value,No rule registered in previous catalog,This number was absent from the previous catalog and now identifies a different current rule. Old-schema settings/baselines using this ID are discarded rather than applied to the new rule.
+0,2,PAS0010,,Previously unassigned ID reclaimed; discard old value,No rule registered in previous catalog,This number was absent from the previous catalog and now identifies a different current rule. Old-schema settings/baselines using this ID are discarded rather than applied to the new rule.
+0,2,PAS0011,,Previously unassigned ID reclaimed; discard old value,No rule registered in previous catalog,This number was absent from the previous catalog and now identifies a different current rule. Old-schema settings/baselines using this ID are discarded rather than applied to the new rule.
+0,2,PAS0012,,Previously unassigned ID reclaimed; discard old value,No rule registered in previous catalog,This number was absent from the previous catalog and now identifies a different current rule. Old-schema settings/baselines using this ID are discarded rather than applied to the new rule.
+0,2,PAS0013,,Previously unassigned ID reclaimed; discard old value,No rule registered in previous catalog,This number was absent from the previous catalog and now identifies a different current rule. Old-schema settings/baselines using this ID are discarded rather than applied to the new rule.
+0,2,PAS0014,,Previously unassigned ID reclaimed; discard old value,No rule registered in previous catalog,This number was absent from the previous catalog and now identifies a different current rule. Old-schema settings/baselines using this ID are discarded rather than applied to the new rule.
+0,2,PAS0015,PAS005,Canonical ID migrated through schema 0 to schema 2,Physics 2D layer collision matrix is fully enabled,Schema-0 identifier PAS0015 maps through the prior catalog to current canonical ID PAS005.
+0,2,PAS0016,PAS006,Canonical ID migrated through schema 0 to schema 2,Fixed Timestep is Unity's default 0.02 seconds,Schema-0 identifier PAS0016 maps through the prior catalog to current canonical ID PAS006.
+0,2,PAS0017,PAS007,Canonical ID migrated through schema 0 to schema 2,Maximum Allowed Timestep is Unity's default 0.1 seconds,Schema-0 identifier PAS0017 maps through the prior catalog to current canonical ID PAS007.
+0,2,PAS0018,PAS008,Canonical ID migrated through schema 0 to schema 2,Quality Settings are using Unity's default quality levels,Schema-0 identifier PAS0018 maps through the prior catalog to current canonical ID PAS008.
+0,2,PAS0019,PAS009,Canonical ID migrated through schema 0 to schema 2,A quality level reduces texture resolution globally,Schema-0 identifier PAS0019 maps through the prior catalog to current canonical ID PAS009.
+0,2,PAS0020,PAS010,Canonical ID migrated through schema 0 to schema 2,Async upload time slice uses Unity's default,Schema-0 identifier PAS0020 maps through the prior catalog to current canonical ID PAS010.
+0,2,PAS0021,PAS011,Canonical ID migrated through schema 0 to schema 2,Async upload buffer size uses Unity's default,Schema-0 identifier PAS0021 maps through the prior catalog to current canonical ID PAS011.
+0,2,PAS0022,PAS012,Canonical ID migrated through schema 0 to schema 2,Built-in Graphics Tier shader quality is inconsistent,Schema-0 identifier PAS0022 maps through the prior catalog to current canonical ID PAS012.
+0,2,PAS0023,PAS013,Canonical ID migrated through schema 0 to schema 2,Built-in rendering uses Forward rendering,Schema-0 identifier PAS0023 maps through the prior catalog to current canonical ID PAS013.
+0,2,PAS0024,PAS014,Canonical ID migrated through schema 0 to schema 2,Built-in rendering uses Deferred rendering,Schema-0 identifier PAS0024 maps through the prior catalog to current canonical ID PAS014.
+0,2,PAS0025,PAS015,Canonical ID migrated through schema 0 to schema 2,"Android managed stripping is Disabled, Low or Minimal",Schema-0 identifier PAS0025 maps through the prior catalog to current canonical ID PAS015.
+0,2,PAS0026,PAS016,Canonical ID migrated through schema 0 to schema 2,iOS managed stripping is Disabled or Low,Schema-0 identifier PAS0026 maps through the prior catalog to current canonical ID PAS016.
+0,2,PAS0029,PAS017,Canonical ID migrated through schema 0 to schema 2,Player splash screen is enabled,Schema-0 identifier PAS0029 maps through the prior catalog to current canonical ID PAS017.
+0,2,PAS0031,PRJ030,Legacy alias retained,Legacy alias of PRJ031,Runtime legacy alias resolves to PRJ030.
+0,2,PAS0033,PAS018,Canonical ID migrated through schema 0 to schema 2,Global audio speaker mode is not Mono,Schema-0 identifier PAS0033 maps through the prior catalog to current canonical ID PAS018.
+0,2,PAS0035,PAS019,Canonical ID migrated through schema 0 to schema 2,Enter Fast Play Mode is not enabled,Schema-0 identifier PAS0035 maps through the prior catalog to current canonical ID PAS019.
+0,2,PAS1000,PAS020,Canonical ID migrated through schema 0 to schema 2,Static batching is enabled with Entities Graphics,Schema-0 identifier PAS1000 maps through the prior catalog to current canonical ID PAS020.
+0,2,PAS1001,,Previously unassigned ID reclaimed; discard old value,No rule registered in previous catalog,This number was absent from the previous catalog and now identifies a different current rule. Old-schema settings/baselines using this ID are discarded rather than applied to the new rule.
+0,2,PAS1002,,Previously unassigned ID reclaimed; discard old value,No rule registered in previous catalog,This number was absent from the previous catalog and now identifies a different current rule. Old-schema settings/baselines using this ID are discarded rather than applied to the new rule.
+0,2,PAS1003,PAS021,Canonical ID migrated through schema 0 to schema 2,Built-in fog variants are not fully stripped,Schema-0 identifier PAS1003 maps through the prior catalog to current canonical ID PAS021.
+0,2,PAS1004,PAS022,Canonical ID migrated through schema 0 to schema 2,IL2CPP compiler configuration is Master,Schema-0 identifier PAS1004 maps through the prior catalog to current canonical ID PAS022.
+0,2,PAS1005,PAS023,Canonical ID migrated through schema 0 to schema 2,IL2CPP compiler configuration is Debug,Schema-0 identifier PAS1005 maps through the prior catalog to current canonical ID PAS023.
+0,2,PAS1006,PAS024,Canonical ID migrated through schema 0 to schema 2,Lightmap Streaming is disabled,Schema-0 identifier PAS1006 maps through the prior catalog to current canonical ID PAS024.
+0,2,PAS1007,PRJ008,Legacy alias migrated; alias ID reclaimed,Legacy alias of PRJ008,Previously aliased to PRJ008; this ID is now assigned to another canonical rule. Schema-0 project settings/baselines map it to PRJ008.
+0,2,PAS1008,,Previously unassigned ID reclaimed; discard old value,No rule registered in previous catalog,This number was absent from the previous catalog and now identifies a different current rule. Old-schema settings/baselines using this ID are discarded rather than applied to the new rule.
+0,2,PAS1009,PAS025,Canonical ID migrated through schema 0 to schema 2,URP Asset is not specified,Schema-0 identifier PAS1009 maps through the prior catalog to current canonical ID PAS025.
+0,2,PAS1010,PAS026,Canonical ID migrated through schema 0 to schema 2,URP HDR is enabled on a mobile target,Schema-0 identifier PAS1010 maps through the prior catalog to current canonical ID PAS026.
+0,2,PAS1011,PAS027,Canonical ID migrated through schema 0 to schema 2,URP MSAA is 4x or 8x on a mobile target,Schema-0 identifier PAS1011 maps through the prior catalog to current canonical ID PAS027.
+0,2,PAS1012,PAS028,Canonical ID migrated through schema 0 to schema 2,URP camera has Stop NaNs enabled,Schema-0 identifier PAS1012 maps through the prior catalog to current canonical ID PAS028.
+0,2,PHY001,PHY001,Canonical ID unchanged,Many 3D Rigidbodies,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PHY002,PHY002,Canonical ID unchanged,Rigidbody uses high solver iterations,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PHY003,PHY003,Canonical ID unchanged,Kinematic Rigidbody uses Continuous Dynamic CCD,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PHY004,PHY004,Canonical ID unchanged,Many joints in hierarchy,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRE001,PRE001,Canonical ID unchanged,Missing script components,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRE002,PRE002,Canonical ID unchanged,Missing asset references,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRE003,PRE003,Canonical ID unchanged,Non-convex Mesh Collider,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRE004,PRE004,Canonical ID unchanged,Renderer material count does not match sub-meshes,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRE005,PRE005,Canonical ID unchanged,Very large hierarchy,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRE006,PRE006,Canonical ID unchanged,Deeply nested hierarchy,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRE007,PRE007,Canonical ID unchanged,Empty GameObjects,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRE008,PRE008,Canonical ID unchanged,Raycast Target enabled on apparently non-interactive UI,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRE009,PRE009,Canonical ID unchanged,Particle System with a very high particle budget,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRE010,PRE010,Canonical ID unchanged,Animator always animates while off-screen,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRE011,PRE011,Canonical ID unchanged,static geometry not marked static,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRE012,PRE012,Canonical ID unchanged,Many realtime shadow-casting lights,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRE013,PRE013,Canonical ID unchanged,Missing prefab instances,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRE014,PRE014,Canonical ID unchanged,Dense mesh with no LOD Group,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRE015,PRE015,Canonical ID unchanged,Continuous collision detection on a Rigidbody,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRE016,PRE016,Canonical ID unchanged,Renderer material mapping requires review,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRJ001,PRJ001,Canonical ID unchanged,Optimize Mesh Data disabled,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRJ002,PRJ002,Canonical ID unchanged,Managed code stripping is low or disabled,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRJ003,PRJ003,Canonical ID unchanged,Mono scripting backend on a mobile-capable target,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRJ004,PRJ004,Canonical ID unchanged,Incremental garbage collection disabled,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRJ005,PRJ005,Canonical ID unchanged,Prebake Collision Meshes disabled,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRJ006,PRJ006,Canonical ID unchanged,Static batching disabled,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRJ007,PRJ007,Canonical ID unchanged,Dynamic batching enabled alongside a Scriptable Render Pipeline,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRJ008,PRJ008,Canonical ID unchanged,Texture streaming disabled,The canonical ID was already at its final contiguous position in this rule family.
+0,2,PRJ009,,Previously unassigned ID reclaimed; discard old value,No rule registered in previous catalog,This number was absent from the previous catalog and now identifies a different current rule. Old-schema settings/baselines using this ID are discarded rather than applied to the new rule.
+0,2,PRJ010,PRJ009,Canonical ID migrated through schema 0 to schema 2,Anisotropic filtering forced on for every texture,Schema-0 identifier PRJ010 maps through the prior catalog to current canonical ID PRJ009.
+0,2,PRJ011,PRJ010,Canonical ID migrated through schema 0 to schema 2,SRP Batcher disabled,Schema-0 identifier PRJ011 maps through the prior catalog to current canonical ID PRJ010.
+0,2,PRJ012,PRJ011,Canonical ID migrated through schema 0 to schema 2,Shadow distance is very large,Schema-0 identifier PRJ012 maps through the prior catalog to current canonical ID PRJ011.
+0,2,PRJ013,PRJ012,Canonical ID migrated through schema 0 to schema 2,Layer collision matrix is fully enabled,Schema-0 identifier PRJ013 maps through the prior catalog to current canonical ID PRJ012.
+0,2,PRJ014,PRJ013,Canonical ID migrated through schema 0 to schema 2,Collision callbacks are not reused,Schema-0 identifier PRJ014 maps through the prior catalog to current canonical ID PRJ013.
+0,2,PRJ015,PRJ014,Canonical ID migrated through schema 0 to schema 2,Accelerometer polled on a mobile target,Schema-0 identifier PRJ015 maps through the prior catalog to current canonical ID PRJ014.
+0,2,PRJ016,PRJ015,Canonical ID migrated through schema 0 to schema 2,Real audio voice budget is high,Schema-0 identifier PRJ016 maps through the prior catalog to current canonical ID PRJ015.
+0,2,PRJ017,PRJ016,Canonical ID migrated through schema 0 to schema 2,Android texture compression does not prefer ASTC,Schema-0 identifier PRJ017 maps through the prior catalog to current canonical ID PRJ016.
+0,2,PRJ018,PRJ017,Canonical ID migrated through schema 0 to schema 2,Physics solver iteration count above the default,Schema-0 identifier PRJ018 maps through the prior catalog to current canonical ID PRJ017.
+0,2,PRJ019,PRJ018,Canonical ID migrated through schema 0 to schema 2,MSAA below 4x on a VR target,Schema-0 identifier PRJ019 maps through the prior catalog to current canonical ID PRJ018.
+0,2,PRJ020,PRJ019,Canonical ID migrated through schema 0 to schema 2,Engine code stripping disabled,Schema-0 identifier PRJ020 maps through the prior catalog to current canonical ID PRJ019.
+0,2,PRJ021,PRJ020,Canonical ID migrated through schema 0 to schema 2,CPU mesh deformation is enabled,Schema-0 identifier PRJ021 maps through the prior catalog to current canonical ID PRJ020.
+0,2,PRJ022,PRJ021,Canonical ID migrated through schema 0 to schema 2,Mip Stripping disabled,Schema-0 identifier PRJ022 maps through the prior catalog to current canonical ID PRJ021.
+0,2,PRJ023,PRJ022,Canonical ID migrated through schema 0 to schema 2,IL2CPP compiler configuration is Debug,Schema-0 identifier PRJ023 maps through the prior catalog to current canonical ID PRJ022.
+0,2,PRJ024,PRJ023,Canonical ID migrated through schema 0 to schema 2,IL2CPP code generation favours size on a performance target,Schema-0 identifier PRJ024 maps through the prior catalog to current canonical ID PRJ023.
+0,2,PRJ025,PRJ024,Canonical ID migrated through schema 0 to schema 2,Graphics Jobs disabled on a supported target,Schema-0 identifier PRJ025 maps through the prior catalog to current canonical ID PRJ024.
+0,2,PRJ026,PRJ025,Canonical ID migrated through schema 0 to schema 2,Colour space is Gamma,Schema-0 identifier PRJ026 maps through the prior catalog to current canonical ID PRJ025.
+0,2,PRJ027,PRJ026,Canonical ID migrated through schema 0 to schema 2,ARM64 missing from the Android target architectures,Schema-0 identifier PRJ027 maps through the prior catalog to current canonical ID PRJ026.
+0,2,PRJ028,PRJ027,Canonical ID migrated through schema 0 to schema 2,ARMv7 is shipped alongside ARM64 without architecture targeting,Schema-0 identifier PRJ028 maps through the prior catalog to current canonical ID PRJ027.
+0,2,PRJ029,PRJ028,Canonical ID migrated through schema 0 to schema 2,Optimized Frame Pacing disabled,Schema-0 identifier PRJ029 maps through the prior catalog to current canonical ID PRJ028.
+0,2,PRJ030,PRJ029,Canonical ID migrated through schema 0 to schema 2,Android application entry point is Activity,Schema-0 identifier PRJ030 maps through the prior catalog to current canonical ID PRJ029.
+0,2,PRJ031,PRJ030,Canonical ID migrated through schema 0 to schema 2,Vulkan is not the preferred Android graphics API,Schema-0 identifier PRJ031 maps through the prior catalog to current canonical ID PRJ030.
+0,2,PRJ032,PRJ031,Canonical ID migrated through schema 0 to schema 2,R8 minification disabled for release builds,Schema-0 identifier PRJ032 maps through the prior catalog to current canonical ID PRJ031.
+0,2,PRJ033,,Previously unassigned ID reclaimed; discard old value,No rule registered in previous catalog,This number was absent from the previous catalog and now identifies a different current rule. Old-schema settings/baselines using this ID are discarded rather than applied to the new rule.
+0,2,PRJ034,PRJ032,Canonical ID migrated through schema 0 to schema 2,Blit Type forces a full-screen copy every frame,Schema-0 identifier PRJ034 maps through the prior catalog to current canonical ID PRJ032.
+0,2,PRJ035,PRJ033,Canonical ID migrated through schema 0 to schema 2,iOS script call optimization keeps exception checks,Schema-0 identifier PRJ035 maps through the prior catalog to current canonical ID PRJ033.
+0,2,PRJ036,PRJ034,Canonical ID migrated through schema 0 to schema 2,WebGL compression is not Brotli,Schema-0 identifier PRJ036 maps through the prior catalog to current canonical ID PRJ034.
+0,2,PRJ037,PRJ035,Canonical ID migrated through schema 0 to schema 2,WebGL exception support is above the minimum,Schema-0 identifier PRJ037 maps through the prior catalog to current canonical ID PRJ035.
+0,2,PRJ038,PRJ036,Canonical ID migrated through schema 0 to schema 2,WebGL data caching disabled,Schema-0 identifier PRJ038 maps through the prior catalog to current canonical ID PRJ036.
+0,2,PRJ039,PRJ037,Canonical ID migrated through schema 0 to schema 2,WebGL managed stripping is below High,Schema-0 identifier PRJ039 maps through the prior catalog to current canonical ID PRJ037.
+0,2,PRJ040,PRJ038,Canonical ID migrated through schema 0 to schema 2,Shadow cascades on a mobile quality level,Schema-0 identifier PRJ040 maps through the prior catalog to current canonical ID PRJ038.
+0,2,PRJ041,PRJ039,Canonical ID migrated through schema 0 to schema 2,LOD Bias keeps high-detail meshes in view too long,Schema-0 identifier PRJ041 maps through the prior catalog to current canonical ID PRJ039.
+0,2,PRJ042,PRJ040,Canonical ID migrated through schema 0 to schema 2,Skin Weights above two bones per vertex,Schema-0 identifier PRJ042 maps through the prior catalog to current canonical ID PRJ040.
+0,2,PRJ043,PRJ041,Canonical ID migrated through schema 0 to schema 2,Realtime reflection probes enabled on a mobile quality level,Schema-0 identifier PRJ043 maps through the prior catalog to current canonical ID PRJ041.
+0,2,PRJ044,PRJ042,Canonical ID migrated through schema 0 to schema 2,Soft particles enabled on a mobile quality level,Schema-0 identifier PRJ044 maps through the prior catalog to current canonical ID PRJ042.
+0,2,PRJ045,PRJ043,Canonical ID migrated through schema 0 to schema 2,GPU Resident Drawer is disabled on a compatible URP target,Schema-0 identifier PRJ045 maps through the prior catalog to current canonical ID PRJ043.
+0,2,PRJ046,PRJ044,Canonical ID migrated through schema 0 to schema 2,GPU occlusion culling is off while the GPU Resident Drawer is on,Schema-0 identifier PRJ046 maps through the prior catalog to current canonical ID PRJ044.
+0,2,PRJ047,PRJ045,Canonical ID migrated through schema 0 to schema 2,BatchRendererGroup variants are stripped,Schema-0 identifier PRJ047 maps through the prior catalog to current canonical ID PRJ045.
+0,2,PRJ048,PRJ046,Canonical ID migrated through schema 0 to schema 2,Static batching fights the GPU Resident Drawer,Schema-0 identifier PRJ048 maps through the prior catalog to current canonical ID PRJ046.
+0,2,PRJ049,PRJ047,Canonical ID migrated through schema 0 to schema 2,Opaque Texture enabled,Schema-0 identifier PRJ049 maps through the prior catalog to current canonical ID PRJ047.
+0,2,PRJ050,PRJ048,Canonical ID migrated through schema 0 to schema 2,Depth Texture enabled,Schema-0 identifier PRJ050 maps through the prior catalog to current canonical ID PRJ048.
+0,2,PRJ051,PRJ049,Canonical ID migrated through schema 0 to schema 2,Mobile MSAA is 4x or higher,Schema-0 identifier PRJ051 maps through the prior catalog to current canonical ID PRJ049.
+0,2,PRJ052,PRJ050,Canonical ID migrated through schema 0 to schema 2,Fast sRGB/Linear conversion disabled on a mobile target,Schema-0 identifier PRJ052 maps through the prior catalog to current canonical ID PRJ050.
+0,2,PRJ053,,Previously unassigned ID reclaimed; discard old value,No rule registered in previous catalog,This number was absent from the previous catalog and now identifies a different current rule. Old-schema settings/baselines using this ID are discarded rather than applied to the new rule.
+0,2,PRJ054,PRJ051,Canonical ID migrated through schema 0 to schema 2,Additional lights are per-pixel with a large shadow map on mobile,Schema-0 identifier PRJ054 maps through the prior catalog to current canonical ID PRJ051.
+0,2,PRJ055,PRJ052,Canonical ID migrated through schema 0 to schema 2,Android target API is below the current Google Play submission requirement,Schema-0 identifier PRJ055 maps through the prior catalog to current canonical ID PRJ052.
+0,2,PRJ056,PRJ053,Canonical ID migrated through schema 0 to schema 2,LOD Cross Fade enabled on a mobile quality level,Schema-0 identifier PRJ056 maps through the prior catalog to current canonical ID PRJ053.
+0,2,PRJ057,PRJ054,Canonical ID migrated through schema 0 to schema 2,Soft real-time shadows enabled on a mobile quality level,Schema-0 identifier PRJ057 maps through the prior catalog to current canonical ID PRJ054.
+0,2,PRJ058,PRJ055,Canonical ID migrated through schema 0 to schema 2,URP render scale is above 1 on a mobile target,Schema-0 identifier PRJ058 maps through the prior catalog to current canonical ID PRJ055.
+0,2,PRJ059,PRJ056,Canonical ID migrated through schema 0 to schema 2,URP main-light shadows enabled on a mobile target,Schema-0 identifier PRJ059 maps through the prior catalog to current canonical ID PRJ056.
+0,2,PRJ060,PRJ057,Canonical ID migrated through schema 0 to schema 2,URP additional-light count is high on a mobile target,Schema-0 identifier PRJ060 maps through the prior catalog to current canonical ID PRJ057.
+0,2,PRJ061,,Previously unassigned ID reclaimed; discard old value,No rule registered in previous catalog,This number was absent from the previous catalog and now identifies a different current rule. Old-schema settings/baselines using this ID are discarded rather than applied to the new rule.
+0,2,PRJ062,PRJ058,Canonical ID migrated through schema 0 to schema 2,Quality setting keeps too many frames queued,Schema-0 identifier PRJ062 maps through the prior catalog to current canonical ID PRJ058.
+0,2,PRJ063,PRJ059,Canonical ID migrated through schema 0 to schema 2,Physics autoSyncTransforms is enabled,Schema-0 identifier PRJ063 maps through the prior catalog to current canonical ID PRJ059.
+0,2,PRJ064,PRJ060,Canonical ID migrated through schema 0 to schema 2,Editor async shader compilation is disabled,Schema-0 identifier PRJ064 maps through the prior catalog to current canonical ID PRJ060.
+0,2,PRJ065,PRJ061,Canonical ID migrated through schema 0 to schema 2,Editor refresh import mode is not OutOfProcessPerQueue,Schema-0 identifier PRJ065 maps through the prior catalog to current canonical ID PRJ061.
+0,2,PRJ066,PRJ062,Canonical ID migrated through schema 0 to schema 2,Import worker configuration may be materially below the host baseline,Schema-0 identifier PRJ066 maps through the prior catalog to current canonical ID PRJ062.
+0,2,PRJ067,PRJ063,Canonical ID migrated through schema 0 to schema 2,Parallel AssetBundle building is disabled,Schema-0 identifier PRJ067 maps through the prior catalog to current canonical ID PRJ063.
+0,2,PRJ068,PRJ064,Canonical ID migrated through schema 0 to schema 2,Dedicated Server optimizations are disabled,Schema-0 identifier PRJ068 maps through the prior catalog to current canonical ID PRJ064.
+0,2,PRJ069,PRJ065,Canonical ID migrated through schema 0 to schema 2,Shader variant loading memory exceeds the configured budget,Schema-0 identifier PRJ069 maps through the prior catalog to current canonical ID PRJ065.
+0,2,PRJ070,PRJ066,Canonical ID migrated through schema 0 to schema 2,Lightmap resolution is high for the project's baked-lighting usage,Schema-0 identifier PRJ070 maps through the prior catalog to current canonical ID PRJ066.
+0,2,PRJ071,PRJ067,Canonical ID migrated through schema 0 to schema 2,Baked GI sample or bounce budget is high,Schema-0 identifier PRJ071 maps through the prior catalog to current canonical ID PRJ067.
+0,2,PRJ072,PRJ068,Canonical ID migrated through schema 0 to schema 2,Physics2D solver iterations exceed the project policy,Schema-0 identifier PRJ072 maps through the prior catalog to current canonical ID PRJ068.
+0,2,PRJ073,PRJ069,Canonical ID migrated through schema 0 to schema 2,3D solver velocity iterations exceed the project policy,Schema-0 identifier PRJ073 maps through the prior catalog to current canonical ID PRJ069.
+0,2,PRJ074,PRJ070,Canonical ID migrated through schema 0 to schema 2,Force Asset Unload and GC on scene load is enabled,Schema-0 identifier PRJ074 maps through the prior catalog to current canonical ID PRJ070.
+0,2,PRJ075,PRJ071,Canonical ID migrated through schema 0 to schema 2,Build Profile shader stripping is configured conservatively,Schema-0 identifier PRJ075 maps through the prior catalog to current canonical ID PRJ071.
+0,2,PRJ076,PRJ072,Canonical ID migrated through schema 0 to schema 2,SRP Batcher setting belongs to an unknown custom pipeline,Schema-0 identifier PRJ076 maps through the prior catalog to current canonical ID PRJ072.
+0,2,PRJ077,PRJ013,Legacy alias retained,Legacy alias of PRJ014,Runtime legacy alias resolves to PRJ013.
+0,2,PRJ078,PRJ014,Legacy alias retained,Legacy alias of PRJ015,Runtime legacy alias resolves to PRJ014.
+0,2,PRJ079,PRJ073,Canonical ID migrated through schema 0 to schema 2,IL2CPP Debug configuration is intentional for development,Schema-0 identifier PRJ079 maps through the prior catalog to current canonical ID PRJ073.
+0,2,PRJ080,PRJ074,Canonical ID migrated through schema 0 to schema 2,ARM64 cannot be enabled until native plugins support it,Schema-0 identifier PRJ080 maps through the prior catalog to current canonical ID PRJ074.
+0,2,PRJ081,PRJ059,Legacy alias retained,Legacy alias of PRJ063,Runtime legacy alias resolves to PRJ059.
+0,2,PRJ082,PRJ075,Canonical ID migrated through schema 0 to schema 2,URP Render Graph compatibility mode is enabled,Schema-0 identifier PRJ082 maps through the prior catalog to current canonical ID PRJ075.
+0,2,PRJ083,PRJ076,Canonical ID migrated through schema 0 to schema 2,URP Render Graph compilation caching is disabled,Schema-0 identifier PRJ083 maps through the prior catalog to current canonical ID PRJ076.
+0,2,REN001,REN001,Canonical ID unchanged,Renderer feature uses the legacy AddRenderPasses path,The canonical ID was already at its final contiguous position in this rule family.
+0,2,REN002,REN002,Canonical ID unchanged,Renderer feature performs an explicit blit,The canonical ID was already at its final contiguous position in this rule family.
+0,2,REN003,REN003,Canonical ID unchanged,Renderer feature configures an intermediate render target on the legacy path,The canonical ID was already at its final contiguous position in this rule family.
+0,2,REN004,REN004,Canonical ID unchanged,Renderer feature uses a CommandBuffer blit/copy,The canonical ID was already at its final contiguous position in this rule family.
+0,2,REN005,REN005,Canonical ID unchanged,Renderer code uses MaterialPropertyBlock,The canonical ID was already at its final contiguous position in this rule family.
+0,2,REN006,REN006,Canonical ID unchanged,Per-instance rendering callback can block GPU-driven rendering,The canonical ID was already at its final contiguous position in this rule family.
+0,2,RND001,RND001,Canonical ID unchanged,SkinnedMeshRenderer updates while off-screen,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR001,SCR001,Canonical ID unchanged,Empty per-frame method,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR002,SCR002,Canonical ID unchanged,Expensive scene search inside a per-frame method,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR003,SCR003,Canonical ID unchanged,GetComponent inside a per-frame method,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR004,SCR004,Canonical ID unchanged,LINQ inside a per-frame method,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR005,SCR005,Canonical ID unchanged,Debug logging in runtime code,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR006,SCR006,Canonical ID unchanged,OnGUI implemented in runtime code,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR007,SCR007,Canonical ID unchanged,SendMessage used instead of a direct call,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR008,SCR008,Canonical ID unchanged,Instantiate or Destroy inside a per-frame method,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR009,SCR009,Canonical ID unchanged,Resources.Load in runtime code,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR010,SCR010,Canonical ID unchanged,Camera.main in a per-frame method,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR011,SCR011,Canonical ID unchanged,Transform.Find in a per-frame method,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR012,SCR012,Canonical ID unchanged,Allocating physics query in a per-frame method,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR013,SCR013,Canonical ID unchanged,Allocation candidate in a per-frame method,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR014,SCR014,Canonical ID unchanged,foreach loop in a per-frame method,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR015,SCR015,Canonical ID unchanged,StartCoroutine in a per-frame method,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR016,SCR016,Canonical ID unchanged,Wait instruction allocated in a per-frame method,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR017,SCR017,Canonical ID unchanged,String formatting in a per-frame method,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR018,SCR018,Canonical ID unchanged,ToString in a per-frame method,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR019,SCR019,Canonical ID unchanged,Lambda/delegate expression in a per-frame method,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR020,SCR020,Canonical ID unchanged,Runtime hash/ID generation in a per-frame method,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR021,SCR021,Canonical ID unchanged,Physics.SyncTransforms in a per-frame method,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR022,SCR022,Canonical ID unchanged,Renderer material or material-array access in a per-frame method,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR023,SCR023,Canonical ID unchanged,Animator.parameters array access in a per-frame method,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR024,SCR024,Canonical ID unchanged,Input.touches array access in a per-frame method,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SCR025,SCR025,Canonical ID unchanged,Explicit GC.Collect in a per-frame method,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SHD001,SHD001,Canonical ID unchanged,Shader has compile errors,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SHD002,SHD002,Canonical ID unchanged,Shader has a large multi_compile variant space,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SHD003,SHD003,Canonical ID unchanged,Shader has many passes,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SHD004,SHD004,Canonical ID unchanged,Shader has compiler warnings,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SHD005,SHD005,Canonical ID unchanged,Shader is unsupported on the editor's current platform,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SHD006,SHD006,Canonical ID unchanged,Shader has a large local keyword space,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SHD007,SHD007,Canonical ID unchanged,multi_compile feature appears material-driven,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SHD008,SHD008,Canonical ID unchanged,Global multi_compile feature may be local,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SHD009,SHD009,Canonical ID unchanged,Large variant shader is Always Included,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SHD010,SHD010,Canonical ID unchanged,Shader has a large keyword/directive footprint (heuristic),The canonical ID was already at its final contiguous position in this rule family.
+0,2,SHD011,SHD011,Canonical ID unchanged,Legacy aggregate; no standalone finding,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SHD012,SHD012,Canonical ID unchanged,Shader Variant Collection contains many variants,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SHD013,SHD013,Canonical ID unchanged,Shader has a large shader_feature variant space,The canonical ID was already at its final contiguous position in this rule family.
+0,2,SHD014,SHD014,Canonical ID unchanged,Shader contains duplicate keyword-set declarations,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TER001,TER001,Canonical ID unchanged,Terrain heightmap resolution is high,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TER002,TER002,Canonical ID unchanged,Terrain alphamap resolution is high,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TER003,TER003,Canonical ID unchanged,Terrain detail resolution is high,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TER004,TER004,Canonical ID unchanged,Terrain uses many terrain layers,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TEX001,TEX001,Canonical ID unchanged,Texture larger than the size budget for the target platform,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TEX002,TEX002,Canonical ID unchanged,Texture imports uncompressed for the target platform,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TEX003,TEX003,Canonical ID unchanged,Crunch compression / quality differs from the project policy,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TEX004,TEX004,Canonical ID unchanged,Read/Write enabled,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TEX005,TEX005,Canonical ID unchanged,Mip maps generated for a 2D/UI texture,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TEX006,TEX006,Canonical ID unchanged,Mip maps missing on a world-space texture,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TEX007,TEX007,Canonical ID unchanged,Alpha source configured when the source has no alpha,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TEX008,TEX008,Canonical ID unchanged,Texture uses a filename normal-map hint but is imported as Default,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TEX009,TEX009,Canonical ID unchanged,Mipmap streaming disabled on a large texture,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TEX010,TEX010,Canonical ID unchanged,Anisotropic filtering level is high,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TEX011,TEX011,Canonical ID unchanged,Mobile target override uses an uncompressed format,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TEX012,TEX012,Canonical ID unchanged,Very large source file,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TEX013,TEX013,Canonical ID unchanged,sRGB enabled on a likely data texture,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TEX014,TEX014,Canonical ID unchanged,Colour texture contains only greyscale data,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TEX015,TEX015,Canonical ID unchanged,Filtering settings are inefficient for a texture without mip maps,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TEX016,TEX016,Canonical ID unchanged,Sprite is not packed into a Sprite Atlas,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TEX017,TEX017,Canonical ID unchanged,Texture ignores the global mipmap limit,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TEX018,TEX018,Canonical ID unchanged,High-quality texture compression on a large texture,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TMP001,TMP001,Canonical ID unchanged,TMP atlas exceeds the review budget,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TMP002,TMP002,Canonical ID unchanged,TMP font uses dynamic atlas population,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TMP003,TMP003,Canonical ID unchanged,TMP fallback chain is long,The canonical ID was already at its final contiguous position in this rule family.
+0,2,TMP004,TMP004,Canonical ID unchanged,TMP font uses multiple atlas textures,The canonical ID was already at its final contiguous position in this rule family.
+0,2,UIT001,UIT001,Canonical ID unchanged,Many UI Canvases,The canonical ID was already at its final contiguous position in this rule family.
+0,2,UIT002,UIT002,Canonical ID unchanged,Many Graphic Raycasters,The canonical ID was already at its final contiguous position in this rule family.
+0,2,UIT003,UIT003,Canonical ID unchanged,Many UI layout components,The canonical ID was already at its final contiguous position in this rule family.
+0,2,UITK001,UITK001,Canonical ID unchanged,Large UI Toolkit source asset,The canonical ID was already at its final contiguous position in this rule family.
+0,2,UITK002,UITK002,Canonical ID unchanged,Deep UXML hierarchy,The canonical ID was already at its final contiguous position in this rule family.
+0,2,UITK003,UITK003,Canonical ID unchanged,Large USS selector surface,The canonical ID was already at its final contiguous position in this rule family.
+0,2,UITK004,UITK004,Canonical ID unchanged,USS imported with errors,The canonical ID was already at its final contiguous position in this rule family.
+0,2,UNU001,UNU001,Canonical ID unchanged,No static referrer anywhere in the project,The canonical ID was already at its final contiguous position in this rule family.
+0,2,UNU002,UNU002,Canonical ID unchanged,Asset lives in a Resources folder,The canonical ID was already at its final contiguous position in this rule family.
+0,2,UNU003,UNU003,Canonical ID unchanged,Empty folder,The canonical ID was already at its final contiguous position in this rule family.
+0,2,UNU004,UNU004,Canonical ID unchanged,Large asset with no static referrer,The canonical ID was already at its final contiguous position in this rule family.
+0,2,UNU005,UNU005,Canonical ID unchanged,"Referenced, but nothing in the build reaches it",The canonical ID was already at its final contiguous position in this rule family.
+0,2,UNU006,UNU006,Canonical ID unchanged,Non-engine source file stored under Assets,The canonical ID was already at its final contiguous position in this rule family.
+0,2,VFX001,VFX001,Canonical ID unchanged,Expensive particle modules enabled,The canonical ID was already at its final contiguous position in this rule family.
+0,2,VID001,VID001,Canonical ID unchanged,Video resolution above the budget,The canonical ID was already at its final contiguous position in this rule family.
+0,2,VID002,VID002,Canonical ID unchanged,Very large imported video,The canonical ID was already at its final contiguous position in this rule family.
+0,2,VID003,VID003,Canonical ID unchanged,Video transcode was skipped,The canonical ID was already at its final contiguous position in this rule family.
+0,2,VID004,VID004,Canonical ID unchanged,Video contains imported audio tracks,The canonical ID was already at its final contiguous position in this rule family.
+0,2,VID005,VID005,Canonical ID unchanged,Alpha retained even though the source has no alpha,The canonical ID was already at its final contiguous position in this rule family.
+0,2,VID006,VID006,Canonical ID unchanged,Video is being upscaled during import,The canonical ID was already at its final contiguous position in this rule family.
+0,2,VID007,VID001,Legacy alias migrated; alias ID reclaimed,Legacy alias of VID001,Previously aliased to VID001; this ID is now assigned to another canonical rule. Schema-0 project settings/baselines map it to VID001.
+0,2,VID008,VID007,Canonical ID migrated through schema 0 to schema 2,VideoClip is unsupported on WebGL,Schema-0 identifier VID008 maps through the prior catalog to current canonical ID VID007.
+0,2,PAA001,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAA001 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAA002,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAA002 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAA003,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAA003 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAA004,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAA004 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAA005,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAA005 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAP001,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAP001 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAP002,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAP002 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS001,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS001 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS002,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS002 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS003,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS003 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS004,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS004 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS005,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS005 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS006,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS006 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS007,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS007 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS008,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS008 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS009,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS009 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS010,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS010 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS011,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS011 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS012,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS012 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS013,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS013 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS014,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS014 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS015,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS015 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS016,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS016 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS017,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS017 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS018,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS018 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS019,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS019 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS020,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS020 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS021,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS021 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS022,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS022 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS023,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS023 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS024,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS024 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS025,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS025 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS026,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS026 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS027,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS027 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+0,2,PAS028,,Previously unassigned schema-0 ID; discard reclaimed short form,No rule registered with this ID in schema 0,Schema-0 data containing PAS028 is discarded because this compact three-digit ID was not assigned in schema 0; it now identifies a different canonical rule.
+1,2,PAA0001,PAA001,Schema 1 canonical ID normalization,Solid-color texture is larger than 1x1,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAA0002,PAA002,Schema 1 canonical ID normalization,Texture Atlas has too much empty space,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAA0003,PAA003,Schema 1 canonical ID normalization,Sprite Atlas has too much empty space,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAA3001,PAA004,Schema 1 canonical ID normalization,Resources asset pulls dependencies into the Resources build data,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAA3002,PAA005,Schema 1 canonical ID normalization,StreamingAssets folder is large,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAP0001,PAP001,Schema 1 canonical ID normalization,Package is not on Unity's recommended version,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAP0002,PAP002,Schema 1 canonical ID normalization,Experimental/Preview package is installed,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS0001,PAS001,Schema 1 canonical ID normalization,iOS architecture includes Universal/extra architectures,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS0002,PAS002,Schema 1 canonical ID normalization,Android architecture includes both ARMv7 and ARM64,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS0003,PAS003,Schema 1 canonical ID normalization,iOS has both Metal and OpenGLES graphics APIs,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS0004,PAS004,Schema 1 canonical ID normalization,iOS Metal graphics API is not enabled,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS0005,PAS005,Schema 1 canonical ID normalization,Physics 2D layer collision matrix is fully enabled,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS0006,PAS006,Schema 1 canonical ID normalization,Fixed Timestep is Unity's default 0.02 seconds,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS0007,PAS007,Schema 1 canonical ID normalization,Maximum Allowed Timestep is Unity's default 0.1 seconds,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS0008,PAS008,Schema 1 canonical ID normalization,Quality Settings are using Unity's default quality levels,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS0009,PAS009,Schema 1 canonical ID normalization,A quality level reduces texture resolution globally,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS0010,PAS010,Schema 1 canonical ID normalization,Async upload time slice uses Unity's default,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS0011,PAS011,Schema 1 canonical ID normalization,Async upload buffer size uses Unity's default,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS0012,PAS012,Schema 1 canonical ID normalization,Built-in Graphics Tier shader quality is inconsistent,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS0013,PAS013,Schema 1 canonical ID normalization,Built-in rendering uses Forward rendering,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS0014,PAS014,Schema 1 canonical ID normalization,Built-in rendering uses Deferred rendering,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS0015,PAS015,Schema 1 canonical ID normalization,"Android managed stripping is Disabled, Low or Minimal",Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS0016,PAS016,Schema 1 canonical ID normalization,iOS managed stripping is Disabled or Low,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS0017,PAS017,Schema 1 canonical ID normalization,Player splash screen is enabled,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS0018,PAS018,Schema 1 canonical ID normalization,Global audio speaker mode is not Mono,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS0019,PAS019,Schema 1 canonical ID normalization,Enter Fast Play Mode is not enabled,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS0031,PRJ030,Schema 1 legacy alias canonicalization,Vulkan is not the preferred Android graphics API,Schema 1 alias resolves directly to its canonical rule.
+1,2,PAS1000,PAS020,Schema 1 canonical ID normalization,Static batching is enabled with Entities Graphics,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS1001,PAS021,Schema 1 canonical ID normalization,Built-in fog variants are not fully stripped,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS1002,PAS022,Schema 1 canonical ID normalization,IL2CPP compiler configuration is Master,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS1003,PAS023,Schema 1 canonical ID normalization,IL2CPP compiler configuration is Debug,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS1004,PAS024,Schema 1 canonical ID normalization,Lightmap Streaming is disabled,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS1005,PAS025,Schema 1 canonical ID normalization,URP Asset is not specified,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS1006,PAS026,Schema 1 canonical ID normalization,URP HDR is enabled on a mobile target,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS1007,PAS027,Schema 1 canonical ID normalization,URP MSAA is 4x or 8x on a mobile target,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PAS1008,PAS028,Schema 1 canonical ID normalization,URP camera has Stop NaNs enabled,Schema 1 canonical ID now uses the single contiguous three-digit sequence for its prefix.
+1,2,PRJ077,PRJ013,Schema 1 legacy alias canonicalization,Collision callbacks are not reused,Schema 1 alias resolves directly to its canonical rule.
+1,2,PRJ078,PRJ014,Schema 1 legacy alias canonicalization,Accelerometer polled on a mobile target,Schema 1 alias resolves directly to its canonical rule.
+1,2,PRJ081,PRJ059,Schema 1 legacy alias canonicalization,Physics autoSyncTransforms is enabled,Schema 1 alias resolves directly to its canonical rule.
+1,2,PAA001,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAA001 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAA002,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAA002 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAA003,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAA003 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAA004,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAA004 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAA005,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAA005 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAP001,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAP001 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAP002,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAP002 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS001,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS001 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS002,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS002 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS003,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS003 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS004,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS004 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS005,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS005 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS006,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS006 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS007,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS007 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS008,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS008 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS009,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS009 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS010,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS010 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS011,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS011 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS012,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS012 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS013,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS013 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS014,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS014 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS015,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS015 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS016,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS016 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS017,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS017 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS018,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS018 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS019,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS019 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS020,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS020 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS021,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS021 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS022,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS022 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS023,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS023 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS024,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS024 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS025,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS025 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS026,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS026 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS027,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS027 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.
+1,2,PAS028,,Previously unassigned schema-1 ID; discard reclaimed short form,No rule registered with this ID in schema 1,Schema-1 data containing PAS028 is discarded because this compact three-digit ID was not assigned in schema 1; it now identifies a different canonical rule.

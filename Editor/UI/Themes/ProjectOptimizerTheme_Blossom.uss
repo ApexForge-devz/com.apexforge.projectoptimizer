@@ -1,0 +1,36 @@
+/* Theme: Blossom - Powdered pink surfaces with a berry accent and cool periwinkle support.
+ *
+ * Light editor palette with soft surfaces, clear hierarchy, and a readable accent.
+ * This file defines only ProjectOptimizer's --po-* theme tokens; layout remains in the base stylesheet.
+ */
+
+.po-root {
+    --po-bg: rgb(243, 231, 236);
+    --po-panel: rgb(248, 240, 243);
+    --po-panel-2: rgb(251, 248, 249);
+    --po-panel-3: rgb(232, 221, 225);
+    --po-panel-4: rgb(217, 207, 211);
+    --po-border: rgb(214, 203, 208);
+    --po-border-soft: rgba(0, 0, 0, 0.05);
+    --po-text: rgb(27, 25, 26);
+    --po-text-dim: rgb(92, 88, 90);
+    --po-text-faint: rgb(141, 134, 137);
+
+    --po-accent: rgb(182, 78, 121);
+    --po-accent-2: rgb(104, 121, 182);
+    --po-accent-soft: rgba(182, 78, 121, 0.12);
+    --po-accent-soft-2: rgba(182, 78, 121, 0.22);
+    --po-accent-strong: rgb(158, 68, 105);
+
+    --po-critical: rgb(198, 57, 72);
+    --po-critical-soft: rgba(198, 57, 72, 0.12);
+    --po-warning: rgb(165, 103, 0);
+    --po-warning-soft: rgba(165, 103, 0, 0.12);
+    --po-info: rgb(94, 109, 164);
+    --po-info-soft: rgba(94, 109, 164, 0.12);
+    --po-success: rgb(27, 137, 98);
+    --po-success-soft: rgba(27, 137, 98, 0.12);
+
+    --po-select-bg: rgb(226, 188, 204);
+    --po-select-bg-inactive: rgb(219, 208, 212);
+}

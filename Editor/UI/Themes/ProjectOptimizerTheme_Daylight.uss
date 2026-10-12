@@ -1,0 +1,35 @@
+/* Theme: Daylight (Light) - a clean, cool-neutral light theme.
+ *
+ * See ProjectOptimizerTheme_Obsidian.uss for what these tokens mean and where they are consumed.
+ */
+
+.po-root {
+    --po-bg: rgb(233, 234, 238);
+    --po-panel: rgb(244, 245, 247);
+    --po-panel-2: rgb(252, 252, 253);
+    --po-panel-3: rgb(227, 229, 234);
+    --po-panel-4: rgb(214, 217, 224);
+    --po-border: rgb(206, 209, 216);
+    --po-border-soft: rgba(0, 0, 0, 0.05);
+    --po-text: rgb(24, 26, 31);
+    --po-text-dim: rgb(90, 96, 108);
+    --po-text-faint: rgb(128, 134, 146);
+
+    --po-accent: rgb(104, 79, 235);
+    --po-accent-2: rgb(0, 145, 181);
+    --po-accent-soft: rgba(104, 79, 235, 0.12);
+    --po-accent-soft-2: rgba(104, 79, 235, 0.22);
+    --po-accent-strong: rgb(85, 60, 220);
+
+    --po-critical: rgb(207, 47, 60);
+    --po-critical-soft: rgba(207, 47, 60, 0.12);
+    --po-warning: rgb(184, 116, 0);
+    --po-warning-soft: rgba(184, 116, 0, 0.14);
+    --po-info: rgb(8, 133, 168);
+    --po-info-soft: rgba(8, 133, 168, 0.12);
+    --po-success: rgb(16, 148, 96);
+    --po-success-soft: rgba(16, 148, 96, 0.12);
+
+    --po-select-bg: rgb(178, 166, 240);
+    --po-select-bg-inactive: rgb(210, 213, 222);
+}

@@ -1,0 +1,36 @@
+/* Theme: Glacier (Light) - icy blue-white surfaces with a cool blue accent.
+ * See ProjectOptimizerTheme_Obsidian.uss for what these tokens mean, and
+ * ProjectOptimizerTheme_Daylight.uss for how a light theme's panel/hover steps are ordered
+ * (panel-2 lightest, panel-3/4 darker than the base background - the reverse of a dark theme).
+ */
+
+.po-root {
+    --po-bg: rgb(226, 234, 240);
+    --po-panel: rgb(238, 244, 248);
+    --po-panel-2: rgb(248, 251, 253);
+    --po-panel-3: rgb(210, 222, 232);
+    --po-panel-4: rgb(194, 208, 222);
+    --po-border: rgb(196, 210, 222);
+    --po-border-soft: rgba(20, 50, 80, 0.05);
+    --po-text: rgb(20, 32, 44);
+    --po-text-dim: rgb(80, 100, 118);
+    --po-text-faint: rgb(118, 136, 152);
+
+    --po-accent: rgb(30, 120, 210);
+    --po-accent-2: rgb(0, 160, 165);
+    --po-accent-soft: rgba(30, 120, 210, 0.12);
+    --po-accent-soft-2: rgba(30, 120, 210, 0.22);
+    --po-accent-strong: rgb(15, 100, 190);
+
+    --po-critical: rgb(200, 55, 65);
+    --po-critical-soft: rgba(200, 55, 65, 0.12);
+    --po-warning: rgb(180, 120, 10);
+    --po-warning-soft: rgba(180, 120, 10, 0.13);
+    --po-info: rgb(20, 130, 175);
+    --po-info-soft: rgba(20, 130, 175, 0.12);
+    --po-success: rgb(20, 145, 105);
+    --po-success-soft: rgba(20, 145, 105, 0.12);
+
+    --po-select-bg: rgb(165, 205, 235);
+    --po-select-bg-inactive: rgb(202, 214, 225);
+}

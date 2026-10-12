@@ -1,0 +1,36 @@
+/* Theme: Midnight (Dark) - deep navy panels with an electric cyan accent.
+ *
+ * Cooler and more clinical than Obsidian: bluer blacks, a cyan/indigo accent pair instead of
+ * violet-blue. See ProjectOptimizerTheme_Obsidian.uss for what these tokens mean.
+ */
+
+.po-root {
+    --po-bg: rgb(8, 12, 20);
+    --po-panel: rgb(13, 18, 28);
+    --po-panel-2: rgb(18, 25, 38);
+    --po-panel-3: rgb(26, 35, 52);
+    --po-panel-4: rgb(34, 46, 66);
+    --po-border: rgb(32, 42, 60);
+    --po-border-soft: rgba(255, 255, 255, 0.05);
+    --po-text: rgb(220, 230, 240);
+    --po-text-dim: rgb(140, 158, 180);
+    --po-text-faint: rgb(90, 106, 128);
+
+    --po-accent: rgb(45, 200, 255);
+    --po-accent-2: rgb(120, 130, 255);
+    --po-accent-soft: rgba(45, 200, 255, 0.16);
+    --po-accent-soft-2: rgba(45, 200, 255, 0.28);
+    --po-accent-strong: rgb(90, 215, 255);
+
+    --po-critical: rgb(255, 90, 100);
+    --po-critical-soft: rgba(255, 90, 100, 0.16);
+    --po-warning: rgb(255, 170, 60);
+    --po-warning-soft: rgba(255, 170, 60, 0.16);
+    --po-info: rgb(80, 190, 255);
+    --po-info-soft: rgba(80, 190, 255, 0.16);
+    --po-success: rgb(50, 220, 170);
+    --po-success-soft: rgba(50, 220, 170, 0.16);
+
+    --po-select-bg: rgb(30, 70, 100);
+    --po-select-bg-inactive: rgb(30, 42, 60);
+}

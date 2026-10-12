@@ -1,0 +1,36 @@
+/* Theme: Ivory - Classic warm ivory surfaces with dark olive accents and a restrained copper secondary.
+ *
+ * Light editor palette with soft surfaces, clear hierarchy, and a readable accent.
+ * This file defines only ProjectOptimizer's --po-* theme tokens; layout remains in the base stylesheet.
+ */
+
+.po-root {
+    --po-bg: rgb(242, 238, 226);
+    --po-panel: rgb(247, 244, 237);
+    --po-panel-2: rgb(251, 250, 246);
+    --po-panel-3: rgb(231, 227, 216);
+    --po-panel-4: rgb(217, 213, 202);
+    --po-border: rgb(213, 209, 199);
+    --po-border-soft: rgba(0, 0, 0, 0.05);
+    --po-text: rgb(27, 26, 25);
+    --po-text-dim: rgb(92, 90, 86);
+    --po-text-faint: rgb(140, 138, 131);
+
+    --po-accent: rgb(104, 115, 58);
+    --po-accent-2: rgb(161, 107, 67);
+    --po-accent-soft: rgba(104, 115, 58, 0.12);
+    --po-accent-soft-2: rgba(104, 115, 58, 0.22);
+    --po-accent-strong: rgb(90, 100, 50);
+
+    --po-critical: rgb(198, 57, 72);
+    --po-critical-soft: rgba(198, 57, 72, 0.12);
+    --po-warning: rgb(165, 103, 0);
+    --po-warning-soft: rgba(165, 103, 0, 0.12);
+    --po-info: rgb(145, 96, 60);
+    --po-info-soft: rgba(145, 96, 60, 0.12);
+    --po-success: rgb(27, 137, 98);
+    --po-success-soft: rgba(27, 137, 98, 0.12);
+
+    --po-select-bg: rgb(203, 204, 179);
+    --po-select-bg-inactive: rgb(218, 214, 203);
+}

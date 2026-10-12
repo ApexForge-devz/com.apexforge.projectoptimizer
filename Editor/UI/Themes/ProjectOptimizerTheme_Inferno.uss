@@ -1,0 +1,36 @@
+/* Theme: Inferno - Charred red-black surfaces with a hot vermilion accent and molten gold secondary.
+ *
+ * Dark editor palette with deliberately separated surface values and a focused accent.
+ * This file defines only ProjectOptimizer's --po-* theme tokens; layout remains in the base stylesheet.
+ */
+
+.po-root {
+    --po-bg: rgb(22, 11, 9);
+    --po-panel: rgb(35, 24, 23);
+    --po-panel-2: rgb(50, 40, 39);
+    --po-panel-3: rgb(66, 57, 56);
+    --po-panel-4: rgb(85, 77, 75);
+    --po-border: rgb(62, 52, 51);
+    --po-border-soft: rgba(255, 255, 255, 0.06);
+    --po-text: rgb(239, 238, 238);
+    --po-text-dim: rgb(166, 162, 162);
+    --po-text-faint: rgb(113, 106, 105);
+
+    --po-accent: rgb(255, 94, 58);
+    --po-accent-2: rgb(255, 194, 71);
+    --po-accent-soft: rgba(255, 94, 58, 0.16);
+    --po-accent-soft-2: rgba(255, 94, 58, 0.28);
+    --po-accent-strong: rgb(255, 118, 88);
+
+    --po-critical: rgb(255, 102, 112);
+    --po-critical-soft: rgba(255, 102, 112, 0.16);
+    --po-warning: rgb(255, 190, 86);
+    --po-warning-soft: rgba(255, 190, 86, 0.16);
+    --po-info: rgb(255, 194, 71);
+    --po-info-soft: rgba(255, 194, 71, 0.16);
+    --po-success: rgb(91, 224, 164);
+    --po-success-soft: rgba(91, 224, 164, 0.16);
+
+    --po-select-bg: rgb(143, 54, 34);
+    --po-select-bg-inactive: rgb(64, 55, 53);
+}

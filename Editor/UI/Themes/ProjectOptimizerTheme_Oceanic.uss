@@ -1,0 +1,36 @@
+/* Theme: Oceanic - Deep petrol surfaces with saturated turquoise accents and a clean sea-blue secondary.
+ *
+ * Dark editor palette with deliberately separated surface values and a focused accent.
+ * This file defines only ProjectOptimizer's --po-* theme tokens; layout remains in the base stylesheet.
+ */
+
+.po-root {
+    --po-bg: rgb(8, 18, 20);
+    --po-panel: rgb(22, 31, 33);
+    --po-panel-2: rgb(38, 46, 48);
+    --po-panel-3: rgb(55, 63, 65);
+    --po-panel-4: rgb(75, 82, 83);
+    --po-border: rgb(50, 58, 60);
+    --po-border-soft: rgba(255, 255, 255, 0.06);
+    --po-text: rgb(238, 238, 239);
+    --po-text-dim: rgb(161, 165, 166);
+    --po-text-faint: rgb(104, 110, 112);
+
+    --po-accent: rgb(40, 208, 196);
+    --po-accent-2: rgb(63, 155, 255);
+    --po-accent-soft: rgba(40, 208, 196, 0.16);
+    --po-accent-soft-2: rgba(40, 208, 196, 0.28);
+    --po-accent-strong: rgb(72, 215, 205);
+
+    --po-critical: rgb(255, 102, 112);
+    --po-critical-soft: rgba(255, 102, 112, 0.16);
+    --po-warning: rgb(255, 190, 86);
+    --po-warning-soft: rgba(255, 190, 86, 0.16);
+    --po-info: rgb(63, 155, 255);
+    --po-info-soft: rgba(63, 155, 255, 0.16);
+    --po-success: rgb(91, 224, 164);
+    --po-success-soft: rgba(91, 224, 164, 0.16);
+
+    --po-select-bg: rgb(25, 117, 112);
+    --po-select-bg-inactive: rgb(52, 61, 62);
+}

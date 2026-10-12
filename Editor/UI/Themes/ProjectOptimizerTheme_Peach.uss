@@ -1,0 +1,36 @@
+/* Theme: Peach - Soft apricot surfaces with a coral accent balanced by a muted teal secondary.
+ *
+ * Light editor palette with soft surfaces, clear hierarchy, and a readable accent.
+ * This file defines only ProjectOptimizer's --po-* theme tokens; layout remains in the base stylesheet.
+ */
+
+.po-root {
+    --po-bg: rgb(243, 232, 223);
+    --po-panel: rgb(248, 241, 235);
+    --po-panel-2: rgb(251, 248, 245);
+    --po-panel-3: rgb(232, 222, 213);
+    --po-panel-4: rgb(217, 208, 200);
+    --po-border: rgb(214, 204, 196);
+    --po-border-soft: rgba(0, 0, 0, 0.05);
+    --po-text: rgb(27, 26, 25);
+    --po-text-dim: rgb(92, 88, 85);
+    --po-text-faint: rgb(141, 135, 129);
+
+    --po-accent: rgb(217, 101, 88);
+    --po-accent-2: rgb(62, 139, 137);
+    --po-accent-soft: rgba(217, 101, 88, 0.12);
+    --po-accent-soft-2: rgba(217, 101, 88, 0.22);
+    --po-accent-strong: rgb(189, 88, 77);
+
+    --po-critical: rgb(198, 57, 72);
+    --po-critical-soft: rgba(198, 57, 72, 0.12);
+    --po-warning: rgb(165, 103, 0);
+    --po-warning-soft: rgba(165, 103, 0, 0.12);
+    --po-info: rgb(56, 125, 123);
+    --po-info-soft: rgba(56, 125, 123, 0.12);
+    --po-success: rgb(27, 137, 98);
+    --po-success-soft: rgba(27, 137, 98, 0.12);
+
+    --po-select-bg: rgb(236, 195, 185);
+    --po-select-bg-inactive: rgb(219, 209, 201);
+}

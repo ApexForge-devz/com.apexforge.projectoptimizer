@@ -1,0 +1,36 @@
+/* Theme: Lavender - Pale lavender-grey surfaces with a sophisticated purple accent and blue-violet support.
+ *
+ * Light editor palette with soft surfaces, clear hierarchy, and a readable accent.
+ * This file defines only ProjectOptimizer's --po-* theme tokens; layout remains in the base stylesheet.
+ */
+
+.po-root {
+    --po-bg: rgb(238, 234, 244);
+    --po-panel: rgb(244, 242, 248);
+    --po-panel-2: rgb(250, 249, 252);
+    --po-panel-3: rgb(227, 223, 233);
+    --po-panel-4: rgb(213, 209, 218);
+    --po-border: rgb(209, 206, 215);
+    --po-border-soft: rgba(0, 0, 0, 0.05);
+    --po-text: rgb(26, 26, 27);
+    --po-text-dim: rgb(90, 89, 93);
+    --po-text-faint: rgb(138, 136, 142);
+
+    --po-accent: rgb(118, 85, 184);
+    --po-accent-2: rgb(78, 120, 184);
+    --po-accent-soft: rgba(118, 85, 184, 0.12);
+    --po-accent-soft-2: rgba(118, 85, 184, 0.22);
+    --po-accent-strong: rgb(103, 74, 160);
+
+    --po-critical: rgb(198, 57, 72);
+    --po-critical-soft: rgba(198, 57, 72, 0.12);
+    --po-warning: rgb(165, 103, 0);
+    --po-warning-soft: rgba(165, 103, 0, 0.12);
+    --po-info: rgb(70, 108, 166);
+    --po-info-soft: rgba(70, 108, 166, 0.12);
+    --po-success: rgb(27, 137, 98);
+    --po-success-soft: rgba(27, 137, 98, 0.12);
+
+    --po-select-bg: rgb(204, 192, 227);
+    --po-select-bg-inactive: rgb(214, 211, 220);
+}

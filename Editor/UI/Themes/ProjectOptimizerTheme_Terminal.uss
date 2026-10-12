@@ -1,0 +1,35 @@
+/* Theme: Terminal (Dark) - near-pure black with a classic phosphor-green accent.
+ * A deliberate throwback to a CRT terminal. See ProjectOptimizerTheme_Obsidian.uss for what these
+ * tokens mean.
+ */
+
+.po-root {
+    --po-bg: rgb(8, 9, 8);
+    --po-panel: rgb(13, 15, 13);
+    --po-panel-2: rgb(18, 21, 18);
+    --po-panel-3: rgb(26, 30, 26);
+    --po-panel-4: rgb(34, 40, 34);
+    --po-border: rgb(32, 40, 32);
+    --po-border-soft: rgba(255, 255, 255, 0.05);
+    --po-text: rgb(210, 235, 210);
+    --po-text-dim: rgb(130, 175, 130);
+    --po-text-faint: rgb(80, 115, 80);
+
+    --po-accent: rgb(80, 240, 130);
+    --po-accent-2: rgb(230, 240, 100);
+    --po-accent-soft: rgba(80, 240, 130, 0.16);
+    --po-accent-soft-2: rgba(80, 240, 130, 0.28);
+    --po-accent-strong: rgb(120, 250, 160);
+
+    --po-critical: rgb(255, 90, 90);
+    --po-critical-soft: rgba(255, 90, 90, 0.16);
+    --po-warning: rgb(230, 220, 90);
+    --po-warning-soft: rgba(230, 220, 90, 0.16);
+    --po-info: rgb(90, 210, 220);
+    --po-info-soft: rgba(90, 210, 220, 0.16);
+    --po-success: rgb(70, 220, 120);
+    --po-success-soft: rgba(70, 220, 120, 0.16);
+
+    --po-select-bg: rgb(35, 85, 50);
+    --po-select-bg-inactive: rgb(34, 42, 34);
+}
