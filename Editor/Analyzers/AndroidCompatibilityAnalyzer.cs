@@ -19,16 +19,16 @@ namespace ApexForge.ProjectOptimizer
         {
             Rules.Register(id: "AND001", title: "Native Android library is not proven 16 KB page-size compatible", category: AssetCategory.ProjectSetting,
                 why: "Android 16 KB page-size support depends on native ELF PT_LOAD alignment and the native toolchain/plugin contents shipped in the application.",
-                fix: "Inspect the affected native library/plugin and rebuild or replace it with a 16 KB-compatible artifact. Project Optimizer does not mutate binary native libraries automatically.",
-                severity: IssueSeverity.Warning, fixKind: FixKind.Review, confidence: OptimizationConfidence.Proven, risk: FixRisk.High, backupRequired: true);
+                fix: "Diagnostic only: inspect the affected native library/plugin and rebuild or replace it with a 16 KB-compatible artifact. Project Optimizer cannot safely rewrite arbitrary vendor binaries or prove final APK/AAB alignment from source artifacts alone.",
+                severity: IssueSeverity.Warning, fixKind: FixKind.None, confidence: OptimizationConfidence.Proven, risk: FixRisk.Unspecified, backupRequired: false);
             Rules.Register(id: "AND002", title: "Android NDK requires 16 KB native-library compatibility review", category: AssetCategory.ProjectSetting,
                 why: "The Android toolchain and linker settings participate in the final ELF PT_LOAD alignment. A detected NDK version is evidence about the toolchain, not proof that every shipped native plugin is compatible.",
-                fix: "Confirm the native toolchain/plugin set and final packaged ELF alignment for the target Android build.",
-                severity: IssueSeverity.Info, fixKind: FixKind.Review, confidence: OptimizationConfidence.HighConfidence, risk: FixRisk.Unspecified, backupRequired: false);
+                fix: "Diagnostic only: confirm the native toolchain/plugin set and final packaged ELF alignment for the target Android build. The NDK version is a signal, not proof of final binary compatibility.",
+                severity: IssueSeverity.Info, fixKind: FixKind.None, confidence: OptimizationConfidence.HighConfidence, risk: FixRisk.Unspecified, backupRequired: false);
             Rules.Register(id: "AND003", title: "Custom Android Gradle Plugin is below the 16 KB compatibility baseline", category: AssetCategory.ProjectSetting,
                 why: "Android's current 16 KB guidance recommends Android Gradle Plugin 8.5.1 or newer for default uncompressed shared-library packaging alignment.",
                 fix: "Review the custom Android Gradle template and upgrade the configured Android Gradle Plugin when compatible with the Unity release and project build pipeline.",
-                severity: IssueSeverity.Info, fixKind: FixKind.Review, confidence: OptimizationConfidence.HighConfidence, risk: FixRisk.Unspecified, backupRequired: false);
+                severity: IssueSeverity.Info, fixKind: FixKind.Review, confidence: OptimizationConfidence.HighConfidence, risk: FixRisk.High, backupRequired: true);
         }
 
         public bool Enabled(OptimizerSettings settings) => true;
@@ -146,21 +146,62 @@ namespace ApexForge.ProjectOptimizer
                         "Native Android libraries are present but the configured NDK revision could not be resolved from the editor's external-tools configuration.");
             }
 
-            string agpVersion = ReadCustomAgpVersion();
+            string agpTemplatePath;
+            string agpVersion = ReadCustomAgpVersion(out agpTemplatePath);
             entry.Set("androidGradlePluginVersion", agpVersion);
+            AssetEntry agpEntry = null;
             using (RuleTiming.Begin("AND003", entry.Path))
             {
                 if (!string.IsNullOrEmpty(agpVersion) && CompareVersion(agpVersion, 8, 5, 1) < 0)
-                    entry.AddIssue("AND003", "AGP " + agpVersion, "Review AGP 8.5.1+ compatibility", 0, null,
-                        "A custom Android Gradle template declares an Android Gradle Plugin version below the 8.5.1 baseline referenced by Android's current 16 KB packaging guidance. This diagnostic does not mutate build templates automatically.");
+                {
+                    string compatibleAgpVersion = GetUnityCompatibleAgpVersion(Application.unityVersion);
+                    if (!string.IsNullOrEmpty(agpTemplatePath) && !string.IsNullOrEmpty(compatibleAgpVersion)
+                        && CompareVersion(compatibleAgpVersion, 8, 5, 1) >= 0)
+                    {
+                        agpEntry = new AssetEntry
+                        {
+                            Path = agpTemplatePath,
+                            Name = Path.GetFileName(agpTemplatePath),
+                            Directory = AssetPathUtility.Directoryish(agpTemplatePath),
+                            Extension = Path.GetExtension(agpTemplatePath),
+                            Category = AssetCategory.ProjectSetting,
+                            TypeLabel = "Android Gradle template",
+                            FileSize = File.Exists(Path.Combine(Directory.GetCurrentDirectory(), agpTemplatePath.Replace('/', Path.DirectorySeparatorChar)))
+                                ? new FileInfo(Path.Combine(Directory.GetCurrentDirectory(), agpTemplatePath.Replace('/', Path.DirectorySeparatorChar))).Length : -1,
+                            RuntimeSize = -1
+                        };
+                        agpEntry.Set("androidGradlePluginVersion", agpVersion);
+                        agpEntry.Set("unityCompatibleAgpVersion", compatibleAgpVersion);
+                        var options = new List<FixOption>
+                        {
+                            BuildAgpUpgradeOption(agpTemplatePath, agpVersion, compatibleAgpVersion)
+                        };
+                        agpEntry.AddIssue("AND003", "AGP " + agpVersion,
+                            "Review: Upgrade AGP to Unity-compatible " + compatibleAgpVersion,
+                            0, null,
+                            "ReviewFix offers a targeted update of the custom AGP declaration to the AGP version documented for this Unity 6000.0 patch band. The action changes only the declaration in this template, requires a backup, and verifies the result. Review third-party Gradle plugins and run a full Android build before shipping.",
+                            options: options);
+                    }
+                    else
+                    {
+                        entry.AddIssue("AND003", "AGP " + agpVersion, "Review AGP 8.5.1+ compatibility", 0, null,
+                            "A custom Android Gradle template declares AGP below Android's 8.5.1 packaging baseline. No automatic template edit is offered because this Unity editor version has no confirmed compatible AGP target in the built-in compatibility map. Update Unity or manually choose a documented compressed-library packaging strategy; do not blindly upgrade AGP.");
+                    }
+                }
             }
 
             entry.Finalise();
             yield return entry;
+            if (agpEntry != null)
+            {
+                agpEntry.Finalise();
+                yield return agpEntry;
+            }
         }
 
-        static string ReadCustomAgpVersion()
+        static string ReadCustomAgpVersion(out string templatePath)
         {
+            templatePath = string.Empty;
             string[] candidates =
             {
                 "Assets/Plugins/Android/mainTemplate.gradle",
@@ -174,11 +215,68 @@ namespace ApexForge.ProjectOptimizer
                 {
                     string text = File.ReadAllText(absolute);
                     var match = System.Text.RegularExpressions.Regex.Match(text, @"com\.android\.tools\.build:gradle:([0-9]+(?:\.[0-9]+){1,3})");
-                    if (match.Success) return match.Groups[1].Value;
+                    if (match.Success)
+                    {
+                        templatePath = candidates[i];
+                        return match.Groups[1].Value;
+                    }
                 }
                 catch { }
             }
             return string.Empty;
+        }
+
+        static string GetUnityCompatibleAgpVersion(string unityVersion)
+        {
+            // Values match the Unity 6000.0 official Gradle compatibility table. Unknown versions
+            // intentionally get no automatic option instead of a speculative toolchain upgrade.
+            if (string.IsNullOrEmpty(unityVersion)) return string.Empty;
+            var match = System.Text.RegularExpressions.Regex.Match(unityVersion, @"^6000\.0\.(\d+)");
+            if (!match.Success || !int.TryParse(match.Groups[1].Value, out int patch)) return string.Empty;
+            if (patch >= 45 && patch <= 60) return "8.7.2";
+            if (patch >= 61 && patch <= 78) return "8.10.0";
+            if (patch >= 79 && patch <= 84) return "9.0.0";
+            if (patch >= 85) return "9.1.1";
+            return string.Empty;
+        }
+
+        static FixOption BuildAgpUpgradeOption(string templatePath, string scannedVersion, string targetVersion)
+        {
+            const string versionPattern = @"com\.android\.tools\.build:gradle:([0-9]+(?:\.[0-9]+){1,3})";
+            return new FixOption
+            {
+                ActionId = "AND003.UpgradeUnityCompatibleAgp",
+                Label = "Upgrade AGP declaration to " + targetVersion,
+                ResultDescription = "Updates only the AGP dependency declaration to the version documented for this Unity editor patch band.",
+                Recommended = false,
+                Warning = "This changes a build tool version. Back up is required; inspect custom Gradle logic and third-party plugins, then run a full Android build.",
+                Risk = FixRisk.High,
+                Apply = c =>
+                {
+                    c.EnsureWritable();
+                    if (!string.Equals(c.AssetPath, templatePath, StringComparison.Ordinal))
+                        throw new InvalidOperationException("The AGP template target no longer matches the reviewed path.");
+                    string absolute = Path.Combine(Directory.GetCurrentDirectory(), templatePath.Replace('/', Path.DirectorySeparatorChar));
+                    if (!File.Exists(absolute)) throw new FileNotFoundException("The custom AGP template no longer exists.", absolute);
+                    string original = File.ReadAllText(absolute);
+                    var match = System.Text.RegularExpressions.Regex.Match(original, versionPattern);
+                    if (!match.Success || !string.Equals(match.Groups[1].Value, scannedVersion, StringComparison.Ordinal))
+                        throw new InvalidOperationException("The AGP declaration changed after analysis; rescan before applying the option.");
+                    if (CompareVersion(targetVersion, 8, 5, 1) < 0)
+                        throw new InvalidOperationException("The selected AGP target does not meet the documented 16 KB packaging baseline.");
+                    string updated = original.Substring(0, match.Groups[1].Index) + targetVersion
+                        + original.Substring(match.Groups[1].Index + match.Groups[1].Length);
+                    File.WriteAllText(absolute, updated, Encoding.UTF8);
+                    c.NeedsReimport = true;
+                },
+                Verify = c =>
+                {
+                    string absolute = Path.Combine(Directory.GetCurrentDirectory(), templatePath.Replace('/', Path.DirectorySeparatorChar));
+                    if (!File.Exists(absolute)) return false;
+                    var match = System.Text.RegularExpressions.Regex.Match(File.ReadAllText(absolute), versionPattern);
+                    return match.Success && string.Equals(match.Groups[1].Value, targetVersion, StringComparison.Ordinal);
+                }
+            };
         }
 
         static void CollectFiles(string rootRelative, List<string> output)

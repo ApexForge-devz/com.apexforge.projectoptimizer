@@ -243,9 +243,9 @@ namespace ApexForge.ProjectOptimizer
 			thresholds.Add(BuildThresholdGroup("Font and sprite atlas budgets", atlases));
 			var auditor = UiKit.Column();
 			auditor.Add(IntRow("Sprite Atlas empty-space warning (%)", settings.spriteAtlasEmptySpaceWarnPercent, v => settings.spriteAtlasEmptySpaceWarnPercent = Mathf.Clamp(v, 0, 99),
-				"Generated Sprite Atlas area above this percentage is reported as PAA0008 during Deep Texture Scan. The measurement is intentionally opt-in because generating packed-atlas previews can be expensive."));
+				"Generated Sprite Atlas area above this percentage is reported as PAA003 during Deep Texture Scan. The measurement is intentionally opt-in because generating packed-atlas previews can be expensive."));
 			auditor.Add(IntRow("StreamingAssets warning (MB)", settings.streamingAssetsWarnMb, v => settings.streamingAssetsWarnMb = Mathf.Max(1, v),
-				"PAA3002-style diagnostic for opaque files under Assets/StreamingAssets. Lower it for projects where download/install size is especially constrained."));
+				"PAA005-style diagnostic for opaque files under Assets/StreamingAssets. Lower it for projects where download/install size is especially constrained."));
 			auditor.Add(IntRow("Build hotspot warning (MB)", settings.buildLargeAssetWarnMb, v => settings.buildLargeAssetWarnMb = Mathf.Max(1, v),
 				"BLD001 appears for packed BuildReport contributors at or above this size."));
 			auditor.Add(IntRow("Build hotspot critical (MB)", settings.buildLargeAssetCriticalMb, v => settings.buildLargeAssetCriticalMb = Mathf.Max(settings.buildLargeAssetWarnMb, v),
@@ -255,23 +255,23 @@ namespace ApexForge.ProjectOptimizer
 			thresholds.Add(BuildThresholdGroup("Project Auditor / build insights", auditor));
 			var policies = UiKit.Column();
 			policies.Add(IntRow("Shader chunk size review budget (MB)", settings.shaderVariantMemoryBudgetMb, v => settings.shaderVariantMemoryBudgetMb = Mathf.Max(0, v),
-				"PRJ069 compares the selected target's shader chunk size with this policy. 0 disables the check; it is not a claim about total shader resident memory."));
+				"PRJ065 compares the selected target's shader chunk size with this policy. 0 disables the check; it is not a claim about total shader resident memory."));
 			policies.Add(FloatRow("Lightmap resolution review threshold", settings.lightmapResolutionReview, v => settings.lightmapResolutionReview = Mathf.Max(0f, v),
-				"PRJ070 flags baked-lighting scenes above this texels-per-world-unit policy. 0 disables the check; lower values are not universally better."));
+				"PRJ066 flags baked-lighting scenes above this texels-per-world-unit policy. 0 disables the check; lower values are not universally better."));
 			policies.Add(IntRow("GI direct sample review threshold", settings.giDirectSampleReview, v => settings.giDirectSampleReview = Mathf.Max(0, v),
-				"PRJ071 heuristic threshold for LightingSettings.directSampleCount. 0 disables this component of the check."));
+				"PRJ067 heuristic threshold for LightingSettings.directSampleCount. 0 disables this component of the check."));
 			policies.Add(IntRow("GI indirect sample review threshold", settings.giIndirectSampleReview, v => settings.giIndirectSampleReview = Mathf.Max(0, v),
-				"PRJ071 heuristic threshold for LightingSettings.indirectSampleCount. 0 disables this component of the check."));
+				"PRJ067 heuristic threshold for LightingSettings.indirectSampleCount. 0 disables this component of the check."));
 			policies.Add(IntRow("GI environment sample review threshold", settings.giEnvironmentSampleReview, v => settings.giEnvironmentSampleReview = Mathf.Max(0, v),
-				"PRJ071 heuristic threshold for LightingSettings.environmentSampleCount. 0 disables this component of the check."));
+				"PRJ067 heuristic threshold for LightingSettings.environmentSampleCount. 0 disables this component of the check."));
 			policies.Add(IntRow("GI max bounces review threshold", settings.giMaxBouncesReview, v => settings.giMaxBouncesReview = Mathf.Max(0, v),
-				"PRJ071 heuristic threshold for LightingSettings.maxBounces. 0 disables this component of the check."));
+				"PRJ067 heuristic threshold for LightingSettings.maxBounces. 0 disables this component of the check."));
 			policies.Add(IntRow("Physics2D position iterations review threshold", settings.physics2DPositionIterationsReview, v => settings.physics2DPositionIterationsReview = Mathf.Max(0, v),
-				"PRJ072 heuristic threshold for Physics2D.positionIterations. 0 disables this component; do not treat it as a universal optimal value."));
+				"PRJ068 heuristic threshold for Physics2D.positionIterations. 0 disables this component; do not treat it as a universal optimal value."));
 			policies.Add(IntRow("Physics2D velocity iterations review threshold", settings.physics2DVelocityIterationsReview, v => settings.physics2DVelocityIterationsReview = Mathf.Max(0, v),
-				"PRJ072 heuristic threshold for Physics2D.velocityIterations. 0 disables this component; solver fidelity is project-dependent."));
+				"PRJ068 heuristic threshold for Physics2D.velocityIterations. 0 disables this component; solver fidelity is project-dependent."));
 			policies.Add(IntRow("3D solver velocity review threshold", settings.physicsVelocityIterationsReview, v => settings.physicsVelocityIterationsReview = Mathf.Max(0, v),
-				"PRJ073 heuristic threshold for Physics.defaultSolverVelocityIterations. 0 disables the check; Rigidbody-specific overrides still apply."));
+				"PRJ069 heuristic threshold for Physics.defaultSolverVelocityIterations. 0 disables the check; Rigidbody-specific overrides still apply."));
 			policies.Add(FloatRow("Addressables dependency efficiency review threshold", settings.addressablesDependencyEfficiencyReview, v => settings.addressablesDependencyEfficiencyReview = Mathf.Clamp(v, 0.01f, 0.99f),
 				"ADR002 reports Addressables bundle dependency links below this measured efficiency ratio. It is a review threshold, not a universal packing target."));
 			thresholds.Add(BuildThresholdGroup("Project setting policies", policies));

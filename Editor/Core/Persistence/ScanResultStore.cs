@@ -154,7 +154,7 @@ namespace ApexForge.ProjectOptimizer
 	public static class ScanResultStore
 	{
 		/// <summary>Bumped whenever the shape of <see cref="PersistedScanResult"/> or its children changes.</summary>
-		const int k_Version = 11;
+		const int k_Version = 12;
 
 		static readonly string k_Path = ProjectOptimizerConstants.ScanSnapshotPath;
 

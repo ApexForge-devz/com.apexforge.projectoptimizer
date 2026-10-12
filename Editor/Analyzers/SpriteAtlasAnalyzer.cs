@@ -18,7 +18,6 @@ namespace ApexForge.ProjectOptimizer
 	{
 		const string k_DefaultTexturePlatform = "DefaultTexturePlatform";
 		const int k_HighPaddingPixels = 8;
-		const int k_DefaultPaddingPixels = 4;
 		const int k_MinUsefulSpriteCount = 1;
 
 		public AssetCategory Category => AssetCategory.SpriteAtlas;
@@ -39,12 +38,13 @@ namespace ApexForge.ProjectOptimizer
 
 			Rules.Register(id: "ATL002", title: "Atlas texture is uncompressed", category: AssetCategory.SpriteAtlas,
 							why: "An uncompressed packed atlas can require substantially more GPU memory and bandwidth than a platform-supported compressed representation. The exact GPU format is target dependent.",
-							fix: "Review a compressed Automatic setting for the selected target. The fix creates or updates only that target's atlas override and does not force a platform-specific format.",
+							fix: "AutoFix: use platform Automatic texture compression at Normal quality for the selected target. Explicitly marked lossless/precision atlases are excluded from this automatic path.",
 							severity: IssueSeverity.Warning,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Medium,
-							backupRequired: false
+							backupRequired: true,
+							recommendationConfidence: OptimizationConfidence.HighConfidence
 							);
 
 			Rules.Register(id: "ATL003", title: "Atlas max size above the budget", category: AssetCategory.SpriteAtlas,
@@ -59,22 +59,24 @@ namespace ApexForge.ProjectOptimizer
 
 			Rules.Register(id: "ATL004", title: "Space-saving packing options disabled", category: AssetCategory.SpriteAtlas,
 							why: "Tight Packing and rotation can improve atlas density, but both are content-dependent. Rotation is unsuitable for Canvas UI textures whose orientation must remain fixed.",
-							fix: "Review Fix: enable the missing packing option(s) only when the atlas contents and runtime workflow support them.",
+							fix: "AutoFix: enable Tight Packing when it is disabled on a populated master atlas. Rotation is deliberately left unchanged.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
-							confidence: OptimizationConfidence.Heuristic,
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Medium,
-							backupRequired: false
+							backupRequired: true,
+							recommendationConfidence: OptimizationConfidence.HighConfidence
 							);
 
 			Rules.Register(id: "ATL005", title: "Atlas is included in the build but has no packables", category: AssetCategory.SpriteAtlas,
 							why: "An included master Sprite Atlas with no packable objects and no packed sprites contributes no useful atlas content. Empty or intentionally reserved atlases can still exist during development.",
-							fix: "Add the intended sprites/folders, or manually exclude/remove the atlas when it is genuinely obsolete.",
+							fix: "AutoFix: exclude a genuinely empty included master atlas from the build. Explicitly marked reserved/template atlases are left untouched.",
 							severity: IssueSeverity.Warning,
-							fixKind: FixKind.None,
-							confidence: OptimizationConfidence.HighConfidence,
-							risk: FixRisk.Low,
-							backupRequired: false
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.Proven,
+							risk: FixRisk.Medium,
+							backupRequired: true,
+							recommendationConfidence: OptimizationConfidence.Proven
 							);
 
 			Rules.Register(id: "ATL006", title: "Atlas mipmaps enabled", category: AssetCategory.SpriteAtlas,
@@ -87,7 +89,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "PAA0008", title: "Sprite Atlas has too much empty space", category: AssetCategory.SpriteAtlas,
+			Rules.Register(id: "PAA003", title: "Sprite Atlas has too much empty space", category: AssetCategory.SpriteAtlas,
 							why: "Unity Project Auditor measures the generated atlas preview and flags atlases whose pixels are predominantly empty. Empty atlas area still consumes texture memory and storage.",
 							fix: "Reorganize the atlas packables, padding and packing settings to improve density. Project Optimizer does not auto-repack assets.",
 							severity: IssueSeverity.Info,
@@ -99,12 +101,13 @@ namespace ApexForge.ProjectOptimizer
 
 			Rules.Register(id: "ATL007", title: "Atlas packing padding is high", category: AssetCategory.SpriteAtlas,
 							why: "Padding reserves boundary pixels around packed sprites to reduce neighboring-pixel bleeding. Excessive padding consumes atlas area and can reduce packing efficiency, especially when many sprites are present.",
-							fix: "Review Fix: choose the smallest padding that remains safe for the atlas's filtering, mipmaps and sprite-edge requirements.",
+							fix: "AutoFix: reduce packing padding to 8 px when it is higher, for populated atlases without mipmaps or explicit bleed-sensitive markers. Never automatically reduce it to 4 px.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
-							confidence: OptimizationConfidence.Heuristic,
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Medium,
-							backupRequired: false
+							backupRequired: true,
+							recommendationConfidence: OptimizationConfidence.HighConfidence
 							);
 		}
 
@@ -158,12 +161,12 @@ namespace ApexForge.ProjectOptimizer
 			entry.Set("generatedReadableBytes", generatedReadableBytes);
 			entry.Set("mipSavingsBytes", generatedMipSavings);
 
-			var texture = atlas.GetTextureSettings();
-			var packing = atlas.GetPackingSettings();
+			var texture = GetAtlasTextureSettings(assetPath, atlas);
+			var packing = GetAtlasPackingSettings(assetPath, atlas);
 			var packables = atlas.GetPackables();
 			int packableCount = packables != null ? packables.Length : 0;
 			int spriteCount = Math.Max(0, atlas.spriteCount);
-			bool includeInBuild = SpriteAtlasExtensions.IsIncludeInBuild(atlas);
+			bool includeInBuild = IsAtlasIncludedInBuild(assetPath, atlas);
 			bool isVariant = atlas.isVariant;
 			float variantScale = isVariant ? GetVariantScale(assetPath) : 0f;
 			SpriteAtlas masterAtlas = isVariant ? SpriteAtlasExtensions.GetMasterAtlas(atlas) : null;
@@ -171,8 +174,8 @@ namespace ApexForge.ProjectOptimizer
 			string targetPlatform = PlatformUtility.GetAnalyzerTargetPlatform(ctx, k_DefaultTexturePlatform);
 			TextureImporterPlatformSettings targetSettings;
 			TextureImporterPlatformSettings defaultSettings;
-			bool targetSettingsAvailable = TryGetPlatformSettings(atlas, targetPlatform, out targetSettings);
-			bool defaultSettingsAvailable = TryGetPlatformSettings(atlas, k_DefaultTexturePlatform, out defaultSettings);
+			bool targetSettingsAvailable = TryGetPlatformSettings(assetPath, atlas, targetPlatform, out targetSettings);
+			bool defaultSettingsAvailable = TryGetPlatformSettings(assetPath, atlas, k_DefaultTexturePlatform, out defaultSettings);
 
 			bool platformOverridden = targetSettingsAvailable && targetSettings.overridden;
 			TextureImporterPlatformSettings effectivePlatformSettings = targetSettings;
@@ -240,32 +243,52 @@ namespace ApexForge.ProjectOptimizer
 				if (!isVariant
 					&& includeInBuild
 					&& packableCount < k_MinUsefulSpriteCount
-					&& spriteCount == 0)
+					&& spriteCount == 0
+					&& !IsIntentionalEmptyAtlas(atlas, assetPath))
 				{
 					entry.AddIssue("ATL005",
-						"0 packables / 0 packed sprites",
-						"Add content or exclude the atlas")
+						"0 packables / 0 packed sprites; included in build",
+						"AutoFix: Exclude empty atlas from build",
+						fix: c =>
+						{
+							c.EnsureWritable();
+							var target = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(c.AssetPath);
+							if (target == null) throw new InvalidOperationException("Sprite Atlas no longer exists.");
+							var currentPackables = target.GetPackables();
+							if (!IsAtlasIncludedInBuild(c.AssetPath, target))
+								throw new InvalidOperationException("Atlas is no longer included in the build; rescan before applying this fix.");
+							if (target.isVariant || (currentPackables != null && currentPackables.Length > 0) || target.spriteCount > 0)
+								throw new InvalidOperationException("Atlas is no longer empty; build inclusion was not changed.");
+							if (IsIntentionalEmptyAtlas(target, c.AssetPath))
+								throw new InvalidOperationException("Atlas is marked as a reserved/template placeholder; build inclusion was not changed.");
+							SetAtlasIncludedInBuild(c, target, false);
+						},
+						verify: c =>
+						{
+							var target = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(c.AssetPath);
+							return target != null && !IsAtlasIncludedInBuild(c.AssetPath, target);
+						})
 						?.Note(
-							"This master atlas has no packable objects and no generated sprites. The analyzer does not delete it because asset/addressing intent cannot be proven automatically.",
-							"Why no fix");
+							"Only an empty master atlas is excluded. Explicit placeholder/reserved/template markers are treated as opt-outs; the asset is never deleted.",
+							"Scope");
 				}
 
 			// Empty atlases have no generated texture content to optimize. Variant atlases do have a
 			// generated texture, but their content originates from the master rather than their pack list.
 			bool hasGeneratedContent = spriteCount > 0 || (isVariant && masterAtlas != null);
 
-			// PAA0008 - Project Auditor's exact generated-atlas density measurement. This uses the
+			// PAA003 - Project Auditor's exact generated-atlas density measurement. This uses the
 			// editor's internal preview texture API by reflection, so the optimizer remains compatible
 			// across Unity revisions that move the method between public/internal surfaces. It is only
 			// attempted for non-empty, non-variant atlases during the user's deep-analysis mode because
 			// generating and sampling the packed preview can be expensive.
-			using (RuleTiming.Begin("PAA0008", entry.Path))
+			using (RuleTiming.Begin("PAA003", entry.Path))
 				if (hasGeneratedContent && !isVariant && ctx.Settings.deepTextureScan)
 				{
 					float emptyPercent = GetGeneratedAtlasEmptyPercent(atlas);
 					entry.Set("emptySpace", emptyPercent >= 0f ? emptyPercent.ToString("0.##") + "%" : "Unavailable");
 					if (emptyPercent > ctx.Settings.spriteAtlasEmptySpaceWarnPercent)
-						entry.AddIssue("PAA0008", emptyPercent.ToString("0.##") + "%", "Review atlas packing density");
+						entry.AddIssue("PAA003", emptyPercent.ToString("0.##") + "%", "Review atlas packing density");
 				}
 
 			// -----------------------------------------------------------------
@@ -295,15 +318,14 @@ namespace ApexForge.ProjectOptimizer
 							{
 								c.EnsureWritable();
 								var target = (SpriteAtlas)c.Asset;
-								var settings = target.GetTextureSettings();
+								var settings = GetAtlasTextureSettings(c.AssetPath, target);
 								settings.readable = false;
-								target.SetTextureSettings(settings);
-								c.NeedsSave = true;
+								SetAtlasTextureSettings(c, target, settings);
 							},
 							Verify = c =>
 							{
 								var target = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(c.AssetPath);
-								return target != null && !target.GetTextureSettings().readable;
+								return target != null && !GetAtlasTextureSettings(c.AssetPath, target).readable;
 							}
 						}
 						});
@@ -322,20 +344,48 @@ namespace ApexForge.ProjectOptimizer
 					|| (effectiveExplicitFormat && TextureFormatUtility.IsUncompressed(effectiveFormat)));
 
 			using (RuleTiming.Begin("ATL002", entry.Path))
-				if (hasGeneratedContent && effectiveUncompressed)
+				if (hasGeneratedContent && effectiveUncompressed && !IsCompressionSensitiveAtlas(atlas, assetPath))
 				{
 					var issue = entry.AddIssue(
 						"ATL002",
 						targetPlatform + ": Uncompressed"
 							+ (effectiveExplicitFormat ? " (" + effectiveFormat + ")" : ""),
-						"Review compressed Automatic format",
-						basis: SavingsBasis.Memory,
-						options: BuildCompressionOptions(targetPlatform));
+						"AutoFix: Compressed / Automatic / Normal Quality",
+						basis: SavingsBasis.Unknown,
+						fix: c =>
+						{
+							c.EnsureWritable();
+							var target = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(c.AssetPath);
+							if (target == null) throw new InvalidOperationException("Sprite Atlas no longer exists.");
+							if (IsCompressionSensitiveAtlas(target, c.AssetPath))
+								throw new InvalidOperationException("Auto compression was blocked by an explicit lossless/precision marker.");
+							if (target.spriteCount <= 0 && !target.isVariant)
+								throw new InvalidOperationException("Sprite Atlas no longer has generated content.");
+							var settings = GetAtlasPlatformSettings(c.AssetPath, target, targetPlatform);
+							settings.name = targetPlatform;
+							settings.overridden = true;
+							settings.textureCompression = TextureImporterCompression.Compressed;
+							settings.format = TextureImporterFormat.Automatic;
+							settings.compressionQuality = (int)TextureCompressionQuality.Normal;
+							settings.crunchedCompression = false;
+SetAtlasPlatformSettings(c, target, settings);
+						},
+						verify: c =>
+						{
+							var target = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(c.AssetPath);
+							if (target == null) return false;
+							var settings = GetAtlasPlatformSettings(c.AssetPath, target, targetPlatform);
+							return settings.overridden
+								&& settings.textureCompression == TextureImporterCompression.Compressed
+								&& settings.format == TextureImporterFormat.Automatic
+								&& settings.compressionQuality == (int)TextureCompressionQuality.Normal
+								&& !settings.crunchedCompression;
+						});
 
 					issue?.Note(
 						platformOverridden
-							? "The selected target has an explicit atlas override. Review actions modify that override only."
-							: "The selected target inherits the atlas default. Review actions create a target-platform override instead of changing the shared default.",
+							? "The selected target has an explicit atlas override. AutoFix changes that override only."
+							: "The selected target inherits the atlas default. AutoFix creates a target-platform override instead of changing the shared default.",
 						"Scope");
 				}
 
@@ -376,19 +426,34 @@ namespace ApexForge.ProjectOptimizer
 			// ATL004 - packing settings only matter for masters that actually repack packable sprites.
 			// -----------------------------------------------------------------
 			using (RuleTiming.Begin("ATL004", entry.Path))
-				if (!isVariant && hasGeneratedContent && (!packing.enableTightPacking || !packing.enableRotation))
+				if (!isVariant && packableCount > 0 && hasGeneratedContent && !packing.enableTightPacking)
 				{
-					var options = BuildPackingOptions(packing.enableTightPacking, packing.enableRotation);
 					var issue = entry.AddIssue(
 						"ATL004",
-						BuildPackingCurrentText(packing.enableTightPacking, packing.enableRotation),
-						"Review missing packing option(s)",
+						"Tight Packing off; Rotation " + (packing.enableRotation ? "on" : "off"),
+						"AutoFix: Enable Tight Packing (leave Rotation unchanged)",
 						basis: SavingsBasis.Unknown,
-						options: options);
+						fix: c =>
+						{
+							c.EnsureWritable();
+							var target = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(c.AssetPath);
+							if (target == null) throw new InvalidOperationException("Sprite Atlas no longer exists.");
+							var currentPackables = target.GetPackables();
+							if (target.isVariant || currentPackables == null || currentPackables.Length == 0 || target.spriteCount <= 0)
+								throw new InvalidOperationException("Tight Packing AutoFix requires a populated master atlas.");
+							var settings = GetAtlasPackingSettings(c.AssetPath, target);
+							settings.enableTightPacking = true;
+							SetAtlasPackingSettings(c, target, settings);
+						},
+						verify: c =>
+						{
+							var target = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(c.AssetPath);
+							return target != null && GetAtlasPackingSettings(c.AssetPath, target).enableTightPacking;
+						});
 
 					issue?.Note(
-						"Tight Packing can improve density. Rotation can improve density too, but should remain disabled for Canvas UI workflows that cannot tolerate rotated packed textures.",
-						"Trade-off");
+						"AutoFix enables Tight Packing only. It deliberately does not enable rotation, including for atlases used by Canvas UI.",
+						"Scope");
 				}
 
 			// -----------------------------------------------------------------
@@ -416,15 +481,14 @@ namespace ApexForge.ProjectOptimizer
 							{
 								c.EnsureWritable();
 								var target = (SpriteAtlas)c.Asset;
-								var settings = target.GetTextureSettings();
+								var settings = GetAtlasTextureSettings(c.AssetPath, target);
 								settings.generateMipMaps = false;
-								target.SetTextureSettings(settings);
-								c.NeedsSave = true;
+								SetAtlasTextureSettings(c, target, settings);
 							},
 							Verify = c =>
 							{
 								var target = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(c.AssetPath);
-								return target != null && !target.GetTextureSettings().generateMipMaps;
+								return target != null && !GetAtlasTextureSettings(c.AssetPath, target).generateMipMaps;
 							}
 						}
 						});
@@ -435,94 +499,44 @@ namespace ApexForge.ProjectOptimizer
 				}
 
 			// -----------------------------------------------------------------
-			// ATL007 - large padding is heuristic. Only report when the atlas contains content and give
-			// explicit smaller choices without assuming that 4 is universally safe.
+			// ATL007 - auto-reduce only to 8 px and only when mipmaps/explicit bleed-sensitive markers do
+			// not identify a known exception. Lower values are never selected automatically.
 			// -----------------------------------------------------------------
 			using (RuleTiming.Begin("ATL007", entry.Path))
-				if (!isVariant && hasGeneratedContent && packing.padding > k_HighPaddingPixels)
+				if (!isVariant && hasGeneratedContent && packing.padding > k_HighPaddingPixels
+					&& !texture.generateMipMaps && !IsBleedSensitiveAtlas(atlas, assetPath))
 				{
-					var options = BuildPaddingOptions(packing.padding);
 					var issue = entry.AddIssue(
 						"ATL007",
 						packing.padding + " px",
-						"Review smaller padding",
+						"AutoFix: Set padding to 8 px",
 						basis: SavingsBasis.Unknown,
-						options: options);
+						fix: c =>
+						{
+							c.EnsureWritable();
+							var target = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(c.AssetPath);
+							if (target == null) throw new InvalidOperationException("Sprite Atlas no longer exists.");
+							if (target.isVariant || GetAtlasTextureSettings(c.AssetPath, target).generateMipMaps || IsBleedSensitiveAtlas(target, c.AssetPath))
+								throw new InvalidOperationException("Padding AutoFix was blocked because the atlas is mipmapped or marked bleed-sensitive.");
+							var currentPackables = target.GetPackables();
+							if (currentPackables == null || currentPackables.Length == 0 || target.spriteCount <= 0)
+								throw new InvalidOperationException("Padding AutoFix requires a populated atlas.");
+							var settings = GetAtlasPackingSettings(c.AssetPath, target);
+							if (settings.padding > k_HighPaddingPixels) settings.padding = k_HighPaddingPixels;
+							SetAtlasPackingSettings(c, target, settings);
+						},
+						verify: c =>
+						{
+							var target = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(c.AssetPath);
+							return target != null && GetAtlasPackingSettings(c.AssetPath, target).padding <= k_HighPaddingPixels;
+						});
 					issue?.Note(
-						"Padding is a bleed-protection parameter. The minimum safe value depends on sprite edges, filtering, mipmaps and the actual packed content; the tool therefore does not mark a smaller value as universally correct.",
-						"Trade-off");
+						"AutoFix selects 8 px only for non-mipmapped atlases without explicit bleed-sensitive markers. Lower padding values are never selected automatically.",
+						"Safety gate");
 				}
 
 			entry.Finalise();
 			return entry;
-		}
-
-		static List<FixOption> BuildCompressionOptions(string platform)
-		{
-			return new List<FixOption>
-			{
-				AtlasCompressionOption(
-					platform,
-					TextureImporterCompression.Compressed,
-					"Normal Quality / Automatic",
-					true,
-					"Use Automatic platform-specific compression at Normal quality."),
-
-				AtlasCompressionOption(
-					platform,
-					TextureImporterCompression.CompressedLQ,
-					"Low Quality / Automatic",
-					false,
-					"Use Automatic platform-specific compression at Low quality."),
-
-				AtlasCompressionOption(
-					platform,
-					TextureImporterCompression.CompressedHQ,
-					"High Quality / Automatic",
-					false,
-					"Use Automatic platform-specific compression at High quality when visual quality requires it.")
-			};
-		}
-
-		static FixOption AtlasCompressionOption(
-			string platform,
-			TextureImporterCompression compression,
-			string label,
-			bool recommended,
-			string description)
-		{
-			return new FixOption
-			{
-				ActionId = "ATL002." + compression,
-				Label = label,
-				ResultDescription = description,
-				Recommended = recommended,
-				Basis = SavingsBasis.Unknown,
-				Warning = "Automatic selects a platform-specific GPU format. Verify the resulting atlas on the actual target device class and check alpha/quality requirements.",
-				Apply = c =>
-				{
-					c.EnsureWritable();
-					var target = (SpriteAtlas)c.Asset;
-					var settings = target.GetPlatformSettings(platform);
-					settings.name = platform;
-					settings.overridden = true;
-					settings.textureCompression = compression;
-					settings.format = TextureImporterFormat.Automatic;
-					settings.crunchedCompression = false;
-					target.SetPlatformSettings(settings);
-					c.NeedsSave = true;
-				},
-				Verify = c =>
-				{
-					var target = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(c.AssetPath);
-					if (target == null) return false;
-					var settings = target.GetPlatformSettings(platform);
-					return settings.overridden
-						&& settings.textureCompression == compression
-						&& settings.format == TextureImporterFormat.Automatic
-						&& !settings.crunchedCompression;
-				}
-			};
 		}
 
 		static FixOption BuildMaxSizeOption(string platform, int target)
@@ -540,133 +554,71 @@ namespace ApexForge.ProjectOptimizer
 				{
 					c.EnsureWritable();
 					var targetAtlas = (SpriteAtlas)c.Asset;
-					var settings = targetAtlas.GetPlatformSettings(platform);
+					var settings = GetAtlasPlatformSettings(c.AssetPath, targetAtlas, platform);
 					settings.name = platform;
 					settings.overridden = true;
 					settings.maxTextureSize = target;
-					targetAtlas.SetPlatformSettings(settings);
-					c.NeedsSave = true;
+					SetAtlasPlatformSettings(c, targetAtlas, settings);
 				},
 				Verify = c =>
 				{
 					var targetAtlas = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(c.AssetPath);
 					if (targetAtlas == null) return false;
-					var settings = targetAtlas.GetPlatformSettings(platform);
+					var settings = GetAtlasPlatformSettings(c.AssetPath, targetAtlas, platform);
 					return settings.overridden && settings.maxTextureSize <= target;
 				}
 			};
 		}
 
-		static List<FixOption> BuildPackingOptions(bool tight, bool rotation)
+		// Explicitly marked cases are excluded from the common-case AutoFix path. Names/labels are
+		// opt-out signals; absence of a marker is not treated as proof of visual quality.
+		static bool HasAtlasMarker(SpriteAtlas atlas, string assetPath, params string[] markers)
 		{
-			var options = new List<FixOption>();
-			if (!tight)
+			string name = System.IO.Path.GetFileNameWithoutExtension(assetPath) ?? string.Empty;
+			for (int i = 0; i < markers.Length; i++)
+				if (name.IndexOf(markers[i], StringComparison.OrdinalIgnoreCase) >= 0) return true;
+
+			try
 			{
-				options.Add(new FixOption
-				{
-					ActionId = "ATL004.EnableTightPacking",
-					Label = "Enable Tight Packing",
-					ResultDescription = "Allow the atlas packer to use sprite outlines to improve density.",
-					Recommended = true,
-					Warning = "Review sprites with unusual geometry or workflows that depend on rectangular packing assumptions.",
-					Apply = c => SetPacking(c, true, null),
-					Verify = c => GetPacking(c).enableTightPacking
-				});
+				string[] labels = AssetDatabase.GetLabels(atlas);
+				if (labels != null)
+					for (int i = 0; i < labels.Length; i++)
+						for (int j = 0; j < markers.Length; j++)
+							if (labels[i].IndexOf(markers[j], StringComparison.OrdinalIgnoreCase) >= 0) return true;
+			}
+			catch { }
+			return false;
+		}
+
+		static bool IsCompressionSensitiveAtlas(SpriteAtlas atlas, string assetPath) =>
+			HasAtlasMarker(atlas, assetPath, "lossless", "uncompressed", "precision", "compression-sensitive", "compressionsensitive", "keep-compression", "keepcompression");
+
+		static bool IsBleedSensitiveAtlas(SpriteAtlas atlas, string assetPath) =>
+			HasAtlasMarker(atlas, assetPath, "bleed-sensitive", "bleedsensitive", "keep-padding", "keeppadding", "preserve-padding", "preservepadding", "pixel-bleed", "pixelbleed", "no-auto-padding", "noautopadding");
+
+		static bool IsIntentionalEmptyAtlas(SpriteAtlas atlas, string assetPath) =>
+			HasAtlasMarker(atlas, assetPath, "placeholder", "reserved", "template", "keep-empty", "keepempty", "future-atlas", "futureatlas");
+
+		static void SetAtlasIncludedInBuild(FixContext context, SpriteAtlas atlas, bool included)
+		{
+			// SpriteAtlasImporter is the non-legacy path used by Sprite Atlas V2. Its import settings
+			// must be saved/reimported through the FixEngine transaction, not only dirtied as an object.
+			var importer = context.Importer as SpriteAtlasImporter;
+			if (importer != null)
+			{
+				importer.includeInBuild = included;
+				context.NeedsReimport = true;
+				return;
 			}
 
-			if (!rotation)
-			{
-				options.Add(new FixOption
-				{
-					ActionId = "ATL004.EnableRotation",
-					Label = "Enable Rotation",
-					ResultDescription = "Allow Unity to rotate sprites during atlas packing to improve density.",
-					Recommended = false,
-					Warning = "Do not use this for Canvas UI element textures where rotation can change their scene orientation.",
-					Apply = c => SetPacking(c, null, true),
-					Verify = c => GetPacking(c).enableRotation
-				});
-			}
-
-			if (!tight && !rotation)
-			{
-				options.Add(new FixOption
-				{
-					ActionId = "ATL004.EnableTightAndRotation",
-					Label = "Enable Tight Packing + Rotation",
-					ResultDescription = "Enable both packing-density features.",
-					Recommended = false,
-					Warning = "Rotation is unsuitable for Canvas UI element textures. Review atlas contents before accepting this option.",
-					Apply = c => SetPacking(c, true, true),
-					Verify = c =>
-					{
-						var p = GetPacking(c);
-						return p.enableTightPacking && p.enableRotation;
-					}
-				});
-			}
-			return options;
+			SpriteAtlasExtensions.SetIncludeInBuild(atlas, included);
+			context.NeedsSave = true;
 		}
 
-		static void SetPacking(FixContext c, bool? tight, bool? rotation)
+		static bool IsAtlasIncludedInBuild(string assetPath, SpriteAtlas atlas)
 		{
-			c.EnsureWritable();
-			var target = (SpriteAtlas)c.Asset;
-			var settings = target.GetPackingSettings();
-			if (tight.HasValue) settings.enableTightPacking = tight.Value;
-			if (rotation.HasValue) settings.enableRotation = rotation.Value;
-			target.SetPackingSettings(settings);
-			c.NeedsSave = true;
-		}
-
-		static SpriteAtlasPackingSettings GetPacking(FixContext c)
-		{
-			var target = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(c.AssetPath);
-			if (target == null) throw new InvalidOperationException("Sprite Atlas no longer exists.");
-			return target.GetPackingSettings();
-		}
-
-		static List<FixOption> BuildPaddingOptions(int current)
-		{
-			var options = new List<FixOption>();
-			if (current > k_DefaultPaddingPixels)
-				options.Add(PaddingOption(k_DefaultPaddingPixels, false));
-			if (current > k_HighPaddingPixels)
-				options.Add(PaddingOption(k_HighPaddingPixels, true));
-			return options;
-		}
-
-		static FixOption PaddingOption(int padding, bool recommended)
-		{
-			return new FixOption
-			{
-				ActionId = "ATL007.Padding." + padding,
-				Label = padding + " px padding",
-				ResultDescription = "Set atlas packing padding to " + padding + " pixels.",
-				Recommended = recommended,
-				Warning = "Confirm the selected padding remains sufficient for sprite-edge bleeding with this atlas's filtering and mipmap settings.",
-				Apply = c =>
-				{
-					c.EnsureWritable();
-					var target = (SpriteAtlas)c.Asset;
-					var settings = target.GetPackingSettings();
-					settings.padding = padding;
-					target.SetPackingSettings(settings);
-					c.NeedsSave = true;
-				},
-				Verify = c =>
-				{
-					var target = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(c.AssetPath);
-					return target != null && target.GetPackingSettings().padding == padding;
-				}
-			};
-		}
-
-		static string BuildPackingCurrentText(bool tight, bool rotation)
-		{
-			if (!tight && !rotation) return "Tight Packing off; Rotation off";
-			if (!tight) return "Tight Packing off; Rotation on";
-			return "Tight Packing on; Rotation off";
+			var importer = AssetImporter.GetAtPath(assetPath) as SpriteAtlasImporter;
+			return importer != null ? importer.includeInBuild : SpriteAtlasExtensions.IsIncludeInBuild(atlas);
 		}
 
 		static float GetGeneratedAtlasEmptyPercent(SpriteAtlas atlas)
@@ -760,20 +712,84 @@ namespace ApexForge.ProjectOptimizer
 			}
 		}
 
-		static bool TryGetPlatformSettings(SpriteAtlas atlas, string platform, out TextureImporterPlatformSettings settings)
+		static bool TryGetPlatformSettings(string assetPath, SpriteAtlas atlas, string platform, out TextureImporterPlatformSettings settings)
 		{
 			settings = default(TextureImporterPlatformSettings);
 			if (atlas == null || string.IsNullOrEmpty(platform)) return false;
 
 			try
 			{
-				settings = atlas.GetPlatformSettings(platform);
+				var importer = AssetImporter.GetAtPath(assetPath) as SpriteAtlasImporter;
+				settings = importer != null ? importer.GetPlatformSettings(platform) : atlas.GetPlatformSettings(platform);
 				settings.name = string.IsNullOrEmpty(settings.name) ? platform : settings.name;
 				return true;
 			}
 			catch
 			{
 				return false;
+			}
+		}
+
+		static SpriteAtlasTextureSettings GetAtlasTextureSettings(string assetPath, SpriteAtlas atlas)
+		{
+			var importer = AssetImporter.GetAtPath(assetPath) as SpriteAtlasImporter;
+			return importer != null ? importer.textureSettings : atlas.GetTextureSettings();
+		}
+
+		static void SetAtlasTextureSettings(FixContext context, SpriteAtlas atlas, SpriteAtlasTextureSettings settings)
+		{
+			var importer = context.Importer as SpriteAtlasImporter;
+			if (importer != null)
+			{
+				importer.textureSettings = settings;
+				context.NeedsReimport = true;
+			}
+			else
+			{
+				atlas.SetTextureSettings(settings);
+				context.NeedsSave = true;
+			}
+		}
+
+		static SpriteAtlasPackingSettings GetAtlasPackingSettings(string assetPath, SpriteAtlas atlas)
+		{
+			var importer = AssetImporter.GetAtPath(assetPath) as SpriteAtlasImporter;
+			return importer != null ? importer.packingSettings : atlas.GetPackingSettings();
+		}
+
+		static void SetAtlasPackingSettings(FixContext context, SpriteAtlas atlas, SpriteAtlasPackingSettings settings)
+		{
+			var importer = context.Importer as SpriteAtlasImporter;
+			if (importer != null)
+			{
+				importer.packingSettings = settings;
+				context.NeedsReimport = true;
+			}
+			else
+			{
+				atlas.SetPackingSettings(settings);
+				context.NeedsSave = true;
+			}
+		}
+
+		static TextureImporterPlatformSettings GetAtlasPlatformSettings(string assetPath, SpriteAtlas atlas, string platform)
+		{
+			var importer = AssetImporter.GetAtPath(assetPath) as SpriteAtlasImporter;
+			return importer != null ? importer.GetPlatformSettings(platform) : atlas.GetPlatformSettings(platform);
+		}
+
+		static void SetAtlasPlatformSettings(FixContext context, SpriteAtlas atlas, TextureImporterPlatformSettings settings)
+		{
+			var importer = context.Importer as SpriteAtlasImporter;
+			if (importer != null)
+			{
+				importer.SetPlatformSettings(settings);
+				context.NeedsReimport = true;
+			}
+			else
+			{
+				atlas.SetPlatformSettings(settings);
+				context.NeedsSave = true;
 			}
 		}
 		static long EstimateMipOverhead(int width, int height, int mipCount, long runtimeBytes)

@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
+using System.Reflection;
+using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEditor;
 
@@ -18,6 +21,18 @@ namespace ApexForge.ProjectOptimizer
 		static List<string> s_EmptyFoldersCache;
 		static bool s_EmptyFoldersCacheReady;
 		static readonly Dictionary<string, string> s_AssetTypeLabels = new Dictionary<string, string>(StringComparer.Ordinal);
+		static HashSet<string> s_DynamicLoadLiterals;
+		static Dictionary<string, long> s_DynamicLoaderSourceTimestamps;
+		static bool s_DynamicLoaderIndexReady;
+		static bool s_DynamicLoaderIndexComplete;
+		static int s_DynamicLoaderIndexGeneration;
+		static readonly string[] k_DynamicLoaderMarkers =
+		{
+			"Resources.Load", "Addressables.LoadAsset", "Addressables.LoadResourceLocations",
+			"AssetBundle.LoadAsset", "AssetBundle.LoadFrom", "LoadAssetAtPath",
+			"Resources.LoadAsync", "SceneManager.LoadScene", "File.ReadAllBytes",
+			"File.ReadAllText", "File.OpenRead", "LoadFromFile"
+		};
 		float m_Progress = -1f;
 		public float Progress => m_Progress;
 
@@ -31,10 +46,10 @@ namespace ApexForge.ProjectOptimizer
 			try { EditorApplication.projectChanged += InvalidateEmptyFoldersCache; } catch { }
 			Rules.Register(id: "UNU001", title: "No static referrer anywhere in the project", category: AssetCategory.Unused,
 							why: "No other asset points at this file, and nothing the static reachability analysis can follow from enabled build scenes, Resources, StreamingAssets, preloaded assets or explicit Addressables entries reaches it. Runtime-generated Addressables keys, externally built AssetBundles and computed Resources.Load paths remain outside static proof, so this is a cleanup candidate rather than proof the asset is dead.",
-							fix: "Review Fix: delete the asset, offered only when the reference graph is complete enough for a project-wide deletion review. Confirm it is not loaded through runtime-generated Addressables keys, external AssetBundles, computed Resources.Load paths, reflection or other dynamic loaders before approving it - static analysis cannot rule those paths out.",
+							fix: "AutoFix only when the project-wide reference graph is complete and candidate-specific checks find no explicit Addressables/AssetBundle registration or recognizable dynamic-loader literal. The asset is backed up before deletion; any incomplete or suspicious case receives no automatic action.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
-							confidence: OptimizationConfidence.Heuristic,
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Destructive,
 							backupRequired: true
 							);
@@ -55,21 +70,19 @@ namespace ApexForge.ProjectOptimizer
 							why: "Empty folders create Project-window clutter and a .meta file without containing usable content.",
 							fix: "Review/delete the folder. It contains no child content, but the path and folder metadata can still matter to editor or external tooling. This is project hygiene rather than a guaranteed runtime optimization.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
-							// Declared destructive even though there is nothing inside to lose. It deletes an
-							// asset, and that is the property the fix engine gates backups on; a rule that
-							// deletes should never be able to run with backups switched off, whatever it deletes.
+							fixKind: FixKind.None,
+							// Empty-folder deletion is project hygiene, not a runtime/build optimization.
 							confidence: OptimizationConfidence.Proven,
-							risk: FixRisk.Destructive,
-							backupRequired: true
+							risk: FixRisk.Unspecified,
+							backupRequired: false
 							);
 
 			Rules.Register(id: "UNU004", title: "Large asset with no static referrer", category: AssetCategory.Unused,
 							why: "No static referrer was found for this large asset, making it a valuable cleanup candidate. Static analysis cannot prove that nothing loads it dynamically.",
-							fix: "Review Fix: delete the asset, offered only when this scan built a complete, project-wide reference graph. Verify Resources, Addressables, AssetBundles, StreamingAssets and runtime loading paths before approving it.",
+							fix: "AutoFix only when the project-wide reference graph is complete and candidate-specific checks find no explicit Addressables/AssetBundle registration or recognizable dynamic-loader literal. The asset is backed up before deletion; any incomplete or suspicious case receives no automatic action.",
 							severity: IssueSeverity.Warning,
-							fixKind: FixKind.Review,
-							confidence: OptimizationConfidence.Heuristic,
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Destructive,
 							backupRequired: true
 							);
@@ -100,6 +113,13 @@ namespace ApexForge.ProjectOptimizer
 			s_EmptyFoldersCacheReady = false;
 			s_EmptyFoldersCache = null;
 			s_AssetTypeLabels.Clear();
+			// Dynamic-loader literals are safety evidence for destructive orphan cleanup. Invalidate
+			// them alongside the project cache so new/changed source files cannot leave stale proof.
+			s_DynamicLoaderIndexReady = false;
+			s_DynamicLoaderIndexComplete = false;
+			s_DynamicLoaderIndexGeneration++;
+			s_DynamicLoadLiterals = null;
+			s_DynamicLoaderSourceTimestamps = null;
 		}
 
 		public bool Enabled(OptimizerSettings settings) => settings.scanUnused;
@@ -136,11 +156,18 @@ namespace ApexForge.ProjectOptimizer
 			yield return null;
 
 			float unusedStart = k_ReferencesShare;
+			float assetPassStart = 0f;
+			if (references.IsCurrentProjectWide)
+			{
+				var loaderIndexBuilder = EnsureDynamicLoaderIndexIncremental(done => Phase(unusedStart, k_UnusedShare, 0.08f * done));
+				while (loaderIndexBuilder.MoveNext()) yield return null;
+				if (s_DynamicLoaderIndexReady && s_DynamicLoaderIndexComplete) assetPassStart = 0.08f;
+			}
 			for (int index = 0; index < ctx.AllAssetPaths.Count; index++)
 			{
 				var path = ctx.AllAssetPaths[index];
 				if ((index & 255) == 0)
-					Phase(unusedStart, k_UnusedShare, index / (float)Mathf.Max(1, ctx.AllAssetPaths.Count));
+					Phase(unusedStart, k_UnusedShare, assetPassStart + (1f - assetPassStart) * index / (float)Mathf.Max(1, ctx.AllAssetPaths.Count));
 
 				if (IsIgnored(path) || !IsProjectOwnedAsset(path)) continue;
 				if (AssetPathUtility.IsInEditorFolder(path)) continue;
@@ -168,51 +195,54 @@ namespace ApexForge.ProjectOptimizer
 					}
 					else if (!referenced)
 					{
-						// A full project scan with a complete reference graph can offer a real Review
-						// Fix here: static analysis still cannot rule out dynamic loading, so it is never
-						// Verified and never enters Fix All, but a human who has read the evidence below
-						// can approve the delete through the same backup/rollback machinery as any other
-						// destructive fix. An incomplete or scope-limited graph cannot make that claim -
-						// an empty referrer list from a folder-scoped scan means "none in the folders you
-						// picked", which is a different statement, so the fix stays off in that case.
-						bool canDelete = graphIsComplete && references.IsProjectWide;
+						// Verified AutoFix is available only when evidence is complete and every
+						// machine-detectable loading/bundling exception is excluded. Unknown evidence
+						// deliberately produces a diagnostic with no executable action.
+						bool graphCanSupportDelete = HasCurrentProjectWideReferenceEvidence(references);
+						bool dynamicIndexReady = graphCanSupportDelete && s_DynamicLoaderIndexReady && s_DynamicLoaderIndexComplete;
+						bool hasDynamicEvidence = dynamicIndexReady && HasCandidateDynamicLoaderLiteral(path, entry.Guid);
+						bool addressableCheckComplete;
+						bool addressable = IsExplicitlyAddressable(path, out addressableCheckComplete);
+						bool assetBundleMember = IsAssetBundleMember(path);
+						bool canAutoDelete = graphCanSupportDelete && dynamicIndexReady && addressableCheckComplete
+							&& !hasDynamicEvidence && !addressable && !assetBundleMember
+							&& !string.IsNullOrEmpty(entry.Guid) && File.Exists(AssetPathUtility.ToAbsolutePath(path));
 						string ruleId = entry.FileSize > settings.largeFileWarnKb * 1024L ? "UNU004" : "UNU001";
+						string expectedGuid = entry.Guid;
+						long expectedSize = FileUtility.FileSizeOf(path);
+						long expectedWriteTicks;
+						try { expectedWriteTicks = File.GetLastWriteTimeUtc(AssetPathUtility.ToAbsolutePath(path)).Ticks; }
+						catch { expectedWriteTicks = -1; canAutoDelete = false; }
 
 						using (RuleTiming.Begin(ruleId, entry.Path))
 						{
 							var orphan = entry.AddIssue(ruleId,
 								DisplayUtility.FormatBytes(entry.FileSize) + ", no referrers",
-								"Review Fix: delete the asset",
-								canDelete ? entry.FileSize : 0,
-								canDelete ? (Action<FixContext>)(c => DeleteOrphan(c)) : null,
-								canDelete
-									? "The project-wide reference graph is complete and the asset has no known referrers, so deletion can recover its current source-file bytes. This is a conservative disk lower bound; it excludes the .meta file, build packing, and dynamic loaders not visible to static analysis."
-									: "The asset has no known referrers, but the reference graph is not complete enough to prove a safe delete. No saving estimate is reported.",
-								canDelete ? SavingsBasis.Disk : SavingsBasis.Unknown,
-								verify: canDelete
+								canAutoDelete ? "Delete verified orphan" : "No automatic action: orphan proof is incomplete or a loading exception was detected",
+								canAutoDelete ? entry.FileSize : 0,
+								canAutoDelete ? (Action<FixContext>)(c => DeleteOrphan(c, expectedGuid, expectedSize, expectedWriteTicks, references)) : null,
+								canAutoDelete
+									? "The project-wide reference graph is complete and current; the AssetDatabase journal generation is checked again at apply time; no explicit Addressables or AssetBundle registration was found; no candidate-matching literal was found in source files containing recognized dynamic-loader calls; and the source file is backed up before deletion. External catalogs, generated keys and non-source loaders remain outside static proof."
+									: BuildOrphanBlockReason(graphCanSupportDelete, dynamicIndexReady, hasDynamicEvidence, addressableCheckComplete, addressable, assetBundleMember),
+								canAutoDelete ? SavingsBasis.Disk : SavingsBasis.Unknown,
+								verify: canAutoDelete
 									? (Func<FixContext, bool>)(c => !System.IO.File.Exists(AssetPathUtility.ToAbsolutePath(c.AssetPath))
-																	&& AssetDatabase.LoadMainAssetAtPath(c.AssetPath) == null)
+													&& AssetDatabase.LoadMainAssetAtPath(c.AssetPath) == null)
 									: null);
 
-							orphan?.Note("Dynamic loading cannot be fully ruled out by static analysis: computed Resources.Load paths, runtime-generated "
-										 + "Addressables keys, remote catalogs, externally built AssetBundles and reflection-based loaders are "
-										 + "outside the proof this scan can establish.", "Static analysis limit")
-								  .Note("Build reachable: " + (inBuild ? "Yes" : "No") + "  ·  In Resources: "
-										+ (inResources ? "Yes" : "No") + "  ·  Reference graph: "
-										+ (references.IsProjectWide ? "project-wide" : "scoped to this scan")
-										+ (graphIsComplete ? ", complete" : ", incomplete"), "Scope");
+							orphan?.Note("Static analysis cannot rule out every computed or externally supplied loading key. Automatic deletion is suppressed when the graph/index is incomplete, a recognized candidate-specific loader literal exists, the asset is explicitly Addressable, or it is assigned to an AssetBundle.", "AutoFix safety gates")
+							  .Note("Build reachable: " + (inBuild ? "Yes" : "No") + "  ·  In Resources: "
+									+ (inResources ? "Yes" : "No") + "  ·  Reference graph: "
+									+ (references.IsProjectWide ? "project-wide" : "scoped to this scan")
+									+ (graphIsComplete ? ", complete" : ", incomplete"), "Scope");
 
 							if (orphan != null && !graphIsComplete)
 							{
-								orphan.Note("The reference graph could not be built completely, so a referrer may exist "
-											+ "among the assets that failed to read. " + references.IncompletenessSummary(),
-									"Incomplete analysis");
+								orphan.Note("The reference graph could not be built completely, so a referrer may exist among assets that failed to read. " + references.IncompletenessSummary(), "Incomplete analysis");
 							}
-							else if (orphan != null && !canDelete)
+							else if (orphan != null && !references.IsProjectWide)
 							{
-								orphan.Note("No Review Fix: this scan's reference graph is scoped rather than "
-											+ "project-wide, so referrers outside its scope cannot be ruled out. Run a "
-											+ "full-project scan to enable deletion.", "Scan scope");
+								orphan.Note("The scan reference graph is scoped rather than project-wide, so referrers outside its scope cannot be ruled out. Run a full-project scan to enable AutoFix.", "Scan scope");
 							}
 						}
 					}
@@ -313,14 +343,8 @@ namespace ApexForge.ProjectOptimizer
 
 				var entry = NewEntry(assetPath, AssetCategory.Unused, "Folder");
 				using (RuleTiming.Begin("UNU003", entry.Path))
-					entry.AddIssue("UNU003", "Empty", "Deleted", 0,
-						c =>
-						{
-							if (!AssetDatabase.MoveAssetToTrash(c.AssetPath))
-								throw new InvalidOperationException("Unity refused to move the folder to the OS trash.");
-							c.DeletedAsset = true;
-						},
-						verify: c => !AssetDatabase.IsValidFolder(c.AssetPath));
+					entry.AddIssue("UNU003", "Empty", "No runtime/build optimization action", 0, null,
+						"This is organizational housekeeping only; it is intentionally diagnostic-only under the approved FixKind policy.");
 				entry.Finalise();
 				yield return entry;
 			}
@@ -407,17 +431,232 @@ namespace ApexForge.ProjectOptimizer
 		}
 
 		/// <summary>
-		/// UNU001/UNU004's Review Fix. The asset itself is not among the extensions FixEngine
+		/// UNU001/UNU004's guarded AutoFix. The asset itself is not among the extensions FixEngine
 		/// snapshots automatically (that list is for the in-place-edited formats), so it is backed up
 		/// explicitly here before the delete, the same way <see cref="DuplicateRemapper"/> backs up
 		/// the duplicate it is about to remove.
 		/// </summary>
-		static void DeleteOrphan(FixContext c)
+		static void DeleteOrphan(FixContext c, string expectedGuid, long expectedSize, long expectedWriteTicks, ReferenceIndex expectedReferences)
 		{
-			c.RequireBackup(c.AssetPath);
-			if (!AssetDatabase.MoveAssetToTrash(c.AssetPath))
+			string path = c.AssetPath;
+			string absolutePath = AssetPathUtility.ToAbsolutePath(path);
+			if (!HasCurrentProjectWideReferenceEvidence(expectedReferences))
+				throw new InvalidOperationException("Project reference evidence is stale because the AssetDatabase changed after analysis. Rescan before deleting the orphan.");
+			if (!IsProjectOwnedAsset(path) || !File.Exists(absolutePath))
+				throw new InvalidOperationException("The orphan target is no longer a project-owned file.");
+			if (!string.Equals(AssetDatabase.AssetPathToGUID(path), expectedGuid, StringComparison.OrdinalIgnoreCase))
+				throw new InvalidOperationException("The orphan asset identity changed after analysis. Rescan before applying the fix.");
+			var info = new FileInfo(absolutePath);
+			if (expectedWriteTicks < 0 || info.Length != expectedSize || info.LastWriteTimeUtc.Ticks != expectedWriteTicks)
+				throw new InvalidOperationException("The orphan asset changed after analysis. Rescan before applying the fix.");
+			if (!DynamicLoaderSourceSetUnchanged())
+				throw new InvalidOperationException("A source file changed after dynamic-loading analysis. Rescan before applying the fix.");
+			if (HasCandidateDynamicLoaderLiteral(path, expectedGuid))
+				throw new InvalidOperationException("A dynamic-loader literal now matches this asset. Automatic deletion was blocked.");
+			bool addressableCheckComplete;
+			if (IsExplicitlyAddressable(path, out addressableCheckComplete) || !addressableCheckComplete || IsAssetBundleMember(path))
+				throw new InvalidOperationException("The asset is explicitly Addressable, assigned to an AssetBundle, or its loading registration could not be checked. Automatic deletion was blocked.");
+			c.RequireBackup(path);
+			if (!AssetDatabase.MoveAssetToTrash(path))
 				throw new InvalidOperationException("Unity refused to move the asset to the OS trash.");
 			c.DeletedAsset = true;
+		}
+
+		static bool HasCurrentProjectWideReferenceEvidence(ReferenceIndex references)
+		{
+			try { return references != null && references.IsCurrentProjectWide; }
+			catch { return false; }
+		}
+
+		static string BuildOrphanBlockReason(bool graphCanSupportDelete, bool dynamicIndexReady, bool hasDynamicEvidence, bool addressableCheckComplete, bool addressable, bool assetBundleMember)
+		{
+			if (!graphCanSupportDelete) return "The reference graph is incomplete, scoped, or stale rather than a current project-wide index; deletion is blocked.";
+			if (!dynamicIndexReady) return "The dynamic-loader source index could not be built completely; deletion is blocked.";
+			if (hasDynamicEvidence) return "A source literal matches the candidate in code using a recognized dynamic loader; deletion is blocked.";
+			if (!addressableCheckComplete) return "Addressables registration could not be checked reliably; deletion is blocked.";
+			if (addressable) return "The asset has an explicit Addressables entry; deletion is blocked.";
+			if (assetBundleMember) return "The asset is assigned to an AssetBundle; deletion is blocked.";
+			return "The candidate failed one or more required preflight checks; no action is offered.";
+		}
+
+		static System.Collections.Generic.IEnumerator<bool> EnsureDynamicLoaderIndexIncremental(Action<float> onProgress)
+		{
+			if (s_DynamicLoaderIndexReady) yield break;
+			int generation = s_DynamicLoaderIndexGeneration;
+			s_DynamicLoaderIndexComplete = true;
+			s_DynamicLoadLiterals = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			s_DynamicLoaderSourceTimestamps = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+			string[] sources;
+			try { sources = EnumeratePotentialSourceFiles().ToArray(); }
+			catch { s_DynamicLoaderIndexComplete = false; sources = Array.Empty<string>(); }
+			for (int i = 0; i < sources.Length; i++)
+			{
+				if (generation != s_DynamicLoaderIndexGeneration) yield break;
+				string source = sources[i];
+				try
+				{
+					var info = new FileInfo(source);
+					s_DynamicLoaderSourceTimestamps[source] = info.LastWriteTimeUtc.Ticks;
+					string content = File.ReadAllText(source);
+					if (ContainsDynamicLoaderMarker(content))
+					{
+						foreach (Match match in Regex.Matches(content, "\"((?:\\\\.|[^\"\\\\])*)\"|'((?:\\\\.|[^'\\\\])*)'"))
+						{
+							string literal = match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value;
+							literal = Regex.Unescape(literal).Trim();
+							if (literal.Length > 0) s_DynamicLoadLiterals.Add(NormalizeLoaderToken(literal));
+						}
+					}
+				}
+				catch { s_DynamicLoaderIndexComplete = false; }
+				if ((i & 31) == 31 || i == sources.Length - 1)
+				{
+					onProgress?.Invoke(sources.Length == 0 ? 1f : (i + 1) / (float)sources.Length);
+					yield return false;
+				}
+			}
+			if (generation != s_DynamicLoaderIndexGeneration) yield break;
+			s_DynamicLoaderIndexReady = s_DynamicLoaderIndexComplete;
+			if (!s_DynamicLoaderIndexComplete)
+			{
+				s_DynamicLoadLiterals = null;
+				s_DynamicLoaderSourceTimestamps = null;
+			}
+			onProgress?.Invoke(1f);
+		}
+
+		static IEnumerable<string> EnumeratePotentialSourceFiles()
+		{
+			var files = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+			string projectRoot = Directory.GetParent(Application.dataPath)?.FullName;
+			string[] roots =
+			{
+				Application.dataPath,
+				Path.Combine(projectRoot ?? string.Empty, "Packages"),
+				Path.Combine(projectRoot ?? string.Empty, "Library", "PackageCache")
+			};
+			for (int i = 0; i < roots.Length; i++)
+			{
+				if (string.IsNullOrEmpty(roots[i]) || !Directory.Exists(roots[i])) continue;
+				string[] found;
+				try { found = Directory.GetFiles(roots[i], "*.cs", SearchOption.AllDirectories); }
+				catch { s_DynamicLoaderIndexComplete = false; continue; }
+				for (int n = 0; n < found.Length; n++) files.Add(found[n]);
+			}
+			return files;
+		}
+
+		static bool ContainsDynamicLoaderMarker(string content)
+		{
+			for (int i = 0; i < k_DynamicLoaderMarkers.Length; i++)
+				if (content.IndexOf(k_DynamicLoaderMarkers[i], StringComparison.OrdinalIgnoreCase) >= 0) return true;
+			return false;
+		}
+
+		static string NormalizeLoaderToken(string value)
+		{
+			if (string.IsNullOrEmpty(value)) return string.Empty;
+			return value.Trim().Replace('\\', '/').TrimStart('/').Replace("Assets/", string.Empty).TrimEnd('/');
+		}
+
+		static bool HasCandidateDynamicLoaderLiteral(string assetPath, string guid)
+		{
+			if (!s_DynamicLoaderIndexReady || !s_DynamicLoaderIndexComplete || s_DynamicLoadLiterals == null) return true;
+			var tokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			string normalized = NormalizeLoaderToken(assetPath);
+			tokens.Add(normalized);
+			tokens.Add(NormalizeLoaderToken(Path.ChangeExtension(normalized, null)));
+			string fileName = Path.GetFileName(assetPath);
+			tokens.Add(NormalizeLoaderToken(fileName));
+			tokens.Add(NormalizeLoaderToken(Path.GetFileNameWithoutExtension(assetPath)));
+			if (!string.IsNullOrEmpty(guid)) tokens.Add(NormalizeLoaderToken(guid));
+			if (AssetPathUtility.IsInResources(assetPath))
+			{
+				string resourcesRelative = assetPath.Substring(0, assetPath.LastIndexOf("Resources/", StringComparison.OrdinalIgnoreCase) + "Resources/".Length);
+				string relative = assetPath.Substring(resourcesRelative.Length);
+				tokens.Add(NormalizeLoaderToken(Path.ChangeExtension(relative, null)));
+			}
+			foreach (string literal in s_DynamicLoadLiterals)
+			{
+				if (tokens.Contains(literal)) return true;
+				foreach (string token in tokens)
+					if (token.Length >= 6 && literal.Length >= 6 && (literal.EndsWith("/" + token, StringComparison.OrdinalIgnoreCase) || token.EndsWith("/" + literal, StringComparison.OrdinalIgnoreCase))) return true;
+			}
+			return false;
+		}
+
+		static bool DynamicLoaderSourceSetUnchanged()
+		{
+			if (!s_DynamicLoaderIndexReady || !s_DynamicLoaderIndexComplete || s_DynamicLoaderSourceTimestamps == null) return false;
+			var current = new SortedSet<string>(EnumeratePotentialSourceFiles(), StringComparer.OrdinalIgnoreCase);
+			if (current.Count != s_DynamicLoaderSourceTimestamps.Count) return false;
+			foreach (string source in current)
+			{
+				if (!s_DynamicLoaderSourceTimestamps.TryGetValue(source, out long ticks)) return false;
+				try { if (File.GetLastWriteTimeUtc(source).Ticks != ticks) return false; }
+				catch { return false; }
+			}
+			return true;
+		}
+
+		static bool IsAssetBundleMember(string path)
+		{
+			try
+			{
+				var importer = AssetImporter.GetAtPath(path);
+				return importer == null || !string.IsNullOrEmpty(importer.assetBundleName);
+			}
+			catch { return true; }
+		}
+
+		static bool IsExplicitlyAddressable(string path, out bool complete)
+		{
+			complete = true;
+			try
+			{
+				Type type = FindType("UnityEditor.AddressableAssets.AddressableAssetSettingsDefaultObject");
+				if (type == null) { complete = !AddressablesUtility.IsInstalled; return false; }
+				var settingsProperty = type.GetProperty("Settings", BindingFlags.Public | BindingFlags.Static);
+				object settings = settingsProperty != null ? settingsProperty.GetValue(null, null) : null;
+				if (settings == null) { complete = !AddressablesUtility.IsInstalled; return false; }
+				object groupsObject = GetMemberValue(settings, "groups");
+				var groups = groupsObject as System.Collections.IEnumerable;
+				if (groups == null) { complete = !AddressablesUtility.IsInstalled; return false; }
+				string targetGuid = AssetDatabase.AssetPathToGUID(path);
+				foreach (object group in groups)
+				{
+					object entriesObject = GetMemberValue(group, "entries");
+					var entries = entriesObject as System.Collections.IEnumerable;
+					if (entries == null) continue;
+					foreach (object entry in entries)
+					{
+						string guid = GetMemberValue(entry, "guid") as string;
+						if (string.Equals(guid, targetGuid, StringComparison.OrdinalIgnoreCase)) return true;
+					}
+				}
+				return false;
+			}
+			catch { complete = false; return false; }
+		}
+
+		static Type FindType(string fullName)
+		{
+			foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+			{
+				Type found = null;
+				try { found = assembly.GetType(fullName, false); } catch { }
+				if (found != null) return found;
+			}
+			return null;
+		}
+
+		static object GetMemberValue(object target, string name)
+		{
+			if (target == null) return null;
+			var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+			try { var property = target.GetType().GetProperty(name, flags); if (property != null) return property.GetValue(target, null); } catch { }
+			try { var field = target.GetType().GetField(name, flags); if (field != null) return field.GetValue(target); } catch { }
+			return null;
 		}
 
 		static string AssetTypeLabel(string path)

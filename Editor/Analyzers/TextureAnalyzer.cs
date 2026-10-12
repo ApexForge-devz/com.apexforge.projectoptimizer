@@ -1,6 +1,7 @@
-using System.Reflection;
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Security.Cryptography;
 using UnityEngine;
 using UnityEditor;
 using UnityEngine.U2D;
@@ -30,11 +31,42 @@ namespace ApexForge.ProjectOptimizer
 
 		HashSet<string> m_AtlasCovered;
 		List<string> m_AtlasFolders;
+		List<AtlasCandidate> m_AtlasCandidates;
 		bool m_AnyAtlases;
 		static HashSet<string> s_AtlasCovered;
 		static List<string> s_AtlasFolders;
+		static List<AtlasCandidate> s_AtlasCandidates;
 		static bool s_AnyAtlases;
 		static bool s_AtlasCoverageDirty = true;
+		static bool s_TextureUsageDirty = true;
+		static Dictionary<string, TextureUsageEvidence> s_TextureUsageEvidence = new Dictionary<string, TextureUsageEvidence>(StringComparer.OrdinalIgnoreCase);
+		static Dictionary<string, string> s_MaterialFileHashes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+		[Flags]
+		enum TextureUsageFlags
+		{
+			None = 0,
+			NormalSlot = 1,
+			LinearDataSlot = 2,
+			OtherSlot = 4,
+			UiShader = 8,
+			NonUiShader = 16
+		}
+
+		sealed class TextureUsageEvidence
+		{
+			public TextureUsageFlags Flags;
+			public readonly HashSet<string> MaterialPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		}
+
+		sealed class AtlasCandidate
+		{
+			public string Path;
+			public string Name;
+			public string Hash;
+			public readonly HashSet<string> PackablePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			public readonly List<string> PackableFolders = new List<string>();
+		}
 
 		public AssetCategory Category => AssetCategory.Texture;
 
@@ -83,9 +115,16 @@ namespace ApexForge.ProjectOptimizer
 			public int targetCompressionQuality;
 			public string targetFormatDescription = "-";
 			public bool crunchCompatible;
-			public bool highQualityMemoryConcern;
+			public bool automaticCompressionCrunchCompatible;
 			public bool streamingMipmapsActive;
 			public int globalTextureMipmapLimit;
+			public bool constantPngEvidenceEvaluated;
+			public bool constantPngSourceSupported;
+			public string constantPngHash = string.Empty;
+			public Color32 constantPngColor;
+			public bool constantPngHasAlpha;
+			public int constantPngSourceWidth;
+			public int constantPngSourceHeight;
 		}
 
 		static TextureAnalyzer()
@@ -93,33 +132,35 @@ namespace ApexForge.ProjectOptimizer
 			try { EditorApplication.projectChanged += InvalidateAtlasCoverage; } catch { }
 			Rules.Register(id: "TEX001", title: "Texture larger than the size budget for the target platform", category: AssetCategory.Texture,
 							why: "Imported texture resolution directly affects GPU memory and bandwidth. The budget is a policy threshold for the selected optimizer platform profile, not proof that this particular asset is visually safe to reduce.",
-							fix: "Review the target-platform Max Size before changing it. The action is platform-scoped and never changes the shared Default Max Size.",
+							fix: "Automatically set only the selected target platform Max Size to the profile budget; preserve Default settings and verify the exact result.",
 							severity: IssueSeverity.Warning,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Medium,
-							backupRequired: false
+							backupRequired: true
 							);
 
 			Rules.Register(id: "TEX002", title: "Texture imports uncompressed for the target platform", category: AssetCategory.Texture,
 							why: "An uncompressed target texture can consume substantially more GPU memory and bandwidth than a compressed format. The correct compression mode depends on platform support, alpha, HDR/data usage and visual quality requirements.",
-							fix: "Review Normal or Low Quality automatic compression for the selected target platform.",
+							fix: "Use platform Automatic format with standard/Normal compression for eligible color textures; preserve data, atlas, HDR and ambiguous-role exceptions.",
 							severity: IssueSeverity.Warning,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Medium,
-							backupRequired: false
+							backupRequired: true
 							);
 
 			Rules.Register(id: "TEX003", title: "Crunch compression / quality differs from the project policy", category: AssetCategory.Texture,
 							why: "Crunch is an additional disk/download compression stage for supported compressed texture formats. It does not reduce the GPU memory footprint and increases import/compression time, so this is a build-size policy with a configurable compression-quality target.",
-							fix: "When the target is proven Crunch-compatible and the project preference requests Crunch, apply the configured Crunch / compression quality.",
+							fix: "Apply the configured Crunch quality only when the selected target and project policy still prove a supported Crunch-compatible compressed format.",
 							severity: IssueSeverity.Info,
 							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
 								recommendationConfidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Medium,
-							backupRequired: false
+							backupRequired: true
 							);
 
 			Rules.Register(id: "TEX004", title: "Read/Write enabled", category: AssetCategory.Texture,
@@ -134,72 +175,79 @@ namespace ApexForge.ProjectOptimizer
 
 			Rules.Register(id: "TEX005", title: "Mip maps generated for a 2D/UI texture", category: AssetCategory.Texture,
 							why: "Mipmaps add imported texture data and are often unnecessary for fixed-size UI imagery. Sprite textures can also be rendered in world space or at varying scales, so the importer state alone cannot prove that mipmaps are wasteful.",
-							fix: "Review disabling Generate Mip Maps for assets that are truly fixed-size/UI-only.",
+							fix: "Disable mipmaps only for GUI/cursor assets in the deterministic fixed-size common case; sprite textures with unresolved world-space use are skipped.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
-							confidence: OptimizationConfidence.Heuristic,
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Medium,
-							backupRequired: false
+							backupRequired: true
 							);
 
 			Rules.Register(id: "TEX006", title: "Mip maps missing on a world-space texture", category: AssetCategory.Texture,
 							why: "Mipmaps improve minification quality and can reduce aliasing and texture-cache pressure on surfaces viewed at varying distances. They are not automatically required for every texture.",
-							fix: "Review enabling Generate Mip Maps for textures used at varying projected sizes.",
+							fix: "Enable mipmaps only for large 2D textures with known non-UI material use and no conflicting UI material evidence; unknown-use assets are skipped.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
-							confidence: OptimizationConfidence.Heuristic,
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Medium,
-							backupRequired: false
+							backupRequired: true
 							);
 
 			Rules.Register(id: "TEX007", title: "Alpha source configured when the source has no alpha", category: AssetCategory.Texture,
 							why: "The importer is configured to obtain alpha even though the source image reports no alpha channel. Alpha can still be intentionally generated from another source, so the source format alone does not prove that disabling the setting is safe.",
-							fix: "Review setting Alpha Source to None when no generated alpha is required.",
+							fix: "Set Alpha Source to None only when Unity confirms no source alpha and the current setting is FromInput; preserve grayscale-generated alpha.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Medium,
-							backupRequired: false
+							backupRequired: true
 							);
 
 			Rules.Register(id: "TEX008", title: "Texture uses a filename normal-map hint but is imported as Default", category: AssetCategory.Texture,
 							why: "Filename conventions can identify likely normal maps, but naming alone cannot prove that the pixels are normal-map data. Changing Texture Type changes import processing and can alter the texture result.",
-							fix: "Review importing as Normal Map only after confirming the content is actually a normal map.",
+							fix: "Import as Normal Map only when a normal-map filename hint is corroborated by exclusive recognized normal-slot usage in known materials.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
-							confidence: OptimizationConfidence.Heuristic,
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Medium,
-							backupRequired: false
+							backupRequired: true
 							);
 
 			Rules.Register(id: "TEX009", title: "Mipmap streaming disabled on a large texture", category: AssetCategory.Texture,
 							why: "Per-texture mipmap streaming allows Unity to load only the mip levels needed for the current cameras. The project quality level must also have mipmap streaming enabled, so this finding is advisory.",
-							fix: "Review enabling Streaming Mipmaps for large non-UI textures in a project that actually uses mip streaming.",
+							fix: "Enable per-texture mipmap streaming only when project streaming is active, mipmaps are enabled, the texture is large and known non-UI use is indicated.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Low,
-							backupRequired: false
+							backupRequired: true
 							);
 
 			Rules.Register(id: "TEX010", title: "Anisotropic filtering level is high", category: AssetCategory.Texture,
 							why: "Higher anisotropic levels can improve texture clarity at grazing angles but increase sampling work. A high value is not inherently wrong and is often appropriate for roads, floors and terrain.",
-							fix: "Review against the actual viewing angle and quality target rather than enforcing a universal maximum.",
+							fix: "Clamp anisotropic filtering down to the configured project maximum, preserving all other importer settings.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Medium,
-							backupRequired: false
+							backupRequired: true
 							);
 
 			Rules.Register(id: "TEX011", title: "Mobile target override uses an uncompressed format", category: AssetCategory.Texture,
 							why: "A mobile target override that explicitly selects an uncompressed format can consume substantially more memory and bandwidth than the platform's supported compressed formats. The correct format depends on device compatibility and the texture's content.",
-							fix: "Review switching the mobile override to Automatic compression with Normal or Low Quality.",
+							fix: "Use platform Automatic format with standard/Normal compression for eligible mobile color textures whose explicit override is uncompressed.",
 							severity: IssueSeverity.Warning,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Medium,
-							backupRequired: false
+							backupRequired: true
 							);
 
 			Rules.Register(id: "TEX012", title: "Very large source file", category: AssetCategory.Texture,
@@ -214,12 +262,13 @@ namespace ApexForge.ProjectOptimizer
 
 			Rules.Register(id: "TEX013", title: "sRGB enabled on a likely data texture", category: AssetCategory.Texture,
 							why: "Masks, roughness, metallic, height and other numeric data textures generally need linear sampling. A filename heuristic cannot prove intent, so this remains review-only.",
-							fix: "Review disabling sRGB (Color Texture) when the texture is confirmed to contain linear data.",
+							fix: "Disable sRGB only when data-name evidence is corroborated by exclusive recognized linear-data material-slot usage.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
-							confidence: OptimizationConfidence.Heuristic,
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Medium,
-							backupRequired: false
+							backupRequired: true
 							);
 
 			Rules.Register(id: "TEX014", title: "Colour texture contains only greyscale data", category: AssetCategory.Texture,
@@ -229,27 +278,28 @@ namespace ApexForge.ProjectOptimizer
 							fixKind: FixKind.Review,
 							confidence: OptimizationConfidence.Heuristic,
 							risk: FixRisk.Medium,
-							backupRequired: false
+							backupRequired: true
 							);
 
 			Rules.Register(id: "TEX015", title: "Filtering settings are inefficient for a texture without mip maps", category: AssetCategory.Texture,
 							why: "Trilinear filtering depends on mip levels, while anisotropic filtering is primarily useful with mipmapped textures. The importer settings can therefore be inconsistent for textures intentionally imported without mipmaps.",
-							fix: "Review switching to Bilinear and Aniso 1 when no mip chain is intentionally required.",
+							fix: "Change only Trilinear to Bilinear on non-mipmapped textures with anisotropy already at 0 or 1; preserve anisotropy and all other settings.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Medium,
-							backupRequired: false
+							backupRequired: true
 							);
 
 			Rules.Register(id: "TEX016", title: "Sprite is not packed into a Sprite Atlas", category: AssetCategory.Texture,
 							why: "Sprite Atlas packing can reduce texture switches and improve batching, but runtime-generated sprites, special addressing, atlas filtering or UI workflows may intentionally keep sprites separate.",
-							fix: "Review Sprite Atlas membership based on actual runtime usage and atlas strategy.",
+							fix: "Review Fix can add the sprite to an explicitly selected existing included atlas; creating a new atlas or guessing a destination is not automated.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.None,
+							fixKind: FixKind.Review,
 							confidence: OptimizationConfidence.Heuristic,
 							risk: FixRisk.Medium,
-							backupRequired: false
+							backupRequired: true
 							);
 
 			Rules.Register(id: "TEX017", title: "Texture ignores the global mipmap limit", category: AssetCategory.Texture,
@@ -262,17 +312,18 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "PAA0005", title: "Solid-color texture is larger than 1x1", category: AssetCategory.Texture,
+			Rules.Register(id: "PAA001", title: "Solid-color texture is larger than 1x1", category: AssetCategory.Texture,
 							why: "A texture that contains one solid color can be represented by a 1x1 texture, eliminating needless pixels and mip levels. This is a deep-analysis heuristic because decoding every texture is expensive.",
-							fix: "Replace a truly solid-color texture with a 1x1 texture or a material/property value. Project Optimizer only reports this when it can prove the sampled pixels are identical.",
+							fix: "Rewrite only metadata-free 8-bit RGB/RGBA PNGs after full-resolution exact pixel equality is proven, with an explicit source backup and post-import verification.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.None,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.Proven,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
+							risk: FixRisk.Medium,
+							backupRequired: true
 							);
 
-			Rules.Register(id: "PAA0007", title: "Texture Atlas has too much empty space", category: AssetCategory.Texture,
+			Rules.Register(id: "PAA002", title: "Texture Atlas has too much empty space", category: AssetCategory.Texture,
 							why: "Project Auditor measures transparent pixels in Texture2D content and reports assets with excessive empty area because empty pixels still consume texture memory and storage.",
 							fix: "Re-author or crop the texture, or reorganize the atlas/source layout to reduce unused transparent area. Project Optimizer does not rewrite texture pixels automatically.",
 							severity: IssueSeverity.Info,
@@ -283,33 +334,40 @@ namespace ApexForge.ProjectOptimizer
 							);
 
 			Rules.Register(id: "TEX018", title: "High-quality texture compression on a large texture", category: AssetCategory.Texture,
-							why: "High Quality compression can use more memory than Normal Quality for the same texture dimensions. Higher quality is legitimate when the visual benefit matters, so the correct action is a visual-quality decision.",
-							fix: "Review Normal or Low Quality for large textures when the visual difference is acceptable.",
+							why: "High Quality compression can spend extra memory or storage on large textures for a visual-quality benefit. Standard/Normal compression is a practical default for common color textures; an occasional visual regression can be corrected manually on the affected asset.",
+							fix: "Automatically switch eligible large high-quality target settings to Automatic standard/Normal compression; preserve data, atlas, HDR and unsupported-Crunch exceptions.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Medium,
-							backupRequired: false
+							backupRequired: true
 							);
 		}
 
 		static void InvalidateAtlasCoverage()
 		{
 			s_AtlasCoverageDirty = true;
+			s_TextureUsageDirty = true;
 		}
 
 		public void BeginScan(ScanContext ctx)
 		{
+			if (s_TextureUsageDirty || s_TextureUsageEvidence == null)
+				BuildTextureUsageEvidence();
+
 			if (!s_AtlasCoverageDirty && s_AtlasCovered != null)
 			{
 				m_AtlasCovered = s_AtlasCovered;
 				m_AtlasFolders = s_AtlasFolders;
+				m_AtlasCandidates = s_AtlasCandidates;
 				m_AnyAtlases = s_AnyAtlases;
 				return;
 			}
 
 			m_AtlasCovered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 			m_AtlasFolders = new List<string>();
+			m_AtlasCandidates = new List<AtlasCandidate>();
 			m_AnyAtlases = false;
 
 			var visitedAtlases = new HashSet<int>();
@@ -320,10 +378,13 @@ namespace ApexForge.ProjectOptimizer
 				if (atlas == null || !SpriteAtlasExtensions.IsIncludeInBuild(atlas)) continue;
 
 				m_AnyAtlases = true;
+				var candidate = CaptureAtlasCandidate(path, atlas);
+				if (candidate != null) m_AtlasCandidates.Add(candidate);
 				RegisterAtlasPackables(atlas, visitedAtlases, requireIncludedInBuild: true);
 			}
 			s_AtlasCovered = m_AtlasCovered;
 			s_AtlasFolders = m_AtlasFolders;
+			s_AtlasCandidates = m_AtlasCandidates;
 			s_AnyAtlases = m_AnyAtlases;
 			s_AtlasCoverageDirty = false;
 		}
@@ -354,15 +415,20 @@ namespace ApexForge.ProjectOptimizer
 				if (facts == null) return;
 			}
 
+			// CPU texture decoding and source-file inspection happen on the main thread here. The
+			// background analyzer consumes only captured primitive/source evidence fields.
+			CaptureConstantPngEvidence(assetPath, facts, settings);
+
 			// These values describe current project/platform policy rather than the imported texture,
 			// so refresh them even when the measurement itself came from the persistent cache.
 			facts.targetFormatDescription = facts.targetOverridden
 				? facts.targetFormat.ToString()
 				: GetInheritedTargetFormatDescription(platform, facts.targetCompression, settings.Profile.IsMobileClass);
 			facts.crunchCompatible = IsCrunchCompatibleTarget(platform, facts.targetOverridden, facts.targetFormat, facts.targetCompression);
-			facts.highQualityMemoryConcern = IsHighQualityMemoryConcern(platform, facts.targetOverridden, facts.targetFormat);
+			facts.automaticCompressionCrunchCompatible = IsCrunchCompatibleTarget(platform, true, TextureImporterFormat.Automatic, TextureImporterCompression.Compressed);
 			facts.streamingMipmapsActive = QualitySettings.streamingMipmapsActive;
 			facts.globalTextureMipmapLimit = QualitySettings.globalTextureMipmapLimit;
+			if (mainContext.Cache != null) mainContext.Cache.Set(cacheKey, facts, dependencyHash);
 			backgroundContext.SeedCached(cacheKey, facts, measuredForBackground);
 		}
 
@@ -393,15 +459,16 @@ namespace ApexForge.ProjectOptimizer
 				if (importer == null) return null;
 				facts = MeasureTexture(assetPath, importer, settings);
 				if (facts == null) return null;
-				ctx.Cache?.Set(cacheKey, facts, dependencyHash);
 			}
+			CaptureConstantPngEvidence(assetPath, facts, settings);
 			facts.targetFormatDescription = facts.targetOverridden
 				? facts.targetFormat.ToString()
 				: GetInheritedTargetFormatDescription(platform, facts.targetCompression, settings.Profile.IsMobileClass);
 			facts.crunchCompatible = IsCrunchCompatibleTarget(platform, facts.targetOverridden, facts.targetFormat, facts.targetCompression);
-			facts.highQualityMemoryConcern = IsHighQualityMemoryConcern(platform, facts.targetOverridden, facts.targetFormat);
+			facts.automaticCompressionCrunchCompatible = IsCrunchCompatibleTarget(platform, true, TextureImporterFormat.Automatic, TextureImporterCompression.Compressed);
 			facts.streamingMipmapsActive = QualitySettings.streamingMipmapsActive;
 			facts.globalTextureMipmapLimit = QualitySettings.globalTextureMipmapLimit;
+			ctx.Cache?.Set(cacheKey, facts, dependencyHash);
 			return BuildEntry(assetPath, settings, facts, ctx.FileMetadata != null ? ctx.FileMetadata.GetFileSize(assetPath) : FileUtility.FileSizeOf(assetPath), ctx.GetGuid(assetPath));
 		}
 
@@ -466,158 +533,68 @@ namespace ApexForge.ProjectOptimizer
 			entry.Set("targetCrunch", targetCrunch ? "Yes" : "No");
 			entry.Set("targetCompressionQuality", (long)facts.targetCompressionQuality);
 
-			// TEX001 - target-specific resolution budget.
-			// A Sprite packed into an included Sprite Atlas does not use the source
-			// texture importer settings for the packed runtime texture.
+			// TEX001 - safe target-only Max Size reduction. Do not alter Default settings.
 			using (RuleTiming.Begin("TEX001", entry.Path))
 				if (!isAtlasPackedSprite)
 				{
 					int budget = isUi ? settings.maxUiTextureSize : settings.maxTextureSize;
-					int effectiveMax = targetOverridden
-						? facts.targetMaxTextureSize
-						: facts.maxTextureSize;
-
+					int effectiveMax = targetOverridden ? facts.targetMaxTextureSize : facts.maxTextureSize;
 					entry.Set("defaultMaxSize", (long)facts.maxTextureSize);
 					entry.Set("targetMaxSize", (long)effectiveMax);
-
 					if (largest > budget)
 					{
 						int target = Mathf.Max(32, Mathf.Min(effectiveMax, budget));
-						if (target < largest)
+						if (target < effectiveMax && target < largest)
 						{
-							long resolutionSavings = EstimateResolutionSavings(entry.RuntimeSize, width, height, target);
-							string label = "Set " + platform + " Max Size to " + target;
-							var issue = entry.AddIssue(
-								"TEX001",
-								width + " x " + height + "; " + platform + " effective Max Size " + effectiveMax,
-								label,
-								estimatedSavings: resolutionSavings,
-								basis: resolutionSavings > 0 ? SavingsBasis.Memory : SavingsBasis.Unknown,
-								detail: "The selected profile budget is " + budget + " for " + settings.Profile.DisplayName
-										+ ". The current target setting is " + effectiveMax
-										+ ". Estimated memory savings are approximate and assume the same target format/compression family; actual imported size can vary with format overhead and platform-specific encoding."
-										+ " This action creates or edits only the " + platform + " override.",
-								options: new List<FixOption>
-								{
-							new FixOption
-							{
-								ActionId = "tex001_set_target_max_size",
-								Label = label,
-								ResultDescription = "Sets only the selected platform's Max Size to " + target + ".",
-								EstimatedSavings = resolutionSavings,
-								Basis = resolutionSavings > 0 ? SavingsBasis.Memory : SavingsBasis.Unknown,
-								Recommended = true,
-								Risk = FixRisk.Medium,
-								Warning = "This reduces the imported resolution for " + platform
-										  + ". Inspect the asset at the new size before accepting the change.",
-								Apply = c =>
-								{
-									var ti = (TextureImporter)c.Importer;
-									var ps = GetTargetPlatformSettings(ti, platform);
-									if (ps == null) throw new InvalidOperationException(
-										"Unity did not return platform settings for " + platform + ".");
-									ps.name = platform;
-									ps.overridden = true;
-									ps.maxTextureSize = target;
-									ti.SetPlatformTextureSettings(ps);
-									c.NeedsReimport = true;
-								},
-								Verify = c =>
-								{
-									var ti = AssetImporter.GetAtPath(c.AssetPath) as TextureImporter;
-									if (ti == null) return false;
-									var ps = GetTargetPlatformSettings(ti, platform);
-									return ps != null && ps.overridden && ps.maxTextureSize <= target;
-								}
-							}
-							});
-
-							if (issue != null)
-							{
-								issue.Note("Default Max Size: " + facts.maxTextureSize
-										   + " | " + platform + " effective Max Size: " + effectiveMax
-										   + " | profile budget: " + budget, "Target");
-							}
+							long savings = EstimateResolutionSavings(entry.RuntimeSize, width, height, target);
+						var issue = entry.AddIssue("TEX001", width + " x " + height + "; " + platform + " Max Size " + effectiveMax,
+							"Set " + platform + " Max Size to " + target, savings,
+							c => ApplyTargetMaxSize(c, platform, settings, isUi, budget, target, targetOverridden, effectiveMax, facts.maxTextureSize),
+							detail: "Applies only the selected platform's Max Size. Default Max Size is preserved; estimated savings are approximate and depend on the target format.",
+							basis: savings > 0 ? SavingsBasis.Memory : SavingsBasis.Unknown,
+							verify: c => VerifyTargetMaxSize(c, platform, target, facts.maxTextureSize));
+							if (issue != null) issue.Note("Profile budget: " + budget + " for " + settings.Profile.DisplayName + ".", "Target");
 						}
 					}
 				}
 
-			// TEX002 - actual target compression mode/format, not merely the Default tab.
-			bool targetExplicitUncompressedFormat =
-				targetOverridden && TextureFormatUtility.IsUncompressed(targetFormat);
+			// TEX002 - make the standard Automatic-compression action the deterministic default.
+			bool targetExplicitUncompressedFormat = targetOverridden && TextureFormatUtility.IsUncompressed(targetFormat);
 			bool targetExplicitMobileUncompressedOverride = settings.Profile.IsMobileClass
-				&& targetOverridden
-				&& targetCompression != TextureImporterCompression.Uncompressed
-				&& TextureFormatUtility.IsUncompressed(targetFormat)
-				&& !isAtlasPackedSprite && !isDataTexture;
-			bool targetActuallyUncompressed =
-				targetCompression == TextureImporterCompression.Uncompressed
+				&& targetOverridden && targetCompression != TextureImporterCompression.Uncompressed
+				&& TextureFormatUtility.IsUncompressed(targetFormat) && !isAtlasPackedSprite && !isDataTexture;
+			bool targetActuallyUncompressed = targetCompression == TextureImporterCompression.Uncompressed
 				|| (targetExplicitUncompressedFormat && !settings.Profile.IsMobileClass);
-
 			using (RuleTiming.Begin("TEX002", entry.Path))
-				if (!isDataTexture && !isAtlasPackedSprite && targetActuallyUncompressed && !targetExplicitMobileUncompressedOverride)
+				if (!isDataTexture && !isAtlasPackedSprite && IsCompressionCommonCase(assetPath, facts)
+					&& targetActuallyUncompressed && !targetExplicitMobileUncompressedOverride
+					&& (!targetCrunch || facts.automaticCompressionCrunchCompatible))
 				{
-					var issue = entry.AddIssue(
-						"TEX002",
-						"Target " + platform + ": Uncompressed (" + targetFormatDescription + ")",
-						"Review compressed Automatic format",
-						detail: "The selected target currently resolves to an uncompressed texture representation. "
-								+ "The recommended action enables Unity Automatic compression for the selected target platform.",
-						options: BuildCompressionOptions(
-							"tex002",
-							platform,
-							normalWarning: "Normal Quality is the balanced default; still inspect detail-sensitive textures.",
-							lowWarning: "Low Quality can reduce memory further but may introduce visible artifacts.",
-							includeCrunch: false));
-					if (issue != null)
-						issue.Note("Target format: " + targetFormatDescription + "; target override: " + (targetOverridden ? "Yes" : "No"),
-							"Target");
+					var issue = entry.AddIssue("TEX002", "Target " + platform + ": Uncompressed (" + targetFormatDescription + ")",
+						"Use Automatic / standard compression", 0,
+						c => ApplyAutomaticCompression(c, platform, settings, targetOverridden, targetCompression, targetFormat, targetCrunch, facts.textureCompression, facts.crunchedCompression),
+						detail: "Sets only the selected target to Automatic format and standard/Normal compression. HDR, data and other ambiguous sources are excluded.",
+						verify: c => VerifyAutomaticCompression(c, platform, targetCrunch, facts.textureCompression, facts.crunchedCompression));
+					if (issue != null) issue.Note("Target format: " + targetFormatDescription + "; override: " + (targetOverridden ? "Yes" : "No"), "Target");
 				}
 
-			// TEX003 - Crunch only when the selected target's effective compression policy
-			// can actually produce a Crunch-compatible format. Do not infer that every
-			// Automatic mobile target supports Crunch: Android can target ETC/ETC2, ASTC,
-			// DXT or PVRTC depending on build configuration.
+			// TEX003 - Crunch is enabled only while the target remains compatible and policy still requests it.
 			using (RuleTiming.Begin("TEX003", entry.Path))
+			{
+				int crunchQuality = Mathf.Clamp(settings.crunchQuality, 0, 100);
+				if (settings.preferCrunch && !isAtlasPackedSprite && !isDataTexture
+					&& targetCompression != TextureImporterCompression.Uncompressed && facts.crunchCompatible
+					&& (!targetCrunch || targetCompressionQuality != crunchQuality))
 				{
-					int crunchQuality = Mathf.Clamp(settings.crunchQuality, 0, 100);
-					bool crunchCompatible = facts.crunchCompatible;
-					bool qualityMismatch = targetCrunch && targetCompressionQuality != crunchQuality;
-					if (settings.preferCrunch
-						&& !isAtlasPackedSprite
-						&& targetCompression != TextureImporterCompression.Uncompressed
-						&& !isDataTexture
-						&& crunchCompatible
-						&& (!targetCrunch || qualityMismatch))
-					{
-						string current = targetCrunch ? "Crunch on (quality " + targetCompressionQuality + ")" : "Crunch off";
-						var issue = entry.AddIssue(
-							"TEX003",
-							"Target " + platform + ": " + current + " (" + targetFormatDescription + ")",
-							"Enable Crunch on (quality " + crunchQuality + ")", 0,
-							c =>
-							{
-								var ti = (TextureImporter)c.Importer;
-								var ps = GetTargetPlatformSettings(ti, platform);
-								if (ps == null) throw new InvalidOperationException("Target platform settings unavailable for " + platform + ".");
-								ps.name = platform;
-								ps.overridden = true;
-								ps.crunchedCompression = true;
-								ps.compressionQuality = crunchQuality;
-								ti.SetPlatformTextureSettings(ps);
-								c.NeedsReimport = true;
-							},
-							detail: "The selected target format is proven Crunch-compatible and the project preference requests Crunch at the configured quality " + crunchQuality + ".",
-							verify: c =>
-							{
-								var ti = AssetImporter.GetAtPath(c.AssetPath) as TextureImporter;
-								var ps = ti != null ? GetTargetPlatformSettings(ti, platform) : null;
-								return ps != null && ps.crunchedCompression && ps.compressionQuality == crunchQuality;
-							});
-						if (issue != null)
-							issue.Note("Configured project Crunch quality: " + crunchQuality + ".", "Compression Quality");
-					}
+					string current = targetCrunch ? "Crunch on (quality " + targetCompressionQuality + ")" : "Crunch off";
+					var issue = entry.AddIssue("TEX003", "Target " + platform + ": " + current + " (" + targetFormatDescription + ")",
+						"Enable Crunch (quality " + crunchQuality + ")", 0,
+						c => ApplyCrunch(c, platform, settings, targetOverridden, targetCompression, targetFormat, targetCrunch, targetCompressionQuality, facts.textureCompression, facts.crunchedCompression, crunchQuality),
+						detail: "The captured target was Crunch-compatible and the project preference requests Crunch. The action rechecks the effective target and preference before mutation.",
+						verify: c => VerifyCrunch(c, platform, settings, crunchQuality));
+					if (issue != null) issue.Note("Configured Crunch quality: " + crunchQuality + ".", "Compression Quality");
 				}
+			}
 
 			// TEX004 - CPU-readable copy. Review only.
 			using (RuleTiming.Begin("TEX004", entry.Path))
@@ -661,245 +638,94 @@ namespace ApexForge.ProjectOptimizer
 							"Savings");
 				}
 
-			// TEX005 / TEX006 - mipmap recommendations remain Review because the importer
-			// cannot prove runtime usage. For sprites already packed into an included Sprite
-			// Atlas, the atlas owns the packed texture's mipmap settings.
+			// TEX005 - fixed-size GUI/cursor assets only. Sprite mipmap usage is not inferred from importer type.
 			using (RuleTiming.Begin("TEX005", entry.Path))
-				if (facts.mipmapEnabled
-					&& !isAtlasPackedSprite
-					&& isUi)
+				if (facts.mipmapEnabled && !isAtlasPackedSprite
+					&& (facts.textureType == TextureImporterType.GUI || facts.textureType == TextureImporterType.Cursor))
 				{
-					var issue = entry.AddIssue(
-						"TEX005",
-						"Mip maps generated for " + facts.textureType,
-						"Review / disable Generate Mip Maps",
-						detail: "Mipmaps are often unnecessary for fixed-size UI imagery, but sprites, GUI textures and cursors can also be rendered at varying scales.",
-						options: new List<FixOption>
-						{
-						new FixOption
-						{
-							ActionId = "tex005_disable_mipmaps",
-							Label = "Disable Generate Mip Maps",
-							ResultDescription = "Disables mipmap generation for this texture.",
-							Recommended = true,
-							Warning = "Only use this when the texture is truly fixed-size/UI-only and does not need mipmapping.",
-							Risk = FixRisk.Medium,
-							Apply = c =>
-							{
-								((TextureImporter)c.Importer).mipmapEnabled = false;
-								c.NeedsReimport = true;
-							},
-							Verify = c =>
-							{
-								var ti = AssetImporter.GetAtPath(c.AssetPath) as TextureImporter;
-								return ti != null && !ti.mipmapEnabled;
-							}
-						}
-						});
-					if (issue != null)
-						issue.Note("Source texture mipmaps are independent of the packed atlas mipmap setting.", "Why review");
+					var issue = entry.AddIssue("TEX005", "Mip maps generated for " + facts.textureType,
+						"Disable Generate Mip Maps", 0,
+						c => ApplyMipmapState(c, expectedType: facts.textureType, expectedMipmap: true, targetMipmap: false),
+						detail: "Only fixed-size GUI/cursor types enter the automatic case. Sprite textures are skipped because importer type alone cannot distinguish UI from world-space use.",
+						verify: c => VerifyMipmapState(c, facts.textureType, false));
 				}
-				else using (RuleTiming.Begin("TEX006", entry.Path))
-					if (!facts.mipmapEnabled
-								&& !isAtlasPackedSprite
-								&& (facts.textureType == TextureImporterType.Default
-									|| facts.textureType == TextureImporterType.NormalMap)
-								&& facts.textureShape == TextureImporterShape.Texture2D
-								&& !isDataTexture
-								&& largest >= 128)
-					{
-						var issue = entry.AddIssue(
-							"TEX006",
-							"No mip maps",
-							"Review / enable Generate Mip Maps",
-							detail: "This is a 2D Default or Normal Map texture large enough that distance-varying world-space usage is plausible. The analyzer cannot prove runtime usage.",
-							options: new List<FixOption>
-							{
-						new FixOption
-						{
-							ActionId = "tex006_enable_mipmaps",
-							Label = "Enable Generate Mip Maps",
-							ResultDescription = "Enables mipmap generation for this texture.",
-							Recommended = true,
-							Warning = "Keep mipmaps disabled when the texture is intentionally sampled without a mip chain, such as some UI/data workflows.",
-							Risk = FixRisk.Medium,
-							Apply = c =>
-							{
-								((TextureImporter)c.Importer).mipmapEnabled = true;
-								c.NeedsReimport = true;
-							},
-							Verify = c =>
-							{
-								var ti = AssetImporter.GetAtPath(c.AssetPath) as TextureImporter;
-								return ti != null && ti.mipmapEnabled;
-							}
-						}
-							});
-						if (issue != null)
-							issue.Note("No mipmap fix is marked Verified because runtime usage can intentionally require a non-mipmapped texture.",
-								"Why review");
-					}
 
-			// TEX007 - generated alpha configuration without source alpha.
+			// TEX006 - only enable mipmaps when the current project has a known non-UI material consumer.
+			using (RuleTiming.Begin("TEX006", entry.Path))
+				if (!facts.mipmapEnabled && !isAtlasPackedSprite && !isUi
+					&& (facts.textureType == TextureImporterType.Default || facts.textureType == TextureImporterType.NormalMap)
+					&& facts.textureShape == TextureImporterShape.Texture2D && !isDataTexture
+					&& !MatchesAny(lowerPath, k_DataHints) && largest >= 128
+					&& HasVerifiedNonUiMaterialUsage(assetPath))
+				{
+					var issue = entry.AddIssue("TEX006", "No mip maps", "Enable Generate Mip Maps", 0,
+						c => ApplyMipmapState(c, expectedType: facts.textureType, expectedMipmap: false, targetMipmap: true, requiredNonUiMaterialPath: assetPath),
+						detail: "The texture has a known non-UI material-slot consumer. Assets without stable material-role evidence and mixed UI/non-UI consumers are skipped.",
+						verify: c => VerifyMipmapState(c, facts.textureType, true));
+				}
+
+			// TEX007 - FromInput is the only alpha source that can be safely cleared from a no-alpha source.
 			using (RuleTiming.Begin("TEX007", entry.Path))
-				if (facts.sourceHasAlphaKnown
-					&& !facts.sourceHasAlpha
-					&& facts.alphaSource != TextureImporterAlphaSource.None
+				if (facts.sourceHasAlphaKnown && !facts.sourceHasAlpha
+					&& facts.alphaSource == TextureImporterAlphaSource.FromInput
 					&& facts.textureType != TextureImporterType.NormalMap)
 				{
-					var issue = entry.AddIssue(
-						"TEX007",
-						"Alpha Source: " + facts.alphaSource,
-						"Review / set Alpha Source to None",
-						detail: "The source image reports no alpha channel. A non-None alpha source may still be intentional if alpha is generated from another source, so this is not an automatic fix.",
-						options: new List<FixOption>
-						{
-						new FixOption
-						{
-							ActionId = "tex007_disable_generated_alpha",
-							Label = "Set Alpha Source to None",
-							ResultDescription = "Stops importing/generated alpha when the source provides no alpha.",
-							Recommended = true,
-							Warning = "Only use this when the material, shader and downstream texture processing do not require the generated alpha.",
-							Risk = FixRisk.Medium,
-							Apply = c =>
-							{
-								var ti = (TextureImporter)c.Importer;
-								ti.alphaSource = TextureImporterAlphaSource.None;
-								c.NeedsReimport = true;
-							},
-							Verify = c =>
-							{
-								var ti = AssetImporter.GetAtPath(c.AssetPath) as TextureImporter;
-								return ti != null && ti.alphaSource == TextureImporterAlphaSource.None;
-							}
-						}
-						});
-					if (issue != null)
-						issue.Note("Source alpha: none; configured alpha source: " + facts.alphaSource + ".", "Alpha");
+					var issue = entry.AddIssue("TEX007", "Alpha Source: FromInput with no source alpha", "Set Alpha Source to None", 0,
+						c => ApplyAlphaSourceNone(c, TextureImporterAlphaSource.FromInput),
+						detail: "The source is known to contain no alpha and the importer was using FromInput. Grayscale-generated alpha and unknown source-alpha cases are excluded.",
+						verify: c => VerifyAlphaSourceNone(c));
 				}
 
-			// TEX008 - filename heuristic. Offer a Review action because the importer change is reversible,
-			// but never mark it Verified.
+			// TEX008 - filename hints are insufficient without exclusive recognized normal-slot usage.
 			using (RuleTiming.Begin("TEX008", entry.Path))
-				if (facts.textureType == TextureImporterType.Default
-					&& facts.textureShape == TextureImporterShape.Texture2D
-					&& MatchesAny(lowerPath, k_NormalHints))
+				if (facts.textureType == TextureImporterType.Default && facts.textureShape == TextureImporterShape.Texture2D
+					&& MatchesAny(lowerPath, k_NormalHints) && HasExclusiveNormalMaterialUsage(assetPath))
 				{
-					var issue = entry.AddIssue(
-						"TEX008",
-						"Texture Type: Default, normal-map-like name",
-						"Review as Normal Map",
-						detail: "The filename is only a hint. Confirm the pixels actually encode normal data before changing Texture Type.",
-						options: new List<FixOption>
-						{
-						new FixOption
-						{
-							ActionId = "tex008_set_normal_map",
-							Label = "Import as Normal Map",
-							ResultDescription = "Changes Texture Type to Normal Map and lets Unity apply its normal-map import processing.",
-							Recommended = true,
-							Warning = "Do not use this action merely because of the filename. It changes import semantics and the resulting texture.",
-							Risk = FixRisk.Medium,
-							Apply = c =>
-							{
-								var ti = (TextureImporter)c.Importer;
-								ti.textureType = TextureImporterType.NormalMap;
-								c.NeedsReimport = true;
-							},
-							Verify = c =>
-							{
-								var ti = AssetImporter.GetAtPath(c.AssetPath) as TextureImporter;
-								return ti != null && ti.textureType == TextureImporterType.NormalMap;
-							}
-						}
-						});
+					var issue = entry.AddIssue("TEX008", "Texture Type: Default; normal hint and exclusive normal-slot use",
+						"Import as Normal Map", 0,
+						c => ApplyNormalMapType(c, assetPath),
+						detail: "The filename hint is corroborated by known normal/bump material slots, with no conflicting known material slot use. Unknown/dynamic consumers are not inferred.",
+						verify: c => { var ti = AssetImporter.GetAtPath(c.AssetPath) as TextureImporter; return ti != null && ti.textureType == TextureImporterType.NormalMap; });
 				}
 
-			// TEX009 - only report when project-wide texture streaming is actually active.
-			// A per-texture flag alone does not activate the mipmap streaming system.
+			// TEX009 - only auto-enable per-texture streaming while the global streaming system is active.
 			using (RuleTiming.Begin("TEX009", entry.Path))
-				if (facts.streamingMipmapsActive
-					&& facts.mipmapEnabled
-					&& !facts.streamingMipmaps
-					&& !isAtlasPackedSprite
-					&& largest >= settings.streamingMipmapMinSize
-					&& !isUi)
+				if (facts.streamingMipmapsActive && facts.mipmapEnabled && !facts.streamingMipmaps
+					&& !isAtlasPackedSprite && !isDataTexture && facts.textureShape == TextureImporterShape.Texture2D
+					&& !MatchesAny(lowerPath, k_DataHints) && largest >= settings.streamingMipmapMinSize && !isUi
+					&& HasVerifiedNonUiMaterialUsage(assetPath))
 				{
-					var issue = entry.AddIssue(
-						"TEX009",
-						"Streaming Mipmaps off",
-						"Review / enable Streaming Mipmaps",
-						detail: "Mipmap streaming is active project-wide, but this large texture is not opted into the per-texture streaming system.",
-						options: new List<FixOption>
-						{
-						new FixOption
-						{
-							ActionId = "tex009_enable_streaming_mipmaps",
-							Label = "Enable Streaming Mipmaps",
-							ResultDescription = "Enables per-texture mipmap streaming for this texture.",
-							Recommended = true,
-							Warning = "Streaming changes which mip levels Unity keeps resident based on camera demand. Validate memory and visual behavior.",
-							Risk = FixRisk.Low,
-							Apply = c =>
-							{
-								((TextureImporter)c.Importer).streamingMipmaps = true;
-								c.NeedsReimport = true;
-							},
-							Verify = c =>
-							{
-								var ti = AssetImporter.GetAtPath(c.AssetPath) as TextureImporter;
-								return ti != null && ti.streamingMipmaps;
-							}
-						}
-						});
-					if (issue != null)
-						issue.Note("Project-wide mipmap streaming is active; suggested threshold: " + settings.streamingMipmapMinSize + " px; target " + largest + " px.",
-							"Threshold");
+					var issue = entry.AddIssue("TEX009", "Streaming Mipmaps off", "Enable Streaming Mipmaps", 0,
+						c => ApplyStreamingMipmaps(c, false, assetPath),
+						detail: "Global mipmap streaming is active and known non-UI material use is present. The fix rechecks global streaming and the original importer state.",
+						verify: c => VerifyStreamingMipmaps(c, true));
+					if (issue != null) issue.Note("Suggested threshold: " + settings.streamingMipmapMinSize + " px; texture maximum dimension: " + largest + " px.", "Threshold");
 				}
 
-			// TEX010 - high anisotropy is informational, never a universal auto-fix.
+			// TEX010 - clamp down to the configured project maximum, without changing unrelated settings.
 			using (RuleTiming.Begin("TEX010", entry.Path))
-				if (facts.mipmapEnabled
-					&& !isAtlasPackedSprite
-					&& facts.anisoLevel > settings.maxAnisoLevel
-					&& largest >= 256)
+			{
+				int targetAniso = ClampAnisotropyTarget(settings.maxAnisoLevel);
+				if (ShouldClampAnisotropy(facts.mipmapEnabled, !isAtlasPackedSprite, largest, facts.anisoLevel, targetAniso))
 				{
-					var issue = entry.AddIssue(
-						"TEX010",
-						"Aniso " + facts.anisoLevel,
-						"Review against project maximum " + settings.maxAnisoLevel,
-						options: new List<FixOption> { new FixOption {
-							Label = "Reduce Anisotropic Filtering",
-							Recommended = true,
-							Risk = FixRisk.Medium,
-							Warning = "This is a Review Fix. Inspect the target state before applying it.",
-							Apply = c => ImporterFixUtility.Texture(c, (ti, _) => ti.anisoLevel = 1)
-						} }
-					);
-					if (issue != null)
-						issue.Note("High anisotropy is useful for surfaces viewed at grazing angles; the project maximum is a review reference, not a correctness constraint.",
-							"Context");
+					var issue = entry.AddIssue("TEX010", "Aniso " + facts.anisoLevel,
+						"Clamp Anisotropic Filtering to " + targetAniso, 0,
+						c => ApplyAnisotropyLimit(c, facts.anisoLevel, targetAniso, settings),
+						detail: "The action clamps the per-texture anisotropic filtering value to the configured project maximum and leaves other importer fields unchanged.",
+						verify: c => VerifyAnisotropyLimit(c, targetAniso, settings));
 				}
+			}
 
-			// TEX011 - explicit mobile target override selecting an uncompressed format.
+			// TEX011 - mobile-specific uncompressed override, distinct from TEX002.
 			using (RuleTiming.Begin("TEX011", entry.Path))
-				if (targetExplicitMobileUncompressedOverride)
+				if (targetExplicitMobileUncompressedOverride && IsCompressionCommonCase(assetPath, facts)
+					&& (!targetCrunch || facts.automaticCompressionCrunchCompatible))
 				{
-					var issue = entry.AddIssue(
-						"TEX011",
-						platform + " override: " + targetFormat,
-						"Review Automatic compressed format",
-						detail: "The mobile override explicitly selects an uncompressed texture format. Unity can choose a platform-appropriate compressed format when Format is Automatic.",
-						options: BuildCompressionOptions(
-							"tex011",
-							platform,
-							normalWarning: "Normal Quality uses the platform's standard automatic compression for the target.",
-							lowWarning: "Low Quality increases compression and may reduce visual quality.",
-							includeCrunch: false));
-					if (issue != null)
-						issue.Note("Explicit target format: " + targetFormatDescription + ". Do not force a single ASTC/ETC2 format here because device capability policy belongs to the project/build configuration.",
-							"Target");
+					var issue = entry.AddIssue("TEX011", platform + " override: " + targetFormat,
+						"Use Automatic / standard compression", 0,
+						c => ApplyAutomaticCompression(c, platform, settings, targetOverridden, targetCompression, targetFormat, targetCrunch, facts.textureCompression, facts.crunchedCompression),
+						detail: "Sets only this mobile target to Automatic format with standard/Normal compression. It does not force a single ASTC/ETC format, and skips ambiguous/data/HDR cases.",
+						verify: c => VerifyAutomaticCompression(c, platform, targetCrunch, facts.textureCompression, facts.crunchedCompression));
 				}
 
 			// TEX012 - source file size. No source rewriting action.
@@ -914,41 +740,16 @@ namespace ApexForge.ProjectOptimizer
 						issue.Note("Source size is not the same as the build's transcoded GPU texture size.", "Measurement");
 				}
 
-			// TEX013 - data texture color-space heuristic.
+			// TEX013 - require both data filename evidence and exclusive known linear-data slot use.
 			using (RuleTiming.Begin("TEX013", entry.Path))
-				if (facts.sRGBTexture
-					&& facts.textureType == TextureImporterType.Default
-					&& facts.textureShape == TextureImporterShape.Texture2D
-					&& MatchesAny(lowerPath, k_DataHints))
+				if (facts.sRGBTexture && facts.textureType == TextureImporterType.Default
+					&& facts.textureShape == TextureImporterShape.Texture2D && MatchesAny(lowerPath, k_DataHints)
+					&& HasExclusiveLinearDataMaterialUsage(assetPath))
 				{
-					var issue = entry.AddIssue(
-						"TEX013",
-						"sRGB on",
-						"Review sRGB off for confirmed linear data",
-						detail: "The path/name suggests numeric data, but the analyzer cannot prove the shader interpretation.",
-						options: new List<FixOption>
-						{
-						new FixOption
-						{
-							ActionId = "tex013_disable_srgb",
-							Label = "Disable sRGB (Color Texture)",
-							ResultDescription = "Imports this texture as linear data rather than color data.",
-							Recommended = true,
-							Warning = "Only correct when the texture is consumed as linear numeric data. Changing this affects sampled values.",
-							Risk = FixRisk.Medium,
-							Apply = c =>
-							{
-								var ti = (TextureImporter)c.Importer;
-								ti.sRGBTexture = false;
-								c.NeedsReimport = true;
-							},
-							Verify = c =>
-							{
-								var ti = AssetImporter.GetAtPath(c.AssetPath) as TextureImporter;
-								return ti != null && !ti.sRGBTexture;
-							}
-						}
-						});
+					var issue = entry.AddIssue("TEX013", "sRGB enabled on a confirmed material data-slot texture", "Disable sRGB (Color Texture)", 0,
+						c => ApplySrgbLinear(c, true),
+						detail: "The source has a data-map filename hint and all known material-slot uses are recognized linear-data slots. Conflicting, UI, and unknown-role cases are skipped.",
+						verify: c => VerifySrgbLinear(c));
 				}
 
 			// TEX014 - actual grayscale measurement. No auto repack because that would require shader/material changes.
@@ -986,89 +787,80 @@ namespace ApexForge.ProjectOptimizer
 							"Safety");
 				}
 
-			using (RuleTiming.Begin("PAA0007", entry.Path))
-				if (settings.deepTextureScan
-					&& facts.textureType == TextureImporterType.Default
-					&& facts.textureShape == TextureImporterShape.Texture2D
-					&& facts.emptyPixelsPercent >= 0f
-					&& facts.emptyPixelsPercent > settings.textureAtlasEmptySpaceWarnPercent
-					&& !isAtlasPackedSprite)
+			using (RuleTiming.Begin("PAA002", entry.Path))
+				if (settings.deepTextureScan && facts.textureType == TextureImporterType.Default
+					&& facts.textureShape == TextureImporterShape.Texture2D && facts.emptyPixelsPercent >= 0f
+					&& facts.emptyPixelsPercent > settings.textureAtlasEmptySpaceWarnPercent && !isAtlasPackedSprite)
 				{
 					entry.Set("emptySpace", facts.emptyPixelsPercent.ToString("0.##") + "%");
-					entry.AddIssue(
-						"PAA0007",
-						facts.emptyPixelsPercent.ToString("0.##") + "% empty pixels",
-						"Review texture/atlas layout");
+					entry.AddIssue("PAA002", facts.emptyPixelsPercent.ToString("0.##") + "% empty pixels", "Review texture/atlas layout",
+						detail: "The measured transparent-pixel percentage is diagnostic only. Cropping/repacking arbitrary textures can change UVs, borders and shader/material assumptions.");
 				}
 
-			using (RuleTiming.Begin("PAA0005", entry.Path))
-				if (settings.deepTextureScan
-					&& facts.textureType == TextureImporterType.Default
-					&& facts.textureShape == TextureImporterShape.Texture2D
-					&& facts.solidColor
-					&& width * (long)height > 1)
+			using (RuleTiming.Begin("PAA001", entry.Path))
+				if (settings.deepTextureScan && facts.textureType == TextureImporterType.Default
+					&& facts.textureShape == TextureImporterShape.Texture2D && facts.solidColor && width * (long)height > 1
+					&& facts.constantPngSourceSupported)
 				{
-					entry.AddIssue(
-						"PAA0005",
-						"All sampled pixels are the same color",
-						"Review 1x1 replacement",
-						0, null,
-						"Unity Project Auditor flags solid-color textures because a constant image can be represented by one texel. Project Optimizer only reports this after its deep texture sampling pass, so a failed/unsupported decode fails closed.");
+					int sourceWidth = facts.constantPngSourceWidth;
+					int sourceHeight = facts.constantPngSourceHeight;
+					if (sourceWidth > 1 || sourceHeight > 1)
+					{
+						string pngHash = facts.constantPngHash;
+						Color32 constantColor = facts.constantPngColor;
+						bool pngHasAlpha = facts.constantPngHasAlpha;
+						var issue = entry.AddIssue("PAA001", sourceWidth + " x " + sourceHeight + "; every decoded source pixel is identical",
+							"Replace source PNG with an equivalent 1 x 1 PNG", 0,
+							c => RewriteConstantPng(c, pngHash, constantColor, pngHasAlpha),
+							detail: "Automatic source rewrite is restricted to metadata-free, non-interlaced, 8-bit RGB/RGBA PNGs that passed exhaustive full-resolution pixel comparison on the main thread. The original source is backed up before mutation; unsupported formats receive no action.",
+							basis: SavingsBasis.Unknown,
+							verify: c => VerifyConstantPngRewrite(c, constantColor, pngHasAlpha));
+					}
 				}
 
-			// TEX015 - no mip chain plus filtering settings whose intent is questionable without mips.
+			// TEX015 - Trilinear without mipmaps has no mip levels to interpolate; change only filter mode.
 			using (RuleTiming.Begin("TEX015", entry.Path))
-				if (!facts.mipmapEnabled
-					&& !isAtlasPackedSprite
-					&& (facts.filterMode == FilterMode.Trilinear || facts.anisoLevel > 1))
+				if (!facts.mipmapEnabled && !isAtlasPackedSprite && facts.filterMode == FilterMode.Trilinear && facts.anisoLevel <= 1)
 				{
-					var issue = entry.AddIssue(
-						"TEX015",
-						facts.filterMode + ", aniso " + facts.anisoLevel,
-						"Review Bilinear + Aniso 1",
-						detail: "Changing filtering can alter visual quality, so this is a Review Fix rather than a Verified optimization.",
-						options: new List<FixOption>
-						{
-						new FixOption
-						{
-							ActionId = "tex015_use_bilinear_no_aniso",
-							Label = "Set Bilinear + Aniso 1",
-							ResultDescription = "Uses Bilinear filtering and sets anisotropic filtering to level 1 for this non-mipmapped texture.",
-							Recommended = true,
-							Warning = "This can change appearance at oblique viewing angles. Keep the current settings when they are intentional.",
-							Risk = FixRisk.Medium,
-							Apply = c =>
-							{
-								var ti = (TextureImporter)c.Importer;
-								ti.filterMode = FilterMode.Bilinear;
-								ti.anisoLevel = 1;
-								c.NeedsReimport = true;
-							},
-							Verify = c =>
-							{
-								var ti = AssetImporter.GetAtPath(c.AssetPath) as TextureImporter;
-								return ti != null
-									   && ti.filterMode == FilterMode.Bilinear
-									   && ti.anisoLevel == 1;
-							}
-						}
-						});
+					var issue = entry.AddIssue("TEX015", "Trilinear filtering without mipmaps", "Set Bilinear filtering", 0,
+						c => ApplyBilinearFilter(c, FilterMode.Trilinear, facts.anisoLevel),
+						detail: "Changes Trilinear to Bilinear only. Anisotropy and all other importer settings are preserved. High-anisotropy or non-Trilinear cases are skipped.",
+						verify: c => VerifyBilinearFilter(c, facts.anisoLevel));
 				}
 
-			// TEX016 - atlas membership. Never guess which atlas should own the sprite.
+			// TEX016 - atlas destination remains a human choice; expose existing included atlases only.
 			using (RuleTiming.Begin("TEX016", entry.Path))
-				if (m_AnyAtlases
-					&& facts.textureType == TextureImporterType.Sprite
-					&& !IsAtlased(assetPath))
+				if (m_AnyAtlases && facts.textureType == TextureImporterType.Sprite && !IsAtlased(assetPath))
 				{
-					var issue = entry.AddIssue(
-						"TEX016",
-						"Loose sprite",
-						"Review Sprite Atlas packing",
-						detail: "One or more Sprite Atlases exist, but this texture is not among the packables known to this analyzer. "
-								+ "No automatic add-to-atlas action is offered because atlas selection, filters and addressing are project design decisions.");
-					if (issue != null)
-						issue.Note("Known atlas packable roots/folders were examined during BeginScan.", "Atlas");
+					var options = new List<FixOption>();
+					if (m_AtlasCandidates != null)
+						for (int i = 0; i < m_AtlasCandidates.Count; i++)
+						{
+							AtlasCandidate candidate = m_AtlasCandidates[i];
+							if (candidate == null || string.IsNullOrEmpty(candidate.Hash) || IsPackableAlreadyInAtlas(candidate, assetPath)) continue;
+							string capturedAtlasPath = candidate.Path;
+							string capturedAtlasHash = candidate.Hash;
+							string capturedAtlasName = candidate.Name;
+							options.Add(new FixOption
+							{
+								ActionId = "tex016_add_to_atlas_" + StablePathToken(capturedAtlasPath),
+								Label = "Add to Sprite Atlas: " + capturedAtlasName,
+								ResultDescription = "Adds this sprite texture to the selected existing included Sprite Atlas.",
+								Recommended = false,
+								Warning = "Choose an atlas whose runtime usage, filtering, platform settings, and addressing strategy are appropriate. No new atlas is created.",
+								Risk = FixRisk.Medium,
+								Apply = c => AddTextureToSelectedAtlas(c, capturedAtlasPath, capturedAtlasHash),
+								Verify = c => VerifyTextureInAtlas(c.AssetPath, capturedAtlasPath)
+							});
+						}
+
+					if (options.Count > 0)
+					{
+						var issue = entry.AddIssue("TEX016", "Loose sprite", "Review destination atlas",
+							detail: "Atlas selection is a human decision. Only existing included atlases are offered, and each action backs up the selected atlas before modifying membership.",
+							options: options);
+						if (issue != null) issue.Note("Known included atlas roots/folders are considered during destination selection.", "Atlas");
+					}
 				}
 
 			// TEX017 - Unity 6 explicitly documents that Ignore Mipmap Limit has no effect outside
@@ -1098,33 +890,22 @@ namespace ApexForge.ProjectOptimizer
 						});
 				}
 
-			// TEX018 - high-quality compression only where we can reasonably establish that
-			// the selected platform uses a higher-memory format/quality tier. HQ itself is
-			// not universally more memory-expensive (for example WebGL can use the same
-			// DXT family), so do not report it merely because the enum says CompressedHQ.
+			// TEX018 - standard/Normal compression is the default for eligible large color textures.
 			using (RuleTiming.Begin("TEX018", entry.Path))
-				if (!isDataTexture
-					&& !isAtlasPackedSprite
-					&& targetCompression == TextureImporterCompression.CompressedHQ
-					&& largest >= 1024
-					&& facts.highQualityMemoryConcern)
+				if (ShouldAutoDowngradeHighQualityCompression(assetPath, facts, targetCompression, largest,
+					isDataTexture, isAtlasPackedSprite, targetCrunch, facts.automaticCompressionCrunchCompatible))
 				{
-					var issue = entry.AddIssue(
-						"TEX018",
-						"Target " + platform + ": High Quality compression",
-						"Review Normal / Low Quality",
-						detail: "The selected target's High Quality compression tier can use a higher-memory texture representation than the normal tier. The visual benefit should be justified for large textures.",
-						options: BuildCompressionOptions(
-							"tex018",
-							platform,
-							normalWarning: "Normal Quality is the balanced choice for most textures; inspect the visual difference before changing a detail-sensitive asset.",
-							lowWarning: "Low Quality can reduce memory further but may introduce visible artifacts.",
-							includeCrunch: false));
-					if (issue != null)
-						issue.Note("Target format policy: " + targetFormatDescription + "; target override: " + (targetOverridden ? "Yes" : "No") + ".", "Target");
-				}
+					var issue = entry.AddIssue("TEX018", "Target " + platform + ": High Quality compression",
+						"Use Automatic / standard (Normal) compression", 0,
+						c => ApplyAutomaticCompression(c, platform, settings, targetOverridden, targetCompression, targetFormat, targetCrunch, facts.textureCompression, facts.crunchedCompression),
+						detail: "Switches only the selected target to Automatic format with Unity's standard Compressed tier (normal/medium-equivalent), preserving other importer settings. For eligible large color textures, follows the project default of standard/Normal quality; users can manually restore High Quality on the rare asset that needs it.",
+						verify: c => VerifyAutomaticCompression(c, platform, targetCrunch, facts.textureCompression, facts.crunchedCompression));
+					if (issue != null) issue.Note("Target format policy: " + targetFormatDescription + "; override: " + (targetOverridden ? "Yes" : "No") + ".", "Target");
+			}
 
-			entry.Finalise();
+
+
+						entry.Finalise();
 			return entry;
 		}
 
@@ -1271,6 +1052,32 @@ namespace ApexForge.ProjectOptimizer
 			{
 				if (copy != null) UnityEngine.Object.DestroyImmediate(copy);
 			}
+		}
+
+		static AtlasCandidate CaptureAtlasCandidate(string atlasPath, SpriteAtlas atlas)
+		{
+			if (string.IsNullOrEmpty(atlasPath) || atlas == null) return null;
+			string hash = SafeMd5File(AssetPathUtility.ToAbsolutePath(atlasPath));
+			if (string.IsNullOrEmpty(hash)) return null;
+			var candidate = new AtlasCandidate { Path = atlasPath, Name = atlas.name, Hash = hash };
+			foreach (var packable in SpriteAtlasExtensions.GetPackables(atlas))
+			{
+				if (packable == null) continue;
+				string path = AssetDatabase.GetAssetPath(packable);
+				if (string.IsNullOrEmpty(path)) continue;
+				if (AssetDatabase.IsValidFolder(path)) candidate.PackableFolders.Add(path.TrimEnd('/') + "/");
+				else candidate.PackablePaths.Add(path);
+			}
+			return candidate;
+		}
+
+		static bool IsPackableAlreadyInAtlas(AtlasCandidate candidate, string assetPath)
+		{
+			if (candidate == null || string.IsNullOrEmpty(assetPath)) return false;
+			if (candidate.PackablePaths.Contains(assetPath)) return true;
+			for (int i = 0; i < candidate.PackableFolders.Count; i++)
+				if (assetPath.StartsWith(candidate.PackableFolders[i], StringComparison.OrdinalIgnoreCase)) return true;
+			return false;
 		}
 
 		bool IsAtlased(string assetPath)
@@ -1581,44 +1388,6 @@ namespace ApexForge.ProjectOptimizer
 				}
 			};
 		}
-
-		static bool IsHighQualityMemoryConcern(
-			string platform,
-			bool targetOverridden,
-			TextureImporterFormat targetFormat)
-		{
-			if (targetOverridden && targetFormat != TextureImporterFormat.Automatic)
-			{
-				switch (targetFormat)
-				{
-					case TextureImporterFormat.BC7:
-					case TextureImporterFormat.ASTC_4x4:
-					case TextureImporterFormat.ASTC_HDR_4x4:
-						return true;
-					default:
-						return false;
-				}
-			}
-
-			if (IsDesktopPlatform(platform))
-				return true;
-
-			if (IsAndroidPlatform(platform))
-			{
-				var subtarget = EditorUserBuildSettings.androidBuildSubtarget;
-				if (subtarget == MobileTextureSubtarget.ASTC) return true;
-
-				if (subtarget != MobileTextureSubtarget.Generic) return false;
-
-				var formats = PlayerSettings.Android.textureCompressionFormats;
-				if (formats == null) return false;
-				for (int i = 0; i < formats.Length; i++)
-					if (formats[i] == TextureCompressionFormat.ASTC) return true;
-			}
-
-			return false;
-		}
-
 		static bool MatchesAny(string pathOrFilename, string[] hints)
 		{
 			if (string.IsNullOrEmpty(pathOrFilename) || hints == null || hints.Length == 0) return false;
@@ -1713,6 +1482,637 @@ namespace ApexForge.ProjectOptimizer
 				if (copy != null) UnityEngine.Object.DestroyImmediate(copy);
 			}
 		}
+
+        static bool IsPackableAlreadyInAtlas(SpriteAtlas atlas, string assetPath)
+        {
+            if (atlas == null || string.IsNullOrEmpty(assetPath)) return false;
+            foreach (var packable in SpriteAtlasExtensions.GetPackables(atlas))
+            {
+                if (packable == null) continue;
+                string path = AssetDatabase.GetAssetPath(packable);
+                if (string.Equals(path, assetPath, StringComparison.OrdinalIgnoreCase)) return true;
+                if (!string.IsNullOrEmpty(path) && AssetDatabase.IsValidFolder(path)
+                    && assetPath.StartsWith(path.TrimEnd('/') + "/", StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
+        }
+
+        static string StablePathToken(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return "atlas";
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+            {
+                var bytes = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(path));
+                return BitConverter.ToString(bytes, 0, 6).Replace("-", string.Empty).ToLowerInvariant();
+            }
+        }
+
+        static void AddTextureToSelectedAtlas(FixContext c, string atlasPath, string expectedAtlasHash)
+        {
+            if (c == null || !c.BackupEnabled || c.TryBackupExtra == null)
+                throw new InvalidOperationException("Adding a sprite to an atlas requires backups to be enabled.");
+            var ti = AssetImporter.GetAtPath(c.AssetPath) as TextureImporter;
+            var atlas = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(atlasPath);
+            if (ti == null || ti.textureType != TextureImporterType.Sprite || atlas == null || !SpriteAtlasExtensions.IsIncludeInBuild(atlas))
+                throw new InvalidOperationException("The sprite or selected included atlas is no longer valid.");
+            if (IsPackableAlreadyInAtlas(atlas, c.AssetPath)) throw new InvalidOperationException("The selected atlas already contains this sprite texture.");
+            string currentHash = SafeMd5File(AssetPathUtility.ToAbsolutePath(atlasPath));
+            if (string.IsNullOrEmpty(currentHash) || !string.Equals(currentHash, expectedAtlasHash, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("The selected atlas changed since analysis; rescan before applying this Review Fix.");
+            if (!UnityEditorUtility.CanEditPath(atlasPath, out string reason))
+                throw new InvalidOperationException("The selected atlas is not editable: " + reason);
+            if (!c.TryBackupExtra(atlasPath)) throw new InvalidOperationException("Could not back up the selected atlas; nothing was changed.");
+            SpriteAtlasExtensions.Add(atlas, new UnityEngine.Object[] { AssetDatabase.LoadMainAssetAtPath(c.AssetPath) });
+            EditorUtility.SetDirty(atlas);
+            AssetDatabase.SaveAssetIfDirty(atlas);
+            c.NeedsReimport = true;
+        }
+
+        static bool VerifyTextureInAtlas(string assetPath, string atlasPath)
+        {
+            var atlas = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(atlasPath);
+            return atlas != null && SpriteAtlasExtensions.IsIncludeInBuild(atlas) && IsPackableAlreadyInAtlas(atlas, assetPath);
+        }
+
+        // TextureAnalyzer-owned common-case evidence and action helpers. These remain in this
+        // analyzer so the isolated session does not modify shared fix infrastructure.
+        static void BuildTextureUsageEvidence()
+        {
+            var evidence = new Dictionary<string, TextureUsageEvidence>(StringComparer.OrdinalIgnoreCase);
+            var materialHashes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            string[] guids;
+            try { guids = AssetDatabase.FindAssets("t:Material"); }
+            catch { s_TextureUsageDirty = true; return; }
+
+            for (int i = 0; i < guids.Length; i++)
+            {
+                string materialPath = AssetDatabase.GUIDToAssetPath(guids[i]);
+                if (string.IsNullOrEmpty(materialPath)) continue;
+                var material = AssetDatabase.LoadAssetAtPath<Material>(materialPath);
+                if (material == null || material.shader == null || EditorUtility.IsDirty(material))
+                {
+                    AddUnknownMaterialDependencies(evidence, materialPath);
+                    continue; // uncertain shader/unsaved state must block auto-classification.
+                }
+
+                string absolute = AssetPathUtility.ToAbsolutePath(materialPath);
+                string materialHash = SafeMd5File(absolute);
+                if (string.IsNullOrEmpty(materialHash))
+                {
+                    AddUnknownMaterialDependencies(evidence, materialPath);
+                    continue;
+                }
+                materialHashes[materialPath] = materialHash;
+
+                string shaderName = material.shader.name ?? string.Empty;
+                bool uiShader = shaderName.StartsWith("UI/", StringComparison.OrdinalIgnoreCase)
+                    || shaderName.IndexOf("TextMeshPro", StringComparison.OrdinalIgnoreCase) >= 0
+                    || shaderName.IndexOf("UI Default", StringComparison.OrdinalIgnoreCase) >= 0;
+                try
+                {
+                    int count = ShaderUtil.GetPropertyCount(material.shader);
+                    for (int p = 0; p < count; p++)
+                    {
+                        if (ShaderUtil.GetPropertyType(material.shader, p) != ShaderUtil.ShaderPropertyType.TexEnv) continue;
+                        string propertyName = ShaderUtil.GetPropertyName(material.shader, p);
+                        Texture texture = material.GetTexture(propertyName);
+                        if (texture == null) continue;
+                        string texturePath = AssetDatabase.GetAssetPath(texture);
+                        if (string.IsNullOrEmpty(texturePath)) continue;
+
+                        if (!evidence.TryGetValue(texturePath, out var usage))
+                        {
+                            usage = new TextureUsageEvidence();
+                            evidence.Add(texturePath, usage);
+                        }
+                        usage.MaterialPaths.Add(materialPath);
+                        usage.Flags |= uiShader ? TextureUsageFlags.UiShader : TextureUsageFlags.NonUiShader;
+                        if (IsNormalMapSlot(propertyName)) usage.Flags |= TextureUsageFlags.NormalSlot;
+                        else if (IsLinearDataSlot(propertyName)) usage.Flags |= TextureUsageFlags.LinearDataSlot;
+                        else usage.Flags |= TextureUsageFlags.OtherSlot;
+                    }
+                }
+                catch
+                {
+                    // Unknown material schema must conflict with any positive slot evidence for its dependencies.
+                    AddUnknownMaterialDependencies(evidence, materialPath);
+                }
+            }
+
+            s_TextureUsageEvidence = evidence;
+            s_MaterialFileHashes = materialHashes;
+            s_TextureUsageDirty = false;
+        }
+
+        static void AddUnknownMaterialDependencies(Dictionary<string, TextureUsageEvidence> evidence, string materialPath)
+        {
+            try
+            {
+                string[] dependencies = AssetDatabase.GetDependencies(materialPath, false);
+                for (int i = 0; i < dependencies.Length; i++)
+                {
+                    string path = dependencies[i];
+                    string extension = Path.GetExtension(path ?? string.Empty);
+                    if (Array.IndexOf(k_Extensions, extension.ToLowerInvariant()) < 0) continue;
+                    if (!evidence.TryGetValue(path, out var usage))
+                    {
+                        usage = new TextureUsageEvidence();
+                        evidence.Add(path, usage);
+                    }
+                    usage.Flags |= TextureUsageFlags.OtherSlot;
+                    usage.MaterialPaths.Add(materialPath);
+                }
+            }
+            catch { /* unresolved dependent material state remains absent and therefore fails closed */ }
+        }
+
+        static bool IsNormalMapSlot(string propertyName)
+        {
+            if (string.IsNullOrEmpty(propertyName)) return false;
+            return propertyName.IndexOf("normal", StringComparison.OrdinalIgnoreCase) >= 0
+                || propertyName.IndexOf("bump", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        static bool IsLinearDataSlot(string propertyName)
+        {
+            if (string.IsNullOrEmpty(propertyName)) return false;
+            string value = propertyName.ToLowerInvariant();
+            return value.Contains("occlusion") || value.Contains("metallic") || value.Contains("roughness")
+                || value.Contains("smoothness") || value.Contains("height") || value.Contains("parallax")
+                || value.Contains("displacement") || value.Contains("mask") || value.Contains("flow")
+                || value.Contains("_data") || value.Contains("specular") || value.Contains("gloss");
+        }
+
+        static bool HasExclusiveNormalMaterialUsage(string assetPath, bool validateFiles = false) => HasExclusiveUsage(assetPath, TextureUsageFlags.NormalSlot, validateFiles);
+        static bool HasExclusiveLinearDataMaterialUsage(string assetPath, bool validateFiles = false) => HasExclusiveUsage(assetPath, TextureUsageFlags.LinearDataSlot, validateFiles);
+        static bool HasVerifiedNonUiMaterialUsage(string assetPath, bool validateFiles = false)
+        {
+            return TryGetStableMaterialUsage(assetPath, out var usage)
+                && (usage.Flags & TextureUsageFlags.NonUiShader) != 0
+                && (usage.Flags & TextureUsageFlags.UiShader) == 0
+                && (!validateFiles || MaterialUsageFilesUnchanged(usage));
+        }
+
+        static bool HasExclusiveUsage(string assetPath, TextureUsageFlags wanted, bool validateFiles)
+        {
+            if (!TryGetStableMaterialUsage(assetPath, out var usage)) return false;
+            const TextureUsageFlags conflicting = TextureUsageFlags.OtherSlot | TextureUsageFlags.UiShader;
+            if ((usage.Flags & wanted) == 0 || (usage.Flags & conflicting) != 0) return false;
+            if (wanted == TextureUsageFlags.NormalSlot && (usage.Flags & TextureUsageFlags.LinearDataSlot) != 0) return false;
+            if (wanted == TextureUsageFlags.LinearDataSlot && (usage.Flags & TextureUsageFlags.NormalSlot) != 0) return false;
+            return (usage.Flags & TextureUsageFlags.NonUiShader) != 0
+                && (!validateFiles || MaterialUsageFilesUnchanged(usage));
+        }
+
+        static bool TryGetStableMaterialUsage(string assetPath, out TextureUsageEvidence usage)
+        {
+            usage = null;
+            if (s_TextureUsageDirty || s_TextureUsageEvidence == null || string.IsNullOrEmpty(assetPath)) return false;
+            return s_TextureUsageEvidence.TryGetValue(assetPath, out usage) && usage != null;
+        }
+
+        static bool MaterialUsageFilesUnchanged(TextureUsageEvidence usage)
+        {
+            if (usage == null || usage.MaterialPaths.Count == 0) return false;
+            foreach (string materialPath in usage.MaterialPaths)
+            {
+                if (s_TextureUsageDirty) return false;
+                var material = AssetDatabase.LoadAssetAtPath<Material>(materialPath);
+                if (material == null || EditorUtility.IsDirty(material)) return false;
+                if (!s_MaterialFileHashes.TryGetValue(materialPath, out string expectedHash)) return false;
+                string currentHash = SafeMd5File(AssetPathUtility.ToAbsolutePath(materialPath));
+                if (string.IsNullOrEmpty(currentHash) || !string.Equals(expectedHash, currentHash, StringComparison.OrdinalIgnoreCase)) return false;
+            }
+            return true;
+        }
+
+        static bool ShouldClampAnisotropy(bool mipmaps, bool notAtlas, int largest, int current, int target)
+        {
+            return mipmaps && notAtlas && largest >= 256 && target >= 0 && target <= 16 && current > target;
+        }
+
+        static bool ShouldAutoDowngradeHighQualityCompression(string assetPath, TextureFacts facts,
+            TextureImporterCompression targetCompression, int largest, bool isDataTexture, bool isAtlasPackedSprite,
+            bool targetCrunch, bool automaticCompressionCrunchCompatible)
+        {
+            return facts != null && targetCompression == TextureImporterCompression.CompressedHQ && largest >= 1024
+                && !isDataTexture && !isAtlasPackedSprite && IsCompressionCommonCase(assetPath, facts)
+                && (!targetCrunch || automaticCompressionCrunchCompatible);
+        }
+
+        static bool IsCompressionCommonCase(string assetPath, TextureFacts facts)
+        {
+            if (facts == null || facts.textureShape != TextureImporterShape.Texture2D) return false;
+            string extension = Path.GetExtension(assetPath ?? string.Empty);
+            if (extension.Equals(".exr", StringComparison.OrdinalIgnoreCase)
+                || extension.Equals(".hdr", StringComparison.OrdinalIgnoreCase)
+                || extension.Equals(".tif", StringComparison.OrdinalIgnoreCase)
+                || extension.Equals(".tiff", StringComparison.OrdinalIgnoreCase)) return false;
+            string format = facts.format ?? string.Empty;
+            if (format.IndexOf("Float", StringComparison.OrdinalIgnoreCase) >= 0
+                || format.IndexOf("Half", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+            if (facts.textureType == TextureImporterType.NormalMap || facts.textureType == TextureImporterType.SingleChannel
+                || facts.textureType == TextureImporterType.Cookie || facts.textureType == TextureImporterType.Shadowmask
+                || facts.textureType == TextureImporterType.Lightmap) return false;
+            if (MatchesAny(assetPath.ToLowerInvariant(), k_DataHints) || MatchesAny(assetPath.ToLowerInvariant(), k_NormalHints)) return false;
+            return true;
+        }
+
+        static void ApplyTargetMaxSize(FixContext c, string platform, OptimizerSettings settings, bool isUi, int expectedBudget,
+            int target, bool expectedOverride, int expectedEffectiveMax, int expectedDefaultMax)
+        {
+            if (settings == null || !string.Equals(settings.PlatformString, platform, StringComparison.Ordinal)
+                || (isUi ? settings.maxUiTextureSize : settings.maxTextureSize) != expectedBudget
+                || target != Mathf.Max(32, Mathf.Min(expectedEffectiveMax, expectedBudget)))
+                throw new InvalidOperationException("The selected platform or texture-size budget changed since analysis.");
+            var ti = c?.Importer as TextureImporter;
+            if (ti == null) throw new InvalidOperationException("Texture importer is unavailable.");
+            var ps = GetTargetPlatformSettings(ti, platform);
+            if (ps == null) throw new InvalidOperationException("Target platform settings are unavailable for " + platform + ".");
+            int currentEffective = ps.overridden ? ps.maxTextureSize : ti.maxTextureSize;
+            if (ps.overridden != expectedOverride || currentEffective != expectedEffectiveMax || ti.maxTextureSize != expectedDefaultMax)
+                throw new InvalidOperationException("Texture settings changed since analysis; rescan before applying TEX001.");
+            if (target <= 0 || target >= currentEffective) throw new InvalidOperationException("TEX001 target is not a strict reduction.");
+            ps.name = platform; ps.overridden = true; ps.maxTextureSize = target;
+            ti.SetPlatformTextureSettings(ps);
+            c.NeedsReimport = true;
+        }
+
+        static bool VerifyTargetMaxSize(FixContext c, string platform, int target, int expectedDefaultMax)
+        {
+            var ti = AssetImporter.GetAtPath(c?.AssetPath) as TextureImporter;
+            var ps = ti != null ? GetTargetPlatformSettings(ti, platform) : null;
+            return ti != null && ps != null && ps.overridden && ps.maxTextureSize == target && ti.maxTextureSize == expectedDefaultMax;
+        }
+
+        static bool TargetStateMatches(TextureImporter ti, string platform, bool expectedOverride,
+            TextureImporterCompression expectedCompression, TextureImporterFormat expectedFormat, bool expectedCrunch,
+            TextureImporterCompression expectedDefaultCompression, bool expectedDefaultCrunch)
+        {
+            if (ti == null) return false;
+            var ps = GetTargetPlatformSettings(ti, platform);
+            if (ps == null || ps.overridden != expectedOverride) return false;
+            if (!expectedOverride) return ti.textureCompression == expectedDefaultCompression && ti.crunchedCompression == expectedDefaultCrunch;
+            return ps.textureCompression == expectedCompression && ps.format == expectedFormat && ps.crunchedCompression == expectedCrunch;
+        }
+
+        static void ApplyAutomaticCompression(FixContext c, string platform, OptimizerSettings settings, bool expectedOverride,
+            TextureImporterCompression expectedCompression, TextureImporterFormat expectedFormat, bool expectedCrunch,
+            TextureImporterCompression expectedDefaultCompression, bool expectedDefaultCrunch)
+        {
+            if (settings == null || !string.Equals(settings.PlatformString, platform, StringComparison.Ordinal))
+                throw new InvalidOperationException("The selected target platform changed since analysis.");
+            if (expectedCrunch && !IsCrunchCompatibleTarget(platform, true, TextureImporterFormat.Automatic, TextureImporterCompression.Compressed))
+                throw new InvalidOperationException("Automatic compression cannot preserve Crunch under the selected platform's known format policy.");
+            var ti = c?.Importer as TextureImporter;
+            if (!TargetStateMatches(ti, platform, expectedOverride, expectedCompression, expectedFormat, expectedCrunch,
+                expectedDefaultCompression, expectedDefaultCrunch))
+                throw new InvalidOperationException("Texture target changed since analysis; rescan before applying compression.");
+            if (c.Importer is TextureImporter current)
+            {
+                var ps = GetTargetPlatformSettings(current, platform);
+                if (ps == null) throw new InvalidOperationException("Target platform settings unavailable for " + platform + ".");
+                ps.name = platform; ps.overridden = true;
+                ps.format = TextureImporterFormat.Automatic;
+                ps.textureCompression = TextureImporterCompression.Compressed;
+                ps.crunchedCompression = expectedCrunch;
+                current.SetPlatformTextureSettings(ps);
+                c.NeedsReimport = true;
+            }
+            else throw new InvalidOperationException("Texture importer is unavailable.");
+        }
+
+        static bool VerifyAutomaticCompression(FixContext c, string platform, bool expectedTargetCrunch,
+            TextureImporterCompression expectedDefaultCompression, bool expectedDefaultCrunch)
+        {
+            var ti = AssetImporter.GetAtPath(c?.AssetPath) as TextureImporter;
+            var ps = ti != null ? GetTargetPlatformSettings(ti, platform) : null;
+            return ti != null && ps != null && ps.overridden && ps.format == TextureImporterFormat.Automatic
+                && ps.textureCompression == TextureImporterCompression.Compressed && ps.crunchedCompression == expectedTargetCrunch
+                && (!expectedTargetCrunch || IsCrunchCompatibleTarget(platform, true, ps.format, ps.textureCompression))
+                && ti.textureCompression == expectedDefaultCompression && ti.crunchedCompression == expectedDefaultCrunch;
+        }
+
+        static void ApplyCrunch(FixContext c, string platform, OptimizerSettings settings, bool expectedOverride,
+            TextureImporterCompression expectedCompression, TextureImporterFormat expectedFormat, bool expectedCrunch,
+            int expectedQuality, TextureImporterCompression expectedDefaultCompression, bool expectedDefaultCrunch, int targetQuality)
+        {
+            var ti = c?.Importer as TextureImporter;
+            if (ti == null || settings == null || !settings.preferCrunch || Mathf.Clamp(settings.crunchQuality, 0, 100) != targetQuality)
+                throw new InvalidOperationException("Crunch preference changed since analysis.");
+            if (!TargetStateMatches(ti, platform, expectedOverride, expectedCompression, expectedFormat, expectedCrunch,
+                expectedDefaultCompression, expectedDefaultCrunch))
+                throw new InvalidOperationException("Texture target changed since analysis; rescan before applying TEX003.");
+            var ps = GetTargetPlatformSettings(ti, platform);
+            int currentQuality = ps.overridden ? ps.compressionQuality : ti.compressionQuality;
+            if (currentQuality != expectedQuality) throw new InvalidOperationException("Texture Crunch quality changed since analysis.");
+            var effectiveCompression = ps.overridden ? ps.textureCompression : ti.textureCompression;
+            if (!IsCrunchCompatibleTarget(platform, ps.overridden, ps.format, effectiveCompression))
+                throw new InvalidOperationException("The current target is no longer Crunch-compatible.");
+            ps.name = platform; ps.overridden = true; ps.crunchedCompression = true; ps.compressionQuality = targetQuality;
+            ti.SetPlatformTextureSettings(ps);
+            c.NeedsReimport = true;
+        }
+
+        static bool VerifyCrunch(FixContext c, string platform, OptimizerSettings settings, int targetQuality)
+        {
+            var ti = AssetImporter.GetAtPath(c?.AssetPath) as TextureImporter;
+            var ps = ti != null ? GetTargetPlatformSettings(ti, platform) : null;
+            return settings != null && settings.preferCrunch && Mathf.Clamp(settings.crunchQuality, 0, 100) == targetQuality
+                && ps != null && ps.overridden && ps.crunchedCompression && ps.compressionQuality == targetQuality
+                && IsCrunchCompatibleTarget(platform, ps.overridden, ps.format, ps.textureCompression);
+        }
+
+        static void ApplyMipmapState(FixContext c, TextureImporterType expectedType, bool expectedMipmap, bool targetMipmap, string requiredNonUiMaterialPath = null)
+        {
+            var ti = c?.Importer as TextureImporter;
+            if (ti == null || ti.textureType != expectedType || ti.mipmapEnabled != expectedMipmap
+                || (!string.IsNullOrEmpty(requiredNonUiMaterialPath) && !HasVerifiedNonUiMaterialUsage(requiredNonUiMaterialPath, validateFiles: true)))
+                throw new InvalidOperationException("Texture type or mipmap setting changed since analysis.");
+            ti.mipmapEnabled = targetMipmap;
+            c.NeedsReimport = true;
+        }
+
+        static bool VerifyMipmapState(FixContext c, TextureImporterType expectedType, bool targetMipmap)
+        {
+            var ti = AssetImporter.GetAtPath(c?.AssetPath) as TextureImporter;
+            return ti != null && ti.textureType == expectedType && ti.mipmapEnabled == targetMipmap;
+        }
+
+        static void ApplyAlphaSourceNone(FixContext c, TextureImporterAlphaSource expectedSource)
+        {
+            var ti = c?.Importer as TextureImporter;
+            if (ti == null || ti.alphaSource != expectedSource || ti.textureType == TextureImporterType.NormalMap)
+                throw new InvalidOperationException("Alpha-source settings changed since analysis.");
+            try { if (ti.DoesSourceTextureHaveAlpha()) throw new InvalidOperationException("Source now has an alpha channel."); }
+            catch (InvalidOperationException) { throw; }
+            catch { throw new InvalidOperationException("Unity cannot verify source alpha; TEX007 is blocked."); }
+            ti.alphaSource = TextureImporterAlphaSource.None;
+            c.NeedsReimport = true;
+        }
+
+        static bool VerifyAlphaSourceNone(FixContext c)
+        {
+            var ti = AssetImporter.GetAtPath(c?.AssetPath) as TextureImporter;
+            if (ti == null || ti.alphaSource != TextureImporterAlphaSource.None) return false;
+            try { return !ti.DoesSourceTextureHaveAlpha(); } catch { return false; }
+        }
+
+        static void ApplyNormalMapType(FixContext c, string assetPath)
+        {
+            var ti = c?.Importer as TextureImporter;
+            if (ti == null || ti.textureType != TextureImporterType.Default || ti.textureShape != TextureImporterShape.Texture2D
+                || s_TextureUsageDirty || !HasExclusiveNormalMaterialUsage(assetPath, validateFiles: true))
+                throw new InvalidOperationException("Normal-map usage evidence is stale or no longer exclusive.");
+            ti.textureType = TextureImporterType.NormalMap;
+            c.NeedsReimport = true;
+        }
+
+        static void ApplyStreamingMipmaps(FixContext c, bool expectedCurrent, string requiredNonUiMaterialPath)
+        {
+            var ti = c?.Importer as TextureImporter;
+            if (ti == null || ti.streamingMipmaps != expectedCurrent || !QualitySettings.streamingMipmapsActive || !ti.mipmapEnabled
+                || !HasVerifiedNonUiMaterialUsage(requiredNonUiMaterialPath, validateFiles: true))
+                throw new InvalidOperationException("Streaming preconditions no longer hold.");
+            ti.streamingMipmaps = true;
+            c.NeedsReimport = true;
+        }
+
+        static bool VerifyStreamingMipmaps(FixContext c, bool target)
+        {
+            var ti = AssetImporter.GetAtPath(c?.AssetPath) as TextureImporter;
+            return ti != null && ti.streamingMipmaps == target && QualitySettings.streamingMipmapsActive;
+        }
+
+        internal static int ClampAnisotropyTarget(int maximum) => Mathf.Clamp(maximum, 0, 16);
+
+        static void ApplyAnisotropyLimit(FixContext c, int expectedCurrent, int target, OptimizerSettings settings)
+        {
+            var ti = c?.Importer as TextureImporter;
+            if (settings == null || target != ClampAnisotropyTarget(settings.maxAnisoLevel)
+                || ti == null || ti.anisoLevel != expectedCurrent || target < 0 || target > 16 || target >= expectedCurrent)
+                throw new InvalidOperationException("Anisotropic filtering settings changed or no strict reduction is needed.");
+            ti.anisoLevel = target;
+            c.NeedsReimport = true;
+        }
+
+        static bool VerifyAnisotropyLimit(FixContext c, int target, OptimizerSettings settings)
+        {
+            var ti = AssetImporter.GetAtPath(c?.AssetPath) as TextureImporter;
+            return settings != null && target == ClampAnisotropyTarget(settings.maxAnisoLevel) && ti != null && ti.anisoLevel == target;
+        }
+
+        static void ApplySrgbLinear(FixContext c, bool expectedSrgb)
+        {
+            var ti = c?.Importer as TextureImporter;
+            if (ti == null || ti.sRGBTexture != expectedSrgb || s_TextureUsageDirty || !HasExclusiveLinearDataMaterialUsage(c.AssetPath, validateFiles: true))
+                throw new InvalidOperationException("sRGB or material-role evidence changed since analysis.");
+            ti.sRGBTexture = false;
+            c.NeedsReimport = true;
+        }
+
+        static bool VerifySrgbLinear(FixContext c)
+        {
+            var ti = AssetImporter.GetAtPath(c?.AssetPath) as TextureImporter;
+            return ti != null && !ti.sRGBTexture;
+        }
+
+        internal static bool ShouldAutoFixTrilinearWithoutMipmaps(bool mipmaps, FilterMode filterMode, int anisoLevel)
+        {
+            return !mipmaps && filterMode == FilterMode.Trilinear && anisoLevel <= 1;
+        }
+
+        static void ApplyBilinearFilter(FixContext c, FilterMode expectedFilter, int expectedAniso)
+        {
+            var ti = c?.Importer as TextureImporter;
+            if (ti == null || ti.mipmapEnabled || ti.filterMode != expectedFilter || ti.anisoLevel != expectedAniso
+                || !ShouldAutoFixTrilinearWithoutMipmaps(false, expectedFilter, expectedAniso))
+                throw new InvalidOperationException("TEX015 preconditions changed since analysis.");
+            ti.filterMode = FilterMode.Bilinear;
+            c.NeedsReimport = true;
+        }
+
+        static bool VerifyBilinearFilter(FixContext c, int expectedAniso)
+        {
+            var ti = AssetImporter.GetAtPath(c?.AssetPath) as TextureImporter;
+            return ti != null && !ti.mipmapEnabled && ti.filterMode == FilterMode.Bilinear && ti.anisoLevel == expectedAniso;
+        }
+
+        static void CaptureConstantPngEvidence(string assetPath, TextureFacts facts, OptimizerSettings settings)
+        {
+            if (facts == null || settings == null || !settings.deepTextureScan || facts.constantPngEvidenceEvaluated) return;
+            facts.constantPngEvidenceEvaluated = true;
+            if (facts.textureType != TextureImporterType.Default || facts.textureShape != TextureImporterShape.Texture2D
+                || !facts.solidColor || facts.width * (long)facts.height <= 1) return;
+            if (TryGetConstantPngSource(assetPath, out string hash, out Color32 color, out bool hasAlpha, out int width, out int height))
+            {
+                facts.constantPngSourceSupported = true;
+                facts.constantPngHash = hash;
+                facts.constantPngColor = color;
+                facts.constantPngHasAlpha = hasAlpha;
+                facts.constantPngSourceWidth = width;
+                facts.constantPngSourceHeight = height;
+            }
+        }
+
+        static bool TryGetConstantPngSource(string assetPath, out string md5, out Color32 color, out bool hasAlpha, out int width, out int height)
+        {
+            md5 = null; color = default; hasAlpha = false; width = height = 0;
+            if (string.IsNullOrEmpty(assetPath) || !assetPath.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(Path.GetExtension(assetPath), ".png", StringComparison.OrdinalIgnoreCase)) return false;
+            try
+            {
+                string absolute = AssetPathUtility.ToAbsolutePath(assetPath);
+                byte[] bytes = File.ReadAllBytes(absolute);
+                md5 = ComputeMd5(bytes);
+                if (!TryDecodeStrictPng(bytes, out Texture2D decoded, out hasAlpha)) return false;
+                try
+                {
+                    width = decoded.width; height = decoded.height;
+                    if (width <= 1 && height <= 1) return false;
+                    var pixels = decoded.GetPixels32();
+                    if (pixels == null || pixels.Length != (long)width * height || pixels.Length == 0) return false;
+                    color = pixels[0];
+                    for (int i = 1; i < pixels.Length; i++)
+                        if (pixels[i].r != color.r || pixels[i].g != color.g || pixels[i].b != color.b || (hasAlpha && pixels[i].a != color.a)) return false;
+                    if (!hasAlpha) color.a = 255;
+                    return true;
+                }
+                finally { if (decoded != null) UnityEngine.Object.DestroyImmediate(decoded); }
+            }
+            catch { md5 = null; width = height = 0; return false; }
+        }
+
+        static bool TryDecodeStrictPng(byte[] bytes, out Texture2D decoded, out bool hasAlpha)
+        {
+            decoded = null; hasAlpha = false;
+            if (bytes == null || bytes.Length < 45) return false;
+            byte[] signature = { 137, 80, 78, 71, 13, 10, 26, 10 };
+            for (int i = 0; i < signature.Length; i++) if (bytes[i] != signature[i]) return false;
+            int offset = 8; bool seenHeader = false, seenData = false, seenEnd = false; int colorType = -1;
+            while (offset + 12 <= bytes.Length)
+            {
+                uint length = ReadBigEndianUInt32(bytes, offset); offset += 4;
+                if (length > int.MaxValue || (long)offset + 4 + length + 4 > bytes.Length) return false;
+                string type = System.Text.Encoding.ASCII.GetString(bytes, offset, 4); offset += 4;
+                if (!seenHeader && type != "IHDR") return false;
+                if (type != "IHDR" && type != "IDAT" && type != "IEND") return false; // rejects metadata/palette chunks
+                if (type == "IHDR")
+                {
+                    if (seenHeader || length != 13) return false;
+                    int bitDepth = bytes[offset]; colorType = bytes[offset + 1];
+                    if (bitDepth != 8 || (colorType != 2 && colorType != 6) || bytes[offset + 2] != 0 || bytes[offset + 3] != 0 || bytes[offset + 4] != 0) return false;
+                    seenHeader = true;
+                }
+                else if (type == "IDAT") { if (!seenHeader || seenEnd) return false; seenData = true; }
+                else if (type == "IEND") { if (!seenData || length != 0) return false; seenEnd = true; offset += 4; break; }
+                offset += (int)length + 4; // chunk data and CRC
+            }
+            if (!seenHeader || !seenData || !seenEnd || offset != bytes.Length) return false;
+            hasAlpha = colorType == 6;
+            decoded = new Texture2D(2, 2, TextureFormat.RGBA32, false, false);
+            if (!ImageConversion.LoadImage(decoded, bytes, false) || decoded.width <= 0 || decoded.height <= 0)
+            {
+                if (decoded != null) UnityEngine.Object.DestroyImmediate(decoded);
+                decoded = null;
+                return false;
+            }
+            return true;
+        }
+
+        static uint ReadBigEndianUInt32(byte[] bytes, int offset)
+        {
+            return ((uint)bytes[offset] << 24) | ((uint)bytes[offset + 1] << 16) | ((uint)bytes[offset + 2] << 8) | bytes[offset + 3];
+        }
+
+        static string ComputeMd5(byte[] bytes)
+        {
+            if (bytes == null) return null;
+            using (var md5 = MD5.Create())
+            {
+                byte[] hash = md5.ComputeHash(bytes);
+                return BitConverter.ToString(hash).Replace("-", string.Empty);
+            }
+        }
+
+        static string SafeMd5File(string absolutePath)
+        {
+            try { return File.Exists(absolutePath) ? ComputeMd5(File.ReadAllBytes(absolutePath)) : null; }
+            catch { return null; }
+        }
+
+        static void RewriteConstantPng(FixContext c, string expectedHash, Color32 expectedColor, bool hasAlpha)
+        {
+            if (c == null || !c.BackupEnabled || c.TryBackupExtra == null)
+                throw new InvalidOperationException("PAA001 requires an enabled, working source-file backup.");
+            string absolute = AssetPathUtility.ToAbsolutePath(c.AssetPath);
+            if (!UnityEditorUtility.CanEditPath(c.AssetPath, out string reason)) throw new InvalidOperationException("Source is not editable: " + reason);
+            byte[] original = File.ReadAllBytes(absolute);
+            if (!string.Equals(ComputeMd5(original), expectedHash, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Source PNG changed since analysis; rescan before applying PAA001.");
+            if (!TryGetConstantPngSource(c.AssetPath, out string currentHash, out Color32 currentColor, out bool currentAlpha, out int width, out int height)
+                || !string.Equals(currentHash, expectedHash, StringComparison.OrdinalIgnoreCase)
+                || currentAlpha != hasAlpha || currentColor.r != expectedColor.r || currentColor.g != expectedColor.g || currentColor.b != expectedColor.b || currentColor.a != expectedColor.a)
+                throw new InvalidOperationException("Full-resolution constant-pixel proof no longer holds.");
+            if (width <= 1 && height <= 1) throw new InvalidOperationException("Source is already 1x1.");
+            if (!c.TryBackupExtra(c.AssetPath)) throw new InvalidOperationException("Could not create an exact backup of the source PNG; nothing was changed.");
+
+            Texture2D onePixel = null;
+            string tempPath = null;
+            try
+            {
+                onePixel = new Texture2D(1, 1, hasAlpha ? TextureFormat.RGBA32 : TextureFormat.RGB24, false, false);
+                onePixel.SetPixel(0, 0, new Color32(expectedColor.r, expectedColor.g, expectedColor.b, hasAlpha ? expectedColor.a : (byte)255));
+                onePixel.Apply(false, false);
+                byte[] replacement = ImageConversion.EncodeToPNG(onePixel);
+                if (replacement == null || !TryDecodeStrictPng(replacement, out Texture2D verifyPixel, out bool replacementHasAlpha))
+                    throw new InvalidOperationException("Unity could not encode a supported 1x1 PNG.");
+                try
+                {
+                    var pixels = verifyPixel.GetPixels32();
+                    if (verifyPixel.width != 1 || verifyPixel.height != 1 || replacementHasAlpha != hasAlpha || pixels == null || pixels.Length != 1
+                        || pixels[0].r != expectedColor.r || pixels[0].g != expectedColor.g || pixels[0].b != expectedColor.b
+                        || (hasAlpha && pixels[0].a != expectedColor.a))
+                        throw new InvalidOperationException("Encoded 1x1 PNG did not preserve the proven source pixel.");
+                }
+                finally { UnityEngine.Object.DestroyImmediate(verifyPixel); }
+
+                tempPath = absolute + ".projectoptimizer-" + Guid.NewGuid().ToString("N") + ".tmp";
+                File.WriteAllBytes(tempPath, replacement);
+                File.Replace(tempPath, absolute, null); // atomic same-volume replacement; fail closed if unsupported.
+                tempPath = null;
+                c.NeedsReimport = true;
+            }
+            finally
+            {
+                if (onePixel != null) UnityEngine.Object.DestroyImmediate(onePixel);
+                if (!string.IsNullOrEmpty(tempPath)) { try { File.Delete(tempPath); } catch { } }
+            }
+        }
+
+        static bool VerifyConstantPngRewrite(FixContext c, Color32 expectedColor, bool expectedAlpha)
+        {
+            if (c == null || string.IsNullOrEmpty(c.AssetPath)) return false;
+            try
+            {
+                string absolute = AssetPathUtility.ToAbsolutePath(c.AssetPath);
+                byte[] bytes = File.ReadAllBytes(absolute);
+                if (!TryDecodeStrictPng(bytes, out Texture2D decoded, out bool alpha)) return false;
+                try
+                {
+                    if (alpha != expectedAlpha || decoded.width != 1 || decoded.height != 1) return false;
+                    var pixels = decoded.GetPixels32();
+                    if (pixels == null || pixels.Length != 1 || pixels[0].r != expectedColor.r || pixels[0].g != expectedColor.g
+                        || pixels[0].b != expectedColor.b || (alpha && pixels[0].a != expectedColor.a)) return false;
+                }
+                finally { UnityEngine.Object.DestroyImmediate(decoded); }
+                var importer = AssetImporter.GetAtPath(c.AssetPath) as TextureImporter;
+                var imported = AssetDatabase.LoadAssetAtPath<Texture2D>(c.AssetPath);
+                return importer != null && imported != null && imported.width == 1 && imported.height == 1;
+            }
+            catch { return false; }
+        }
+
 
 		static TextureImporterFormat ChooseTextureFormat(string platform)
 		{

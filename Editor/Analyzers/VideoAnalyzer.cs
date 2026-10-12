@@ -34,13 +34,13 @@ namespace ApexForge.ProjectOptimizer
 							why: "The imported VideoClip is larger than the configured height budget for this scan profile. "
 							+ "Resolution affects encoded size, decode bandwidth and the amount of image data presented to the renderer. "
 							+ "The appropriate size depends on the largest presentation size and target device.",
-							fix: "Re-author or transcode the clip to the smallest resolution that satisfies its actual presentation. "
-							+ "Where the selected target is already transcoding, review the target-specific resize/spatial-quality settings.",
+							fix: "Automatically meet the configured selected-target height budget by lowering spatial quality to the least-reduced supported level that fits, then resizing proportionally if necessary. Change only target settings, require transcoding, and verify encoded dimensions after reimport.",
 							severity: IssueSeverity.Warning,
-							fixKind: FixKind.Review,
-							confidence: OptimizationConfidence.Heuristic,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
+							risk: FixRisk.Medium,
+							backupRequired: true
 							);
 
 			Rules.Register(id: "VID002", title: "Very large imported video", category: AssetCategory.Video,
@@ -64,7 +64,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "VID008", title: "VideoClip is unsupported on WebGL", category: AssetCategory.Video,
+			Rules.Register(id: "VID007", title: "VideoClip is unsupported on WebGL", category: AssetCategory.Video,
 							why: "Unity 6 does not support embedded VideoClip assets on WebGL. Web builds should use VideoPlayer.url with a browser-playable video hosted or delivered separately.",
 							fix: "For WebGL, move the video to an appropriate URL/StreamingAssets delivery workflow and use VideoPlayer.url instead of embedding the VideoClip asset.",
 							severity: IssueSeverity.Warning,
@@ -91,19 +91,20 @@ namespace ApexForge.ProjectOptimizer
 							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
 								recommendationConfidence: OptimizationConfidence.HighConfidence,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							risk: FixRisk.Medium,
+							backupRequired: true
 							);
 
 			Rules.Register(id: "VID006", title: "Video is being upscaled during import", category: AssetCategory.Video,
 							why: "A custom transcode size larger than the source can increase encoded data without adding source detail. "
 							+ "However, the importer API does not expose a portable source-resolution field suitable for proving this across all containers, so the analyzer must not infer source size from the already-imported VideoClip.",
-							fix: "Inspect the source media and custom resize settings together. Avoid custom dimensions above the source unless the presentation pipeline explicitly requires them.",
+							fix: "When original source dimensions are positively obtained from the importer OriginalSize query, proportionally clamp selected-target Custom Size dimensions to those source bounds. Do not auto-fix when source dimensions are only inferred from the imported artifact.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
-							confidence: OptimizationConfidence.Heuristic,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
+							risk: FixRisk.Medium,
+							backupRequired: true
 							);
 		}
 
@@ -150,6 +151,7 @@ namespace ApexForge.ProjectOptimizer
 			public bool targetCustomResize;
 			public int sourceWidth;
 			public int sourceHeight;
+			public bool originalSourceDimensionsVerified;
 			public bool buildReachabilityKnown;
 			public bool inBuildReachability;
 		}
@@ -224,7 +226,9 @@ namespace ApexForge.ProjectOptimizer
 			facts.targetCustomResize = HasCustomResize(targetSettings, hasTargetSettings);
 			facts.targetWidth = 0; facts.targetHeight = 0;
 			facts.targetDimensionsKnown = TryGetTargetEncodedDimensions(importer, facts.width, facts.height, targetSettings, hasTargetSettings, out facts.targetWidth, out facts.targetHeight);
-			TryGetSourceDimensions(importer, facts.width, facts.height, out facts.sourceWidth, out facts.sourceHeight);
+			facts.originalSourceDimensionsVerified = TryGetOriginalSourceDimensions(importer, out facts.sourceWidth, out facts.sourceHeight);
+			if (!facts.originalSourceDimensionsVerified)
+				TryGetSourceDimensions(importer, facts.width, facts.height, out facts.sourceWidth, out facts.sourceHeight);
 			facts.buildReachabilityKnown = context != null && context.BuildSet != null;
 			facts.inBuildReachability = facts.buildReachabilityKnown && context.BuildSet.Contains(context.CurrentAssetPath ?? string.Empty);
 		}
@@ -306,7 +310,7 @@ namespace ApexForge.ProjectOptimizer
 			entry.Set("targetEncodedHeight", targetHeight > 0 ? (long)targetHeight : 0L);
 
 			using (RuleTiming.Begin("VID001", entry.Path))
-				if (facts.targetDimensionsKnown && facts.targetHeight > 0 && budget > 0 && facts.targetHeight > budget)
+				if (facts.hasTargetSettings && facts.transcode && facts.targetDimensionsKnown && facts.targetHeight > 0 && budget > 0 && facts.targetHeight > budget)
 				{
 					long targetPixels = targetWidth > 0 ? (long)targetWidth * targetHeight : 0L;
 					long budgetPixels = targetWidth > 0 ? (long)targetWidth * budget : 0L;
@@ -316,17 +320,18 @@ namespace ApexForge.ProjectOptimizer
 						targetWidth + " x " + targetHeight + " target encoded",
 						"target height at most " + budget,
 						excess,
-						null,
-						"The selected target resolves to an encoded height above the configured budget. "
-						+ "The analyzer evaluates the target's resize mode and spatial quality rather than assuming the currently imported VideoClip dimensions are the target output. "
-						+ "The excess pixel count is a resolution metric, not a guaranteed file-size saving.",
+						c => ApplyVideoHeightBudgetFix(c, targetPlatform, targetWidth, targetHeight, budget),
+						"The selected transcoding target resolves above the configured encoded-height budget. AutoFix uses target-specific spatial quality and, if needed, a proportional Custom Size. The excess pixel count is a resolution metric, not a guaranteed file-size saving.",
 						SavingsBasis.Unknown,
+						verify: c => VerifyVideoHeightBudget(c, targetPlatform, budget),
 						options: new List<FixOption> { new FixOption {
-							Label = "Reduce Video Resolution",
-							Recommended = true,
+							Label = "Reduce Video Resolution Further",
+							Recommended = false,
 							Risk = FixRisk.Medium,
-							Warning = "This is a Review Fix. Inspect the target state before applying it.",
-							Apply = c => ImporterFixUtility.Video(c, vi => ReflectionUtility.SetMember(vi, "maxTextureSize", Mathf.Min(GetInt(vi, "maxTextureSize", 4096), OptimizerSettings.Instance.maxTextureSize)))
+							BackupRequiredOverride = true,
+							Warning = "Optional manual alternative: select a stronger resolution reduction if the verified automatic target is not suitable.",
+							Apply = c => ApplyVideoHeightBudgetFix(c, targetPlatform, targetWidth, targetHeight, budget, forceLowQuality: true),
+							Verify = c => VerifyVideoHeightBudget(c, targetPlatform, budget)
 						} }
 					);
 
@@ -357,14 +362,7 @@ namespace ApexForge.ProjectOptimizer
 						null,
 						null,
 						SavingsBasis.Disk,
-						options: new List<FixOption> { new FixOption {
-							Label = "Reduce Video Import Footprint",
-							Recommended = true,
-							Risk = FixRisk.Medium,
-							Warning = "This is a Review Fix. Inspect the target state before applying it.",
-							Apply = c => ImporterFixUtility.Video(c, vi => { ReflectionUtility.SetMember(vi, "keepAlpha", false); ReflectionUtility.SetMember(vi, "deinterlace", false); })
-						} }
-					);
+						options: BuildVideoSizeReviewOptions(entry.Path, targetPlatform, facts));
 
 					if (issue != null)
 					{
@@ -389,12 +387,13 @@ namespace ApexForge.ProjectOptimizer
 						"Unity reports that transcoding is configured for the selected target but the most recent import did not perform it. "
 						+ "The importer settings therefore do not necessarily match the generated artifact.",
 						options: new List<FixOption> { new FixOption {
-							Label = "Enable Video Transcode",
+							Label = "Reimport and Complete Video Transcode",
 							Recommended = true,
 							Risk = FixRisk.Medium,
-							Warning = "This is a Review Fix. Inspect the target state before applying it.",
-							Apply = c => ImporterFixUtility.Video(c, vi => { ReflectionUtility.SetMember(vi, "enableTranscoding", true); }),
-							Verify = c => ReadMemberBool(c.AssetPath, "enableTranscoding") == true
+							BackupRequiredOverride = true,
+							Warning = "This can take a long time. Confirm before applying; the verifier requires the skipped-transcode flag to clear.",
+							Apply = c => RequestVideoTranscodeRetry(c, targetPlatform),
+							Verify = c => VerifyVideoTranscodeCompleted(c, targetPlatform)
 						} }
 					);
 
@@ -403,12 +402,12 @@ namespace ApexForge.ProjectOptimizer
 				}
 
 			// ---------------------------------------------------------------------
-			// VID008 - WebGL cannot embed VideoClip assets.
+			// VID007 - WebGL cannot embed VideoClip assets.
 			// ---------------------------------------------------------------------
-			using (RuleTiming.Begin("VID008", entry.Path))
+			using (RuleTiming.Begin("VID007", entry.Path))
 				if (string.Equals(targetPlatform, "WebGL", StringComparison.OrdinalIgnoreCase))
 				{
-					var issue = entry.AddIssue("VID008",
+					var issue = entry.AddIssue("VID007",
 						"VideoClip asset is incompatible with WebGL when embedded",
 						"Use VideoPlayer.url for WebGL",
 						0,
@@ -457,19 +456,10 @@ namespace ApexForge.ProjectOptimizer
 						"Keep Alpha on / source has no alpha",
 						"Keep Alpha off",
 						0,
-						c =>
-						{
-							var vi = (VideoClipImporter)c.Importer;
-							vi.keepAlpha = false;
-							c.NeedsReimport = true;
-						},
-						"The source explicitly reports no per-pixel alpha channel and transcoding is enabled. Disabling Keep Alpha removes an unnecessary opaque-alpha output requirement without changing real source transparency; the exact file-size saving is codec/content dependent.",
+						c => DisableKeepAlphaWithPreflight(c, targetPlatform),
+						"The source positively reports no alpha and the selected target is transcoded. Disable Keep Alpha only if these conditions still hold at apply time; the fix engine backs up the importer metadata and restores it if verification fails.",
 						SavingsBasis.Unknown,
-						verify: c =>
-						{
-							var vi = AssetImporter.GetAtPath(c.AssetPath) as VideoClipImporter;
-							return vi != null && !vi.keepAlpha;
-						});
+						verify: c => VerifyKeepAlphaDisabled(c, targetPlatform));
 				}
 
 			// ---------------------------------------------------------------------
@@ -478,7 +468,7 @@ namespace ApexForge.ProjectOptimizer
 			// ---------------------------------------------------------------------
 			using (RuleTiming.Begin("VID006", entry.Path))
 			{
-				if (facts.targetCustomResize && facts.sourceWidth > 0 && facts.sourceHeight > 0)
+				if (facts.targetCustomResize && facts.originalSourceDimensionsVerified && facts.sourceWidth > 0 && facts.sourceHeight > 0)
 				{
 					int requestedWidth = facts.customWidth;
 					int requestedHeight = facts.customHeight;
@@ -488,17 +478,10 @@ namespace ApexForge.ProjectOptimizer
 							requestedWidth + " x " + requestedHeight + " custom target",
 							"Do not upscale above source " + facts.sourceWidth + " x " + facts.sourceHeight,
 							0,
-							null,
-							"The selected target requests a Custom Size larger than the source dimensions known by Unity. "
-							+ "The requested resize is an upscale; Unity may additionally apply the configured aspect-ratio handling. Spatial quality is evaluated separately.",
-							options: new List<FixOption> { new FixOption {
-								Label = "Stop Import Upscaling",
-								Recommended = true,
-								Risk = FixRisk.Medium,
-								Warning = "This is a Review Fix. Inspect the target state before applying it.",
-								Apply = c => { c.EnsureWritable(); var vi = c.Importer as VideoClipImporter; if (vi == null) throw new InvalidOperationException("Not a VideoClipImporter"); var target = vi.GetTargetSettings(facts.targetPlatform); target.customWidth = Math.Min(target.customWidth, facts.sourceWidth); target.customHeight = Math.Min(target.customHeight, facts.sourceHeight); vi.SetTargetSettings(facts.targetPlatform, target); c.NeedsReimport = true; }
-							} }
-						);
+							c => ClampCustomVideoDimensionsToSource(c, facts.targetPlatform, facts.sourceWidth, facts.sourceHeight, requestedWidth, requestedHeight),
+							"The selected target requests a Custom Size larger than dimensions positively read from the source's OriginalSize setting. The fix proportionally clamps dimensions, changes only this target, and verifies the read-back.",
+							SavingsBasis.Unknown,
+							verify: c => VerifyCustomVideoDimensions(c, facts.targetPlatform, facts.sourceWidth, facts.sourceHeight));
 						if (issue != null)
 						{
 							issue.Note("Source dimensions: " + facts.sourceWidth + " x " + facts.sourceHeight + "; requested: " + requestedWidth + " x " + requestedHeight + ".", "Source vs target");
@@ -508,7 +491,7 @@ namespace ApexForge.ProjectOptimizer
 				}
 			}
 
-			// VID007 is now folded into VID001 when both describe the same target resolution-budget breach.
+			// Spatial-quality alternatives are attached to VID001 when the resolution budget is exceeded.
 			// The canonical finding keeps the spatial-quality evidence and options instead of counting a second issue.
 			if (facts.hasTargetSettings
 				&& facts.transcode
@@ -552,13 +535,10 @@ namespace ApexForge.ProjectOptimizer
 					ResultDescription = "Stops Unity from importing the video's embedded audio tracks.",
 					Recommended = false,
 					Basis = SavingsBasis.Disk,
+					Risk = FixRisk.Medium,
+					BackupRequiredOverride = true,
 					Warning = "Do this only after confirming the embedded audio is not used by the runtime video workflow.",
-					Apply = c =>
-					{
-						var vi = (VideoClipImporter)c.Importer;
-						vi.importAudio = false;
-						c.NeedsReimport = true;
-					},
+					Apply = c => DisableImportedAudioAfterPreflight(c),
 					Verify = c =>
 					{
 						var vi = AssetImporter.GetAtPath(c.AssetPath) as VideoClipImporter;
@@ -580,6 +560,7 @@ namespace ApexForge.ProjectOptimizer
 			{
 				options.Add(SpatialQualityOption(
 					platform,
+					VideoSpatialQuality.HighSpatialQuality,
 					VideoSpatialQuality.MediumSpatialQuality,
 					"MediumSpatialQuality",
 					"Scales the encoded image dimensions to 3/4 (approximately "
@@ -593,6 +574,7 @@ namespace ApexForge.ProjectOptimizer
 			{
 				options.Add(SpatialQualityOption(
 					platform,
+					VideoSpatialQuality.HighSpatialQuality,
 					VideoSpatialQuality.LowSpatialQuality,
 					"LowSpatialQuality",
 					"Scales the encoded image dimensions to 1/2 (approximately "
@@ -605,43 +587,36 @@ namespace ApexForge.ProjectOptimizer
 			return options;
 		}
 
-		static FixOption SpatialQualityOption(string platform, VideoSpatialQuality quality, string actionSuffix,
-			string description, bool recommended)
+		static FixOption SpatialQualityOption(string platform, VideoSpatialQuality expectedQuality,
+			VideoSpatialQuality quality, string actionSuffix, string description, bool recommended)
 		{
 			return new FixOption
 			{
-				ActionId = "VID007_" + platform + "_" + actionSuffix,
+				ActionId = "VID001_SpatialQuality_" + platform + "_" + actionSuffix,
 				Label = quality == VideoSpatialQuality.MediumSpatialQuality ? "Medium" : "Low",
 				ResultDescription = description,
 				Recommended = recommended,
 				Basis = SavingsBasis.Unknown,
+				Risk = FixRisk.Medium,
+				BackupRequiredOverride = true,
 				Warning = "This changes the encoded image dimensions for the selected target platform and may reduce visual sharpness.",
-				Apply = c =>
-				{
-					var vi = c.Importer as VideoClipImporter;
-					if (vi == null) return;
-
-					var target = vi.GetTargetSettings(platform);
-					target.spatialQuality = quality;
-					vi.SetTargetSettings(platform, target);
-					c.NeedsReimport = true;
-				},
-				Verify = c =>
-				{
-					var vi = AssetImporter.GetAtPath(c.AssetPath) as VideoClipImporter;
-					if (vi == null) return false;
-
-					try
-					{
-						var target = vi.GetTargetSettings(platform);
-						return target.spatialQuality == quality;
-					}
-					catch
-					{
-						return false;
-					}
-				}
+				Apply = c => SetVideoSpatialQualityChecked(c, platform, expectedQuality, quality),
+				Verify = c => ReadVideoSpatialQuality(c, platform) == quality
 			};
+		}
+
+		static void SetVideoSpatialQualityChecked(FixContext c, string platform, VideoSpatialQuality expectedQuality, VideoSpatialQuality quality)
+		{
+			if (c == null || string.IsNullOrEmpty(platform)) throw new InvalidOperationException("A selected video target is required.");
+			c.EnsureWritable();
+			var importer = AssetImporter.GetAtPath(c.AssetPath) as VideoClipImporter;
+			if (importer == null || !TryGetTargetSettings(importer, platform, out var target)
+				|| !target.enableTranscoding || target.spatialQuality != expectedQuality || target.spatialQuality == quality)
+				throw new InvalidOperationException("Selected target or spatial-quality state changed since analysis.");
+			c.Importer = importer;
+			target.spatialQuality = quality;
+			importer.SetTargetSettings(platform, target);
+			c.NeedsReimport = true;
 		}
 
 		static bool HasCustomResize(VideoImporterTargetSettings settings, bool available)
@@ -834,5 +809,312 @@ namespace ApexForge.ProjectOptimizer
 			var t = Type.GetType(typeName);
 			return t != null && t.IsEnum ? Enum.Parse(t, name) : null;
 		}
+		static bool TryGetOriginalSourceDimensions(VideoClipImporter importer, out int width, out int height)
+		{
+			width = 0;
+			height = 0;
+			if (importer == null) return false;
+			try
+			{
+				width = importer.GetResizeWidth(VideoResizeMode.OriginalSize);
+				height = importer.GetResizeHeight(VideoResizeMode.OriginalSize);
+				return width > 0 && height > 0;
+			}
+			catch
+			{
+				width = 0;
+				height = 0;
+				return false;
+			}
+		}
+
+		static void ApplyVideoHeightBudgetFix(FixContext c, string platform, int expectedWidth, int expectedHeight,
+			int budget, bool forceLowQuality = false)
+		{
+			if (c == null || string.IsNullOrEmpty(platform) || budget <= 0)
+				throw new InvalidOperationException("A valid target platform and positive video height budget are required.");
+			c.EnsureWritable();
+			var importer = AssetImporter.GetAtPath(c.AssetPath) as VideoClipImporter;
+			if (importer == null) throw new InvalidOperationException("VideoClipImporter not found for " + c.AssetPath);
+			c.Importer = importer;
+			if (!TryGetTargetSettings(importer, platform, out var target) || !target.enableTranscoding)
+				throw new InvalidOperationException("The selected target is unavailable or video transcoding is disabled.");
+			var clip = AssetDatabase.LoadAssetAtPath<VideoClip>(c.AssetPath);
+			int sourceOrImportedWidth = clip != null && clip.width > 0 ? (int)Math.Min(int.MaxValue, clip.width) : 0;
+			int sourceOrImportedHeight = clip != null && clip.height > 0 ? (int)Math.Min(int.MaxValue, clip.height) : 0;
+			if (!TryGetTargetEncodedDimensions(importer, sourceOrImportedWidth, sourceOrImportedHeight, target, true, out int currentWidth, out int currentHeight)
+				|| currentWidth != expectedWidth || currentHeight != expectedHeight || currentHeight <= budget)
+				throw new InvalidOperationException("The video target dimensions changed since the finding was analyzed.");
+
+			c.Importer = importer;
+
+			VideoSpatialQuality nextQuality = target.spatialQuality;
+			if (forceLowQuality) nextQuality = VideoSpatialQuality.LowSpatialQuality;
+			else if (target.spatialQuality == VideoSpatialQuality.HighSpatialQuality)
+			{
+				if (ScaleDimension(currentHeight, 0.75) <= budget) nextQuality = VideoSpatialQuality.MediumSpatialQuality;
+				else nextQuality = VideoSpatialQuality.LowSpatialQuality;
+			}
+			else if (target.spatialQuality == VideoSpatialQuality.MediumSpatialQuality
+				&& ScaleDimension(currentHeight, 2d / 3d) <= budget)
+				nextQuality = VideoSpatialQuality.LowSpatialQuality;
+			if (forceLowQuality) nextQuality = VideoSpatialQuality.LowSpatialQuality;
+			target.spatialQuality = nextQuality;
+
+			int baseWidth, baseHeight;
+			if (!TryGetResizeBaseDimensions(importer, target, out baseWidth, out baseHeight))
+				throw new InvalidOperationException("Unable to determine the selected target's base resize dimensions.");
+			int effectiveHeight = ScaleDimension(baseHeight, SpatialScale(nextQuality));
+			if (effectiveHeight > budget)
+			{
+				// Preserve the existing aspect ratio, applying a small rounding margin so the output
+				// verifier can prove the final encoded height is at or below the budget.
+				int maxBaseHeight = Math.Max(1, (int)Math.Floor((budget + 0.49d) / SpatialScale(nextQuality)));
+				int newHeight = Math.Min(baseHeight, maxBaseHeight);
+				int newWidth = Math.Max(1, (int)Math.Round((double)baseWidth * newHeight / baseHeight));
+				if (newHeight >= baseHeight && newWidth >= baseWidth)
+					throw new InvalidOperationException("The importer could not produce a smaller target within the configured budget.");
+				target.resizeMode = VideoResizeMode.CustomSize;
+				target.customWidth = newWidth;
+				target.customHeight = newHeight;
+			}
+			importer.SetTargetSettings(platform, target);
+			c.NeedsReimport = true;
+		}
+
+		static bool VerifyVideoHeightBudget(FixContext c, string platform, int budget)
+		{
+			if (c == null || string.IsNullOrEmpty(platform) || budget <= 0) return false;
+			var importer = AssetImporter.GetAtPath(c.AssetPath) as VideoClipImporter;
+			if (importer == null || !TryGetTargetSettings(importer, platform, out var target) || !target.enableTranscoding) return false;
+			var clip = AssetDatabase.LoadAssetAtPath<VideoClip>(c.AssetPath);
+			int width = clip != null && clip.width > 0 ? (int)Math.Min(int.MaxValue, clip.width) : 0;
+			int height = clip != null && clip.height > 0 ? (int)Math.Min(int.MaxValue, clip.height) : 0;
+			return TryGetTargetEncodedDimensions(importer, width, height, target, true, out _, out int encodedHeight)
+				&& encodedHeight > 0 && encodedHeight <= budget;
+		}
+
+		static bool TryGetResizeBaseDimensions(VideoClipImporter importer, VideoImporterTargetSettings target, out int width, out int height)
+		{
+			width = 0;
+			height = 0;
+			try
+			{
+				if (target.resizeMode == VideoResizeMode.CustomSize)
+				{
+					width = target.customWidth;
+					height = target.customHeight;
+				}
+				else
+				{
+					width = importer.GetResizeWidth(target.resizeMode);
+					height = importer.GetResizeHeight(target.resizeMode);
+				}
+				return width > 0 && height > 0;
+			}
+			catch { return false; }
+		}
+
+		static double SpatialScale(VideoSpatialQuality quality)
+		{
+			switch (quality)
+			{
+				case VideoSpatialQuality.MediumSpatialQuality: return 0.75d;
+				case VideoSpatialQuality.LowSpatialQuality: return 0.5d;
+				default: return 1d;
+			}
+		}
+
+		static int ScaleDimension(int value, double scale) => Math.Max(1, (int)Math.Round(value * scale));
+
+		static List<FixOption> BuildVideoSizeReviewOptions(string assetPath, string platform, VideoFacts facts)
+		{
+			var options = new List<FixOption>();
+			if (facts == null || string.IsNullOrEmpty(assetPath) || string.IsNullOrEmpty(platform) || !facts.hasTargetSettings || !facts.transcode) return options;
+			if (facts.targetSpatialQuality != VideoSpatialQuality.MediumSpatialQuality)
+				options.Add(VideoSpatialQualityReviewOption(platform, facts.targetSpatialQuality, VideoSpatialQuality.MediumSpatialQuality, "Use Medium Spatial Quality"));
+			if (facts.targetSpatialQuality != VideoSpatialQuality.LowSpatialQuality)
+				options.Add(VideoSpatialQualityReviewOption(platform, facts.targetSpatialQuality, VideoSpatialQuality.LowSpatialQuality, "Use Low Spatial Quality"));
+
+			// Capture raw target resize dimensions before spatial-quality scaling. Scaling already-scaled
+			// dimensions would apply spatial quality twice and reduce the output more than 25%.
+			var importer = AssetImporter.GetAtPath(assetPath) as VideoClipImporter;
+			if (importer == null || !TryGetTargetSettings(importer, platform, out var currentTarget) || !currentTarget.enableTranscoding
+				|| !TryGetResizeBaseDimensions(importer, currentTarget, out int baseWidth, out int baseHeight)
+				|| baseWidth <= 1 || baseHeight <= 1) return options;
+			int reducedHeight = ScaleDimension(baseHeight, 0.75d);
+			int reducedWidth = Math.Max(1, (int)Math.Round((double)baseWidth * reducedHeight / baseHeight));
+			if (reducedWidth >= baseWidth && reducedHeight >= baseHeight) return options;
+			VideoResizeMode expectedResizeMode = currentTarget.resizeMode;
+			int expectedCustomWidth = currentTarget.customWidth;
+			int expectedCustomHeight = currentTarget.customHeight;
+			options.Add(new FixOption
+			{
+				ActionId = "VID002_REDUCE_CUSTOM_SIZE_75_" + platform,
+				Label = "Reduce Target Dimensions by 25%",
+				ResultDescription = "Changes only the selected target to a proportional Custom Size approximately 75% of the current encoded dimensions.",
+				Recommended = false,
+				Risk = FixRisk.Medium,
+				BackupRequiredOverride = true,
+				Warning = "Review Fix: reduces video resolution and may soften the image.",
+				Apply = c => ApplyVideoSizeScaleReview(c, platform, expectedResizeMode, expectedCustomWidth, expectedCustomHeight, baseWidth, baseHeight, reducedWidth, reducedHeight),
+				Verify = c => VerifyVideoSizeScaleReview(c, platform, reducedWidth, reducedHeight)
+			});
+			return options;
+		}
+
+		static FixOption VideoSpatialQualityReviewOption(string platform, VideoSpatialQuality expectedQuality, VideoSpatialQuality quality, string label)
+		{
+			return new FixOption
+			{
+				ActionId = "VID002_SPATIAL_" + platform + "_" + quality,
+				Label = label,
+				ResultDescription = quality == VideoSpatialQuality.MediumSpatialQuality
+					? "Reduces target spatial quality to approximately 75% of the encoded dimensions."
+					: "Reduces target spatial quality to approximately 50% of the encoded dimensions.",
+				Recommended = false,
+				Risk = FixRisk.Medium,
+				BackupRequiredOverride = true,
+				Warning = "Review Fix: confirm that the visual-quality trade-off is acceptable.",
+				Apply = c => SetVideoSpatialQualityForReview(c, platform, expectedQuality, quality),
+				Verify = c => ReadVideoSpatialQuality(c, platform) == quality
+			};
+		}
+
+		static void SetVideoSpatialQualityForReview(FixContext c, string platform, VideoSpatialQuality expectedQuality, VideoSpatialQuality quality)
+		{
+			if (c == null || string.IsNullOrEmpty(platform)) throw new InvalidOperationException("A selected video target is required.");
+			c.EnsureWritable();
+			var importer = AssetImporter.GetAtPath(c.AssetPath) as VideoClipImporter;
+			if (importer == null || !TryGetTargetSettings(importer, platform, out var target) || !target.enableTranscoding
+				|| target.spatialQuality != expectedQuality || target.spatialQuality == quality)
+				throw new InvalidOperationException("Selected video target or spatial-quality state changed since analysis.");
+			c.Importer = importer;
+			target.spatialQuality = quality;
+			importer.SetTargetSettings(platform, target);
+			c.NeedsReimport = true;
+		}
+
+		static VideoSpatialQuality? ReadVideoSpatialQuality(FixContext c, string platform)
+		{
+			var importer = c != null ? AssetImporter.GetAtPath(c.AssetPath) as VideoClipImporter : null;
+			return importer != null && TryGetTargetSettings(importer, platform, out var target) ? target.spatialQuality : (VideoSpatialQuality?)null;
+		}
+
+		static void ApplyVideoSizeScaleReview(FixContext c, string platform, VideoResizeMode expectedResizeMode,
+			int expectedCustomWidth, int expectedCustomHeight, int expectedBaseWidth, int expectedBaseHeight,
+			int expectedNewWidth, int expectedNewHeight)
+		{
+			if (c == null || string.IsNullOrEmpty(platform) || expectedBaseWidth <= 0 || expectedBaseHeight <= 0
+				|| expectedNewWidth <= 0 || expectedNewHeight <= 0)
+				throw new InvalidOperationException("A selected video target and positive dimensions are required.");
+			c.EnsureWritable();
+			var importer = AssetImporter.GetAtPath(c.AssetPath) as VideoClipImporter;
+			if (importer == null || !TryGetTargetSettings(importer, platform, out var target) || !target.enableTranscoding
+				|| target.resizeMode != expectedResizeMode)
+				throw new InvalidOperationException("Selected video target or resize mode changed since analysis.");
+			c.Importer = importer;
+			if ((expectedResizeMode == VideoResizeMode.CustomSize
+					&& (target.customWidth != expectedCustomWidth || target.customHeight != expectedCustomHeight))
+				|| !TryGetResizeBaseDimensions(importer, target, out int width, out int height)
+				|| width != expectedBaseWidth || height != expectedBaseHeight)
+				throw new InvalidOperationException("Selected target dimensions changed since analysis.");
+			target.resizeMode = VideoResizeMode.CustomSize;
+			target.customWidth = expectedNewWidth;
+			target.customHeight = expectedNewHeight;
+			importer.SetTargetSettings(platform, target);
+			c.NeedsReimport = true;
+		}
+
+		static bool VerifyVideoSizeScaleReview(FixContext c, string platform, int expectedWidth, int expectedHeight)
+		{
+			var importer = c != null ? AssetImporter.GetAtPath(c.AssetPath) as VideoClipImporter : null;
+			return importer != null && TryGetTargetSettings(importer, platform, out var target)
+				&& target.enableTranscoding && target.resizeMode == VideoResizeMode.CustomSize
+				&& target.customWidth == expectedWidth && target.customHeight == expectedHeight;
+		}
+
+		static void RequestVideoTranscodeRetry(FixContext c, string platform)
+		{
+			if (c == null || string.IsNullOrEmpty(platform)) throw new InvalidOperationException("A selected video target is required.");
+			c.EnsureWritable();
+			var importer = AssetImporter.GetAtPath(c.AssetPath) as VideoClipImporter;
+			if (importer == null || !TryGetTargetSettings(importer, platform, out var target)
+				|| !target.enableTranscoding || !importer.transcodeSkipped)
+				throw new InvalidOperationException("The transcode is no longer in the skipped-but-enabled state; rescan before retrying.");
+			c.Importer = importer;
+			// Reimport is the intended operation. Do not toggle any other target settings.
+			c.NeedsReimport = true;
+		}
+
+		static bool VerifyVideoTranscodeCompleted(FixContext c, string platform)
+		{
+			var importer = c != null ? AssetImporter.GetAtPath(c.AssetPath) as VideoClipImporter : null;
+			return importer != null && TryGetTargetSettings(importer, platform, out var target)
+				&& target.enableTranscoding && !importer.transcodeSkipped;
+		}
+
+		static void DisableImportedAudioAfterPreflight(FixContext c)
+		{
+			if (c == null) throw new InvalidOperationException("Missing video fix context.");
+			c.EnsureWritable();
+			var importer = AssetImporter.GetAtPath(c.AssetPath) as VideoClipImporter;
+			if (importer == null || !importer.importAudio || importer.sourceAudioTrackCount <= 0)
+				throw new InvalidOperationException("The video audio-import state changed or no source audio tracks remain.");
+			c.Importer = importer;
+			importer.importAudio = false;
+			c.NeedsReimport = true;
+		}
+
+		static void DisableKeepAlphaWithPreflight(FixContext c, string platform)
+		{
+			if (c == null || string.IsNullOrEmpty(platform)) throw new InvalidOperationException("A selected video target is required.");
+			c.EnsureWritable();
+			var importer = AssetImporter.GetAtPath(c.AssetPath) as VideoClipImporter;
+			if (importer == null || !importer.keepAlpha || importer.sourceHasAlpha)
+				throw new InvalidOperationException("Keep Alpha or source-alpha evidence changed since analysis.");
+			if (!TryGetTargetSettings(importer, platform, out var target) || !target.enableTranscoding)
+				throw new InvalidOperationException("The selected target is unavailable or transcoding is disabled.");
+			c.Importer = importer;
+			importer.keepAlpha = false;
+			c.NeedsReimport = true;
+		}
+
+		static bool VerifyKeepAlphaDisabled(FixContext c, string platform)
+		{
+			var importer = c != null ? AssetImporter.GetAtPath(c.AssetPath) as VideoClipImporter : null;
+			return importer != null && !importer.keepAlpha && !importer.sourceHasAlpha
+				&& TryGetTargetSettings(importer, platform, out var target) && target.enableTranscoding;
+		}
+
+		static void ClampCustomVideoDimensionsToSource(FixContext c, string platform, int sourceWidth, int sourceHeight,
+			int expectedWidth, int expectedHeight)
+		{
+			if (c == null || string.IsNullOrEmpty(platform) || sourceWidth <= 0 || sourceHeight <= 0)
+				throw new InvalidOperationException("Verified source dimensions and target platform are required.");
+			c.EnsureWritable();
+			var importer = AssetImporter.GetAtPath(c.AssetPath) as VideoClipImporter;
+			if (importer == null || !TryGetTargetSettings(importer, platform, out var target)
+				|| !target.enableTranscoding || target.resizeMode != VideoResizeMode.CustomSize)
+				throw new InvalidOperationException("Selected target is no longer using Custom Size transcoding.");
+			c.Importer = importer;
+			if (target.customWidth != expectedWidth || target.customHeight != expectedHeight
+				|| (target.customWidth <= sourceWidth && target.customHeight <= sourceHeight))
+				throw new InvalidOperationException("The custom target dimensions changed or no longer exceed the source.");
+			double scale = Math.Min((double)sourceWidth / target.customWidth, (double)sourceHeight / target.customHeight);
+			target.customWidth = Math.Max(1, Math.Min(sourceWidth, (int)Math.Floor(target.customWidth * scale)));
+			target.customHeight = Math.Max(1, Math.Min(sourceHeight, (int)Math.Floor(target.customHeight * scale)));
+			importer.SetTargetSettings(platform, target);
+			c.NeedsReimport = true;
+		}
+
+		static bool VerifyCustomVideoDimensions(FixContext c, string platform, int sourceWidth, int sourceHeight)
+		{
+			var importer = c != null ? AssetImporter.GetAtPath(c.AssetPath) as VideoClipImporter : null;
+			return importer != null && TryGetTargetSettings(importer, platform, out var target)
+				&& target.resizeMode == VideoResizeMode.CustomSize && target.customWidth > 0 && target.customHeight > 0
+				&& target.customWidth <= sourceWidth && target.customHeight <= sourceHeight;
+		}
+
 	}
 }

@@ -18,8 +18,8 @@ namespace ApexForge.ProjectOptimizer
 				severity:IssueSeverity.Info, fixKind:FixKind.None, confidence:OptimizationConfidence.HighConfidence,
 				risk:FixRisk.Unspecified, backupRequired:false);
 			Rules.Register(id:"DEP002", title:"Large dependency fan-out", category:AssetCategory.Build,
-				why:"This asset directly references many other assets, increasing its dependency surface and the chance of dragging extra content into builds.",
-				fix:"Review the referenced content and separate optional content when the runtime loading model permits it.",
+				why:"This asset has a large direct dependency surface. Dependency count alone does not prove that the referenced assets ship in a build or that any reference is optional.",
+				fix:"Use build-layout or runtime-loading evidence to identify unnecessary dependencies before considering an architectural split.",
 				severity:IssueSeverity.Info, fixKind:FixKind.None, confidence:OptimizationConfidence.HighConfidence,
 				risk:FixRisk.Unspecified, backupRequired:false);
 		}

@@ -83,23 +83,23 @@ namespace ApexForge.ProjectOptimizer
 							);
 
 			Rules.Register(id: "FNT006", title: "Dynamic font asset has no source font dependency", category: AssetCategory.Font,
-							why: "Dynamic font assets require a source font dependency, while static assets are standalone. A Dynamic font asset whose source font reference is missing is likely to fail to populate glyphs correctly.",
-							fix: "Assign the intended source font file, or convert the asset to static after pre-populating the required glyphs when runtime population is not needed.",
+							why: "Dynamic font assets require a source font dependency, while static assets are standalone. The intended source font cannot safely be inferred from a filename, so this rule offers explicit user-selected candidates.",
+							fix: "Review Fix: choose the intended source Font candidate; never assign a font automatically from filename similarity.",
 							severity: IssueSeverity.Warning,
-							fixKind: FixKind.None,
+							fixKind: FixKind.Review,
 							confidence: OptimizationConfidence.HighConfidence,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							risk: FixRisk.High,
+							backupRequired: true
 							);
 
 			Rules.Register(id: "FNT008", title: "Font fallback chain is long", category: AssetCategory.Font,
-						why: FontAnalysisPolicy.FallbackChainExplanation,
-						fix: "Review the fallback chain and remove redundant fonts only when required multilingual/localized glyph coverage remains intact.",
+						why: FontAnalysisPolicy.FallbackChainExplanation + " Verified automation removes only null slots, repeated references, or static fallbacks whose complete known glyph set is already covered by earlier entries.",
+						fix: "Automatically remove only proven redundant fallback references; retain all non-redundant or incompletely understood entries.",
 						severity: IssueSeverity.Info,
-						fixKind: FixKind.None,
+						fixKind: FixKind.Verified,
 						confidence: OptimizationConfidence.HighConfidence,
-						risk: FixRisk.Unspecified,
-						backupRequired: false
+						risk: FixRisk.High,
+						backupRequired: true
 						);
 
 			Rules.Register(id: "FNT007", title: "Font atlas texture memory is high", category: AssetCategory.Font,
@@ -308,9 +308,23 @@ namespace ApexForge.ProjectOptimizer
 			using (RuleTiming.Begin("FNT008", entry.Path))
 				if (facts.fallbackKnown && facts.fallbackCount > fallbackBudget)
 				{
-					entry.AddIssue("FNT008", facts.fallbackCount + " fallback font(s)",
-						"Review whether the fallback chain can be simplified", 0, null,
-						FontAnalysisPolicy.FallbackChainExplanation + " Current project threshold: " + fallbackBudget + " fallback assets.");
+					var fontAsset = AssetDatabase.LoadMainAssetAtPath(assetPath);
+					var redundantIndices = FindRedundantFallbackIndices(fontAsset, "m_FallbackFontAssetTable");
+					var issue = entry.AddIssue("FNT008", facts.fallbackCount + " fallback font(s)",
+						"Remove only proven redundant fallback references", 0,
+						c => RemoveRedundantFallbacks(c, "m_FallbackFontAssetTable"),
+						FontAnalysisPolicy.FallbackChainExplanation + " Current project threshold: " + fallbackBudget + " fallback assets. Exact duplicates/nulls are safe to remove; glyph-subset pruning is allowed only for static assets with fully readable character tables.",
+						SavingsBasis.Unknown,
+						c => VerifyNoRedundantFallbacks(c.AssetPath, "m_FallbackFontAssetTable"));
+					if (issue != null && redundantIndices.Count == 0)
+					{
+						issue.FixKind = FixKind.None;
+						issue.Fix = null;
+						issue.Verify = null;
+						issue.Recommended = "No automatic change: no null, duplicate, or provably glyph-shadowed fallback reference was found.";
+					}
+					else if (issue != null)
+						issue.Items("Safe redundant fallback indices", FormatIndices(redundantIndices), DetailKind.Good);
 				}
 
 
@@ -482,6 +496,194 @@ namespace ApexForge.ProjectOptimizer
 			facts.runtimeSize = total > 0 ? total : -1;
 
 			return facts;
+		}
+
+		static List<FixOption> BuildSourceFontReviewOptions(string targetAssetPath)
+		{
+			var options = new List<FixOption>();
+			var paths = SourceFontCandidatePaths();
+			for (int i = 0; i < paths.Count; i++)
+			{
+				string candidatePath = paths[i];
+				var candidate = AssetDatabase.LoadAssetAtPath<Font>(candidatePath);
+				if (candidate == null) continue;
+				options.Add(new FixOption
+				{
+					Label = "Assign source Font: " + candidatePath,
+					ResultDescription = candidatePath,
+					Recommended = false,
+					Risk = FixRisk.High,
+					Warning = "This is an explicit Review action. Confirm this is the intended face and language coverage before applying; the target asset is backed up.",
+					Apply = c => AssignSourceFont(c, candidatePath),
+					Verify = c => IsAssignedSourceFont(c.AssetPath, candidatePath)
+				});
+			}
+			return options;
+		}
+
+		static List<string> SourceFontCandidatePaths()
+		{
+			var result = new List<string>();
+			string[] guids = AssetDatabase.FindAssets("t:Font");
+			for (int i = 0; i < guids.Length; i++)
+			{
+				string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+				if (string.IsNullOrEmpty(path)) continue;
+				string extension = System.IO.Path.GetExtension(path);
+				if (!Array.Exists(k_SourceExtensions, x => string.Equals(x, extension, StringComparison.OrdinalIgnoreCase))) continue;
+				if (AssetDatabase.LoadAssetAtPath<Font>(path) != null) result.Add(path);
+			}
+			result.Sort(StringComparer.OrdinalIgnoreCase);
+			return result;
+		}
+
+		static void AssignSourceFont(FixContext context, string sourcePath)
+		{
+			context.EnsureWritable();
+			var target = AssetDatabase.LoadMainAssetAtPath(context.AssetPath);
+			var source = AssetDatabase.LoadAssetAtPath<Font>(sourcePath);
+			if (target == null || source == null) throw new InvalidOperationException("FNT006 preflight blocked: target or selected source Font no longer exists.");
+			var so = new SerializedObject(target);
+			var property = so.FindProperty("m_SourceFontFile");
+			if (property == null || property.propertyType != SerializedPropertyType.ObjectReference || property.objectReferenceValue != null)
+				throw new InvalidOperationException("FNT006 preflight blocked: source-font property changed or is not writable.");
+			property.objectReferenceValue = source;
+			if (!so.ApplyModifiedProperties()) throw new InvalidOperationException("FNT006 could not commit the selected source-font reference.");
+			EditorUtility.SetDirty(target);
+			context.NeedsSave = true;
+		}
+
+		static bool IsAssignedSourceFont(string targetPath, string sourcePath)
+		{
+			var target = AssetDatabase.LoadMainAssetAtPath(targetPath);
+			if (target == null) return false;
+			var so = new SerializedObject(target);
+			var property = so.FindProperty("m_SourceFontFile");
+			return property != null && property.propertyType == SerializedPropertyType.ObjectReference
+				&& property.objectReferenceValue != null
+				&& string.Equals(AssetDatabase.GetAssetPath(property.objectReferenceValue), sourcePath, StringComparison.OrdinalIgnoreCase);
+		}
+
+		static List<int> FindRedundantFallbackIndices(UnityEngine.Object asset, string fallbackPropertyPath)
+		{
+			var result = new List<int>();
+			if (asset == null) return result;
+			var so = new SerializedObject(asset);
+			var fallback = so.FindProperty(fallbackPropertyPath);
+			if (fallback == null || !fallback.isArray) return result;
+
+			var seen = new HashSet<int>();
+			var covered = new HashSet<uint>();
+			bool canProveGlyphCoverage = IsStaticPopulation(asset) && TryCollectKnownGlyphs(asset, out covered);
+			for (int i = 0; i < fallback.arraySize; i++)
+			{
+				var element = fallback.GetArrayElementAtIndex(i);
+				if (element.propertyType != SerializedPropertyType.ObjectReference) { canProveGlyphCoverage = false; continue; }
+				var candidate = element.objectReferenceValue;
+				if (candidate == null) { result.Add(i); continue; }
+				if (!seen.Add(candidate.GetInstanceID())) { result.Add(i); continue; }
+
+				if (canProveGlyphCoverage && IsStaticPopulation(candidate) && TryCollectKnownGlyphs(candidate, out var candidateGlyphs))
+				{
+					if (IsSubset(candidateGlyphs, covered)) result.Add(i);
+					else covered.UnionWith(candidateGlyphs);
+				}
+				else canProveGlyphCoverage = false;
+			}
+			return result;
+		}
+
+		static bool IsStaticPopulation(UnityEngine.Object asset)
+		{
+			if (asset == null) return false;
+			try
+			{
+				object mode = ReadMember(asset, "atlasPopulationMode", "m_AtlasPopulationMode");
+				if (mode != null) return string.Equals(mode.ToString(), "Static", StringComparison.OrdinalIgnoreCase);
+				var so = new SerializedObject(asset);
+				var property = so.FindProperty("m_AtlasPopulationMode");
+				if (property == null) property = so.FindProperty("m_AtlasPopulationModeSettings.populationMode");
+				return property != null && property.propertyType == SerializedPropertyType.Enum
+					&& property.enumValueIndex >= 0 && property.enumValueIndex < property.enumDisplayNames.Length
+					&& string.Equals(property.enumDisplayNames[property.enumValueIndex], "Static", StringComparison.OrdinalIgnoreCase);
+			}
+			catch { return false; }
+		}
+
+		static bool TryCollectKnownGlyphs(UnityEngine.Object asset, out HashSet<uint> glyphs)
+		{
+			glyphs = new HashSet<uint>();
+			if (asset == null) return false;
+			try
+			{
+				object table = ReadMember(asset, "characterTable", "m_CharacterTable");
+				var enumerable = table as System.Collections.IEnumerable;
+				if (enumerable == null) return false;
+				foreach (object character in enumerable)
+				{
+					object unicode = ReadMember(character, "unicode", "m_Unicode");
+					if (unicode == null) return false;
+					glyphs.Add(Convert.ToUInt32(unicode, System.Globalization.CultureInfo.InvariantCulture));
+				}
+				return true;
+			}
+			catch { glyphs.Clear(); return false; }
+		}
+
+		static object ReadMember(object target, string propertyOrField, string fallbackField = null)
+		{
+			if (target == null) return null;
+			var type = target.GetType();
+			const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+			var property = type.GetProperty(propertyOrField, flags);
+			if (property != null && property.GetIndexParameters().Length == 0)
+				try { return property.GetValue(target, null); } catch { }
+			var field = type.GetField(propertyOrField, flags) ?? (!string.IsNullOrEmpty(fallbackField) ? type.GetField(fallbackField, flags) : null);
+			if (field != null) try { return field.GetValue(target); } catch { }
+			return null;
+		}
+
+		static bool IsSubset(HashSet<uint> subset, HashSet<uint> superset)
+		{
+			if (subset == null || superset == null) return false;
+			foreach (uint value in subset) if (!superset.Contains(value)) return false;
+			return true;
+		}
+
+		static void RemoveRedundantFallbacks(FixContext context, string fallbackPropertyPath)
+		{
+			context.EnsureWritable();
+			var asset = AssetDatabase.LoadMainAssetAtPath(context.AssetPath);
+			var indices = FindRedundantFallbackIndices(asset, fallbackPropertyPath);
+			if (indices.Count == 0) throw new InvalidOperationException("No safe redundant fallback references remain; the asset changed since analysis.");
+			var so = new SerializedObject(asset);
+			var fallback = so.FindProperty(fallbackPropertyPath);
+			if (fallback == null || !fallback.isArray) throw new InvalidOperationException("Fallback array is unavailable or changed since analysis.");
+			int expectedCount = fallback.arraySize;
+			for (int i = indices.Count - 1; i >= 0; i--)
+			{
+				int index = indices[i];
+				if (index < 0 || index >= fallback.arraySize) throw new InvalidOperationException("Fallback array indices changed since analysis.");
+				fallback.DeleteArrayElementAtIndex(index);
+				if (fallback.arraySize == expectedCount) fallback.DeleteArrayElementAtIndex(index);
+				expectedCount = fallback.arraySize;
+			}
+			if (!so.ApplyModifiedProperties()) throw new InvalidOperationException("Unity did not apply the fallback-array changes.");
+			EditorUtility.SetDirty(asset);
+			context.NeedsSave = true;
+		}
+
+		static bool VerifyNoRedundantFallbacks(string assetPath, string fallbackPropertyPath)
+		{
+			var asset = AssetDatabase.LoadMainAssetAtPath(assetPath);
+			return asset != null && FindRedundantFallbackIndices(asset, fallbackPropertyPath).Count == 0;
+		}
+
+		static List<string> FormatIndices(List<int> indices)
+		{
+			var result = new List<string>(indices != null ? indices.Count : 0);
+			if (indices != null) for (int i = 0; i < indices.Count; i++) result.Add("Fallback index " + indices[i]);
+			return result;
 		}
 
 		static bool IsColorTextureFormat(string format)

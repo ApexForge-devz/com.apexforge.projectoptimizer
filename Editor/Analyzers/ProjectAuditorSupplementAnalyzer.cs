@@ -33,7 +33,7 @@ namespace ApexForge.ProjectOptimizer
 		static ProjectAuditorSupplementAnalyzer()
 		{
 			// --- Auditor project/settings findings not already represented by Project Optimizer ----
-			Rules.Register(id: "PAS0035", title: "Enter Fast Play Mode is not enabled", category: AssetCategory.ProjectSetting,
+			Rules.Register(id: "PAS019", title: "Enter Fast Play Mode is not enabled", category: AssetCategory.ProjectSetting,
 							why: "Without Enter Fast Play Mode, entering Play Mode performs the normal managed-domain reload. This reconstructs managed state and can increase editor iteration time on large projects.",
 							fix: "Enable Enter Play Mode Options in Editor Settings. Treat disabling domain reload as a separate, deliberate workflow change and validate static state/reset code before relying on it.",
 							severity: IssueSeverity.Info,
@@ -43,7 +43,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: true
 							);
 
-			Rules.Register(id: "PAS0005", title: "iOS has both Metal and OpenGLES graphics APIs", category: AssetCategory.ProjectSetting,
+			Rules.Register(id: "PAS003", title: "iOS has both Metal and OpenGLES graphics APIs", category: AssetCategory.ProjectSetting,
 							why: "Keeping multiple graphics APIs enabled can increase build/runtime surface area and shader/compatibility testing. Modern iOS targets normally use Metal.",
 							fix: "Remove OpenGLES when your supported iOS devices are fully covered by Metal. Keep it only when you have a demonstrated compatibility requirement.",
 							severity: IssueSeverity.Warning,
@@ -53,7 +53,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "PAS0006", title: "iOS Metal graphics API is not enabled", category: AssetCategory.ProjectSetting,
+			Rules.Register(id: "PAS004", title: "iOS Metal graphics API is not enabled", category: AssetCategory.ProjectSetting,
 							why: "Metal is the primary modern graphics API for iOS. Omitting it may leave an avoidable compatibility/performance limitation, but graphics API selection remains a target-compatibility decision.",
 							fix: "Enable Metal for iOS after confirming that every supported device and native/plugin dependency is covered. Review the API list rather than blindly replacing it.",
 							severity: IssueSeverity.Warning,
@@ -63,7 +63,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: true
 							);
 
-			Rules.Register(id: "PAS0029", title: "Player splash screen is enabled", category: AssetCategory.ProjectSetting,
+			Rules.Register(id: "PAS017", title: "Player splash screen is enabled", category: AssetCategory.ProjectSetting,
 							why: "A splash screen is a deliberate product choice, but an enabled Unity splash can add startup presentation time and is unnecessary when the project already uses its own branded loading flow and the target license/settings allow disabling it.",
 							fix: "Review the Unity splash setting and disable it only when the project and target-license rules permit it.",
 							severity: IssueSeverity.Info,
@@ -73,7 +73,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "PAS0033", title: "Global audio speaker mode is not Mono", category: AssetCategory.ProjectSetting,
+			Rules.Register(id: "PAS018", title: "Global audio speaker mode is not Mono", category: AssetCategory.ProjectSetting,
 							why: "A stereo-wide global speaker mode increases output work where the product is intentionally mono, such as some voice-only/mobile experiences. This is a product-audio choice rather than a universal optimization.",
 							fix: "Use Mono only when the game is genuinely designed for mono output. Otherwise keep the current mode.",
 							severity: IssueSeverity.Info,
@@ -83,7 +83,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "PAS1004", title: "IL2CPP compiler configuration is Master", category: AssetCategory.ProjectSetting,
+			Rules.Register(id: "PAS022", title: "IL2CPP compiler configuration is Master", category: AssetCategory.ProjectSetting,
 							why: "Master enables additional native-code optimization beyond the normal Release configuration, trading substantially more build time for a shipping-oriented build.",
 							fix: "Use Master for final shipping builds when its extra build time is acceptable; use Release for normal development and CI iteration.",
 							severity: IssueSeverity.Info,
@@ -93,7 +93,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "PAS0022", title: "Built-in Graphics Tier shader quality is inconsistent", category: AssetCategory.ProjectSetting,
+			Rules.Register(id: "PAS012", title: "Built-in Graphics Tier shader quality is inconsistent", category: AssetCategory.ProjectSetting,
 							why: "Different Standard Shader Quality values across Graphics Tiers can produce more shader variants and therefore increase shader compilation work and build size.",
 							fix: "Use a consistent Standard Shader Quality where the target platform does not genuinely require tier-specific variants.",
 							severity: IssueSeverity.Warning,
@@ -103,7 +103,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "PAS0023", title: "Built-in rendering uses Forward rendering", category: AssetCategory.ProjectSetting,
+			Rules.Register(id: "PAS013", title: "Built-in rendering uses Forward rendering", category: AssetCategory.ProjectSetting,
 							why: "Forward rendering can be appropriate for simple lighting, but scenes with many dynamic lights may spend substantial GPU time on repeated lighting work.",
 							fix: "Profile Forward versus Deferred for the actual project. Keep Forward for 2D/simple/baked-light workloads when it wins.",
 							severity: IssueSeverity.Info,
@@ -113,7 +113,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "PAS0024", title: "Built-in rendering uses Deferred rendering", category: AssetCategory.ProjectSetting,
+			Rules.Register(id: "PAS014", title: "Built-in rendering uses Deferred rendering", category: AssetCategory.ProjectSetting,
 							why: "Deferred rendering can be advantageous with many dynamic lights, but simple scenes can pay extra bandwidth and g-buffer costs for little benefit.",
 							fix: "Profile Deferred versus Forward for the actual project rather than changing the path as a blanket optimization.",
 							severity: IssueSeverity.Info,
@@ -123,7 +123,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "PAS1000", title: "Static batching is enabled with Entities Graphics", category: AssetCategory.ProjectSetting,
+			Rules.Register(id: "PAS020", title: "Static batching is enabled with Entities Graphics", category: AssetCategory.ProjectSetting,
 							why: "Unity Entities Graphics/Hybrid Renderer has its own batching path. Keeping classic static batching enabled can add memory/build data and work against a DOTS rendering strategy.",
 							fix: "When the project genuinely uses Entities Graphics, profile with classic static batching disabled and keep only the batching systems that measurably help.",
 							severity: IssueSeverity.Warning,
@@ -133,7 +133,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "PAS1003", title: "Built-in fog variants are not fully stripped", category: AssetCategory.ProjectSetting,
+			Rules.Register(id: "PAS021", title: "Built-in fog variants are not fully stripped", category: AssetCategory.ProjectSetting,
 							why: "Fog keyword variants that the project never uses can increase shader variant counts, compilation time and player build size.",
 							fix: "Use the Graphics settings fog-stripping configuration to keep only the fog modes the project actually renders.",
 							severity: IssueSeverity.Info,
@@ -143,7 +143,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "PAS0015", title: "Physics 2D layer collision matrix is fully enabled", category: AssetCategory.ProjectSetting,
+			Rules.Register(id: "PAS005", title: "Physics 2D layer collision matrix is fully enabled", category: AssetCategory.ProjectSetting,
 							why: "A fully enabled 2D collision matrix makes Physics2D consider layer pairs that may never interact. Pruning impossible pairs reduces broadphase/contact work.",
 							fix: "Disable only the layer pairs the gameplay design proves can never collide.",
 							severity: IssueSeverity.Info,
@@ -153,7 +153,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "PAS0018", title: "Quality Settings are using Unity's default quality levels", category: AssetCategory.ProjectSetting,
+			Rules.Register(id: "PAS008", title: "Quality Settings are using Unity's default quality levels", category: AssetCategory.ProjectSetting,
 							why: "Leaving the default quality-level set untouched often means the project is shipping generic tiers instead of deliberate platform budgets. The result can be unnecessary quality work on lower-end devices.",
 							fix: "Define intentional quality levels for the supported hardware classes and remove settings that are not relevant to the product.",
 							severity: IssueSeverity.Info,
@@ -163,7 +163,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "PAS0019", title: "A quality level reduces texture resolution globally", category: AssetCategory.ProjectSetting,
+			Rules.Register(id: "PAS009", title: "A quality level reduces texture resolution globally", category: AssetCategory.ProjectSetting,
 							why: "A global mip/texture limit can save memory and bandwidth on lower-quality tiers, but it also changes image quality throughout the project.",
 							fix: "Keep reduced texture quality on low-end tiers when it is part of the product's quality strategy.",
 							severity: IssueSeverity.Info,
@@ -173,7 +173,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "PAS0020", title: "Async upload time slice uses Unity's default", category: AssetCategory.ProjectSetting,
+			Rules.Register(id: "PAS010", title: "Async upload time slice uses Unity's default", category: AssetCategory.ProjectSetting,
 							why: "Texture/mesh upload work is budgeted through the async upload time slice. The default is not automatically ideal for every project's loading and frame-time profile.",
 							fix: "Tune the async upload time slice against loading spikes and background streaming on the target hardware.",
 							severity: IssueSeverity.Info,
@@ -183,7 +183,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "PAS0021", title: "Async upload buffer size uses Unity's default", category: AssetCategory.ProjectSetting,
+			Rules.Register(id: "PAS011", title: "Async upload buffer size uses Unity's default", category: AssetCategory.ProjectSetting,
 							why: "The async upload buffer controls how much data Unity can stage for background uploads. A deliberately sized buffer can change streaming smoothness and memory usage.",
 							fix: "Tune the upload buffer using measured streaming/load behavior rather than assuming the default is optimal.",
 							severity: IssueSeverity.Info,
@@ -193,7 +193,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "PAS0003", title: "iOS architecture includes Universal/extra architectures", category: AssetCategory.ProjectSetting,
+			Rules.Register(id: "PAS001", title: "iOS architecture includes Universal/extra architectures", category: AssetCategory.ProjectSetting,
 							why: "Shipping extra CPU architectures increases binary size and may duplicate native code in the player.",
 							fix: "Ship only the iOS architecture(s) required by the project's deployment matrix. ARM64 is the normal modern baseline.",
 							severity: IssueSeverity.Warning,
@@ -203,7 +203,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "PAS0004", title: "Android architecture includes both ARMv7 and ARM64", category: AssetCategory.ProjectSetting,
+			Rules.Register(id: "PAS002", title: "Android architecture includes both ARMv7 and ARM64", category: AssetCategory.ProjectSetting,
 							why: "Including multiple Android CPU architectures can increase APK/AAB native-code size and build output when every device does not need every ABI.",
 							fix: "Prefer ARM64-only for a modern deployment unless a supported device tier genuinely requires ARMv7.",
 							severity: IssueSeverity.Info,
@@ -213,7 +213,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "PAS0016", title: "Fixed Timestep is Unity's default 0.02 seconds", category: AssetCategory.ProjectSetting,
+			Rules.Register(id: "PAS006", title: "Fixed Timestep is Unity's default 0.02 seconds", category: AssetCategory.ProjectSetting,
 							why: "A 0.02 second fixed timestep requests up to 50 physics steps per second. That is reasonable for a 60 FPS simulation, but at a 30 FPS target it can cause catch-up work across frames.",
 							fix: "Tune Fixed Timestep to the game's actual simulation frequency. Do not change it merely because the Auditor rule fires.",
 							severity: IssueSeverity.Info,
@@ -223,7 +223,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "PAS0017", title: "Maximum Allowed Timestep is Unity's default 0.1 seconds", category: AssetCategory.ProjectSetting,
+			Rules.Register(id: "PAS007", title: "Maximum Allowed Timestep is Unity's default 0.1 seconds", category: AssetCategory.ProjectSetting,
 							why: "A large maximum fixed-step catch-up window can let one bad frame trigger substantial subsequent physics work, making a frame-time spike self-reinforcing.",
 							fix: "Choose a maximum that fits the target frame budget and simulation design, then validate physics behavior under stalls.",
 							severity: IssueSeverity.Info,
@@ -233,7 +233,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "PAA3001", title: "Resources asset pulls dependencies into the Resources build data", category: AssetCategory.ProjectSetting,
+			Rules.Register(id: "PAA004", title: "Resources asset pulls dependencies into the Resources build data", category: AssetCategory.ProjectSetting,
 							why: "An asset in Resources is runtime-loadable, but its dependency tree can also be pulled into the Resources build data. One small Resources asset can therefore retain a much larger graph than its own file suggests.",
 							fix: "Move large or rarely loaded Resources content to explicit references/Addressables where practical, and verify runtime loading paths before changing it.",
 							severity: IssueSeverity.Info,
@@ -243,7 +243,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "PAA3002", title: "StreamingAssets folder is large", category: AssetCategory.ProjectSetting,
+			Rules.Register(id: "PAA005", title: "StreamingAssets folder is large", category: AssetCategory.ProjectSetting,
 							why: "Everything in StreamingAssets is carried as opaque file content for runtime access. Large payloads increase the shipped footprint even when Unity cannot optimize the data like a normal imported asset.",
 							fix: "Keep only runtime-required opaque files in StreamingAssets and move ordinary Unity-imported content into normal asset pipelines where possible.",
 							severity: IssueSeverity.Warning,
@@ -253,7 +253,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "PAP0001", title: "Package is not on Unity's recommended version", category: AssetCategory.Package,
+			Rules.Register(id: "PAP001", title: "Package is not on Unity's recommended version", category: AssetCategory.Package,
 							why: "Unity exposes a recommended package version for supported packages. Remaining on an older supported version can leave fixes and improvements unapplied.",
 							fix: "Review the package in Package Manager and update to Unity's recommended version when the project's dependency graph and required features allow it.",
 							severity: IssueSeverity.Info,
@@ -263,7 +263,7 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "PAP0002", title: "Experimental/Preview package is installed", category: AssetCategory.Package,
+			Rules.Register(id: "PAP002", title: "Experimental/Preview package is installed", category: AssetCategory.Package,
 							why: "Preview and experimental packages can change behavior or compatibility between Unity/package revisions and are not generally production-stable dependencies.",
 							fix: "Remove preview packages that are not required for the product, or pin/upgrade them deliberately with CI validation.",
 							severity: IssueSeverity.Info,
@@ -451,10 +451,10 @@ namespace ApexForge.ProjectOptimizer
 			entry.Set("enterPlayModeOptions", EditorSettings.enterPlayModeOptionsEnabled ? "On" : "Off");
 			entry.Set("reloadDomain", (EditorSettings.enterPlayModeOptions & EnterPlayModeOptions.DisableDomainReload) != EnterPlayModeOptions.DisableDomainReload ? "On" : "Off");
 
-			using (RuleTiming.Begin("PAS0035", entry.Path))
+			using (RuleTiming.Begin("PAS019", entry.Path))
 				if (!EditorSettings.enterPlayModeOptionsEnabled ||
 					(EditorSettings.enterPlayModeOptions & EnterPlayModeOptions.DisableDomainReload) == 0)
-					entry.AddIssue("PAS0035",
+					entry.AddIssue("PAS019",
 						EditorSettings.enterPlayModeOptionsEnabled
 							? "Reload Domain: On"
 							: "Enter Play Mode Options: Off",
@@ -488,9 +488,9 @@ namespace ApexForge.ProjectOptimizer
 				bool hasGles = apis.Contains(GraphicsDeviceType.OpenGLES2) || apis.Contains(GraphicsDeviceType.OpenGLES3);
 #pragma warning restore CS0618
 
-				using (RuleTiming.Begin("PAS0005", entry.Path))
+				using (RuleTiming.Begin("PAS003", entry.Path))
 					if (hasMetal && hasGles)
-						entry.AddIssue("PAS0005", "Metal + OpenGLES", "Metal only unless a compatibility target requires both",
+						entry.AddIssue("PAS003", "Metal + OpenGLES", "Metal only unless a compatibility target requires both",
 						options: new List<FixOption> { new FixOption {
 							Label = "Use Metal Only",
 							Recommended = true,
@@ -500,9 +500,9 @@ namespace ApexForge.ProjectOptimizer
 							Verify = _ => { var current = PlayerSettings.GetGraphicsAPIs(BuildTarget.iOS) ?? Array.Empty<GraphicsDeviceType>(); return current.Length == 1 && current[0] == GraphicsDeviceType.Metal; }
 						} }
 					);
-				using (RuleTiming.Begin("PAS0006", entry.Path))
+				using (RuleTiming.Begin("PAS004", entry.Path))
 					if (!hasMetal)
-						entry.AddIssue("PAS0006", "Metal not enabled", "Enable Metal", 0,
+						entry.AddIssue("PAS004", "Metal not enabled", "Enable Metal", 0,
 						c =>
 						{
 							var current = PlayerSettings.GetGraphicsAPIs(target) ?? Array.Empty<GraphicsDeviceType>();
@@ -527,9 +527,9 @@ namespace ApexForge.ProjectOptimizer
 			entry.Set("accelerometer", settings.Profile.IsMobileClass ? PlayerSettings.accelerometerFrequency.ToString() : "N/A");
 			entry.Set("speakerMode", SafeSpeakerMode());
 
-			using (RuleTiming.Begin("PAS0029", entry.Path))
+			using (RuleTiming.Begin("PAS017", entry.Path))
 				if (PlayerSettings.SplashScreen.show)
-					entry.AddIssue("PAS0029", "Unity splash: On", "Review whether the project needs the Unity splash",
+					entry.AddIssue("PAS017", "Unity splash: On", "Review whether the project needs the Unity splash",
 						options: new List<FixOption> { new FixOption {
 							Label = "Disable Splash Screen",
 							Recommended = true,
@@ -544,9 +544,9 @@ namespace ApexForge.ProjectOptimizer
 				&& PlayerSettings.accelerometerFrequency > 0)
 				entry.Set("accelerometer", PlayerSettings.accelerometerFrequency.ToString());
 
-			using (RuleTiming.Begin("PAS0033", entry.Path))
+			using (RuleTiming.Begin("PAS018", entry.Path))
 				if (settings.Profile.IsMobileClass && AudioSettings.GetConfiguration().speakerMode != AudioSpeakerMode.Mono)
-					entry.AddIssue("PAS0033", SafeSpeakerMode(), "Mono only when product audio is designed for it",
+					entry.AddIssue("PAS018", SafeSpeakerMode(), "Mono only when product audio is designed for it",
 						options: new List<FixOption> { new FixOption {
 							Label = "Use Mono Speaker Mode",
 							Recommended = true,
@@ -558,13 +558,13 @@ namespace ApexForge.ProjectOptimizer
 
 			var namedTarget = PlatformUtility.ToNamedBuildTarget(settings.targetPlatform);
 			var backend = PlayerSettings.GetScriptingBackend(namedTarget);
-			using (RuleTiming.Begin("PAS1004", entry.Path))
+			using (RuleTiming.Begin("PAS022", entry.Path))
 				if (backend == ScriptingImplementation.IL2CPP)
 				{
 					var config = GetIl2CppConfiguration(namedTarget);
 					entry.Set("il2cppConfiguration", config ?? "Unavailable");
 					if (string.Equals(config, "Master", StringComparison.OrdinalIgnoreCase))
-						entry.AddIssue("PAS1004", "Master", "Master for shipping / Release for normal builds");
+						entry.AddIssue("PAS022", "Master", "Master for shipping / Release for normal builds");
 				}
 
 			entry.Finalise();
@@ -607,15 +607,15 @@ namespace ApexForge.ProjectOptimizer
 				var paths = tiers.Select(t => EditorGraphicsSettings.GetTierSettings(group, t).renderingPath).ToArray();
 				entry.Set("shaderQuality", string.Join(" / ", quality.Select(q => q.ToString()).ToArray()));
 				entry.Set("renderingPaths", string.Join(" / ", paths.Select(p => p.ToString()).ToArray()));
-				using (RuleTiming.Begin("PAS0022", entry.Path))
+				using (RuleTiming.Begin("PAS012", entry.Path))
 					if (quality.Distinct().Count() > 1)
-						entry.AddIssue("PAS0022", "Mixed tier shader quality", "Prefer one quality unless tiering is intentional");
-				using (RuleTiming.Begin("PAS0023", entry.Path))
+						entry.AddIssue("PAS012", "Mixed tier shader quality", "Prefer one quality unless tiering is intentional");
+				using (RuleTiming.Begin("PAS013", entry.Path))
 					if (paths.Contains(RenderingPath.Forward))
-						entry.AddIssue("PAS0023", "Forward", "Profile against Deferred for dynamic-light workloads");
-				using (RuleTiming.Begin("PAS0024", entry.Path))
+						entry.AddIssue("PAS013", "Forward", "Profile against Deferred for dynamic-light workloads");
+				using (RuleTiming.Begin("PAS014", entry.Path))
 					if (paths.Contains(RenderingPath.DeferredShading))
-						entry.AddIssue("PAS0024", "Deferred", "Profile against Forward for simple workloads");
+						entry.AddIssue("PAS014", "Deferred", "Profile against Forward for simple workloads");
 			}
 			catch (Exception e)
 			{
@@ -631,7 +631,7 @@ namespace ApexForge.ProjectOptimizer
 			var entry = NewEntry("ProjectSettings/PhysicsManager.asset", "Entities / Batching Compatibility", "Project/Rendering");
 			bool entitiesGraphics = HasPackage("com.unity.entities.graphics");
 			entry.Set("entitiesGraphicsDetected", entitiesGraphics ? "Yes" : "No");
-			using (RuleTiming.Begin("PAS1000", entry.Path))
+			using (RuleTiming.Begin("PAS020", entry.Path))
 				if (entitiesGraphics)
 				{
 					bool enabled = false;
@@ -639,7 +639,7 @@ namespace ApexForge.ProjectOptimizer
 					catch { }
 					entry.Set("staticBatching", enabled ? "On" : "Off");
 					if (enabled)
-						entry.AddIssue("PAS1000", "Static batching: On", "Profile with classic static batching Off",
+						entry.AddIssue("PAS020", "Static batching: On", "Profile with classic static batching Off",
 						options: new List<FixOption> { new FixOption {
 							Label = "Disable Static Batching",
 							Recommended = true,
@@ -665,7 +665,7 @@ namespace ApexForge.ProjectOptimizer
 			}
 			try
 			{
-				using (RuleTiming.Begin("PAS1003", entry.Path))
+				using (RuleTiming.Begin("PAS021", entry.Path))
 				{
 					var graphics = GraphicsSettings.GetGraphicsSettings();
 					var so = new SerializedObject(graphics);
@@ -684,7 +684,7 @@ namespace ApexForge.ProjectOptimizer
 							anyKept |= kept;
 						}
 						if (strip.enumValueIndex != 0 && anyKept)
-							entry.AddIssue("PAS1003", "Unused fog modes are retained", "Strip fog modes the project never uses");
+							entry.AddIssue("PAS021", "Unused fog modes are retained", "Strip fog modes the project never uses");
 					}
 				}
 			}
@@ -714,9 +714,9 @@ namespace ApexForge.ProjectOptimizer
 			}
 			entry.Set("namedLayers", (long)named);
 			entry.Set("ignoredPairs", (long)ignored);
-			using (RuleTiming.Begin("PAS0015", entry.Path))
+			using (RuleTiming.Begin("PAS005", entry.Path))
 				if (named >= 4 && ignored == 0)
-					entry.AddIssue("PAS0015", "No 2D layer pairs ignored", "Prune pairs that cannot collide");
+					entry.AddIssue("PAS005", "No 2D layer pairs ignored", "Prune pairs that cannot collide");
 
 			entry.Set("simulationMode", Physics2D.simulationMode.ToString());
 
@@ -764,7 +764,7 @@ namespace ApexForge.ProjectOptimizer
 				entry.RuntimeSize = UnityEditorUtility.RuntimeSizeOf(texture);
 				entry.Set("dimensions", texture.width + "x" + texture.height);
 				entry.Set("solidColor", "RGBA(" + first.r + ", " + first.g + ", " + first.b + ", " + first.a + ")");
-				entry.AddIssue("PAA0005", texture.width + "x" + texture.height + " solid-color texture", "Review replacing with 1x1 texture or material/property value");
+				entry.AddIssue("PAA001", texture.width + "x" + texture.height + " solid-color texture", "Review replacing with 1x1 texture or material/property value");
 				entry.Finalise();
 				yield return entry;
 			}
@@ -848,15 +848,15 @@ namespace ApexForge.ProjectOptimizer
 			entry.Set("asyncUploadDefaultTimeSliceLevels", defaultTimeSlice.Count > 0 ? string.Join(", ", defaultTimeSlice) : "None");
 			entry.Set("asyncUploadDefaultBufferLevels", defaultBuffer.Count > 0 ? string.Join(", ", defaultBuffer) : "None");
 
-			using (RuleTiming.Begin("PAS0018", entry.Path))
+			using (RuleTiming.Begin("PAS008", entry.Path))
 				if (allDefaultNames && levels.Count == 6)
-					entry.AddIssue("PAS0018", "Unity default quality level names", "Define deliberate platform quality tiers");
-			using (RuleTiming.Begin("PAS0019", entry.Path))
+					entry.AddIssue("PAS008", "Unity default quality level names", "Define deliberate platform quality tiers");
+			using (RuleTiming.Begin("PAS009", entry.Path))
 				if (reduced.Count > 0)
-					entry.AddIssue("PAS0019", reduced.Count + " target quality level(s) reduce global texture resolution", "Keep only where intentional");
-			using (RuleTiming.Begin("PAS0020", entry.Path))
+					entry.AddIssue("PAS009", reduced.Count + " target quality level(s) reduce global texture resolution", "Keep only where intentional");
+			using (RuleTiming.Begin("PAS010", entry.Path))
 				if (defaultTimeSlice.Count > 0)
-					entry.AddIssue("PAS0020", defaultTimeSlice.Count + " target quality level(s) use the 2 ms default time slice", "Tune against streaming/frame-time measurements",
+					entry.AddIssue("PAS010", defaultTimeSlice.Count + " target quality level(s) use the 2 ms default time slice", "Tune against streaming/frame-time measurements",
 						options: new List<FixOption> { new FixOption {
 							Label = "Increase Async Upload Time Slice",
 							Recommended = true,
@@ -866,9 +866,9 @@ namespace ApexForge.ProjectOptimizer
 							Verify = _ => QualitySettings.asyncUploadTimeSlice >= 4
 						} }
 					);
-			using (RuleTiming.Begin("PAS0021", entry.Path))
+			using (RuleTiming.Begin("PAS011", entry.Path))
 				if (defaultBuffer.Count > 0)
-					entry.AddIssue("PAS0021", defaultBuffer.Count + " target quality level(s) use a default async upload buffer", "Tune against loading/streaming measurements",
+					entry.AddIssue("PAS011", defaultBuffer.Count + " target quality level(s) use a default async upload buffer", "Tune against loading/streaming measurements",
 						options: new List<FixOption> { new FixOption {
 							Label = "Increase Async Upload Buffer",
 							Recommended = true,
@@ -886,13 +886,13 @@ namespace ApexForge.ProjectOptimizer
 		AssetEntry AnalyzeArchitecture(OptimizerSettings settings)
 		{
 			var entry = NewEntry("ProjectSettings/ProjectSettings.asset", "Native Architecture", "Project/Player");
-			using (RuleTiming.Begin("PAS0003", entry.Path))
+			using (RuleTiming.Begin("PAS001", entry.Path))
 				if (settings.targetPlatform == OptimizerPlatform.iOS)
 				{
 					int architecture = GetArchitecture(BuildTargetGroup.iOS);
 					entry.Set("architecture", architecture.ToString());
 					if (architecture == 2)
-						entry.AddIssue("PAS0003", "Universal", "ARM64-only unless another architecture is required",
+						entry.AddIssue("PAS001", "Universal", "ARM64-only unless another architecture is required",
 						options: new List<FixOption> { new FixOption {
 							Label = "Use ARM64 Only",
 							Recommended = true,
@@ -902,13 +902,13 @@ namespace ApexForge.ProjectOptimizer
 						} }
 					);
 				}
-				else using (RuleTiming.Begin("PAS0004", entry.Path))
+				else using (RuleTiming.Begin("PAS002", entry.Path))
 					if (settings.targetPlatform == OptimizerPlatform.Android || settings.targetPlatform == OptimizerPlatform.StandaloneVR)
 					{
 						var arch = PlayerSettings.Android.targetArchitectures;
 						entry.Set("architecture", arch.ToString());
 						if ((arch & AndroidArchitecture.ARMv7) != 0 && (arch & AndroidArchitecture.ARM64) != 0)
-							entry.AddIssue("PAS0004", "ARMv7 + ARM64", "ARM64-only for modern device matrices",
+							entry.AddIssue("PAS002", "ARMv7 + ARM64", "ARM64-only for modern device matrices",
 						options: new List<FixOption> { new FixOption {
 							Label = "Use ARM64 Only",
 							Recommended = true,
@@ -931,9 +931,9 @@ namespace ApexForge.ProjectOptimizer
 			var entry = NewEntry("ProjectSettings/TimeManager.asset", "Time Settings", "Project/Time");
 			entry.Set("fixedTimestep", (double)Time.fixedDeltaTime);
 			entry.Set("maximumTimestep", (double)Time.maximumDeltaTime);
-			using (RuleTiming.Begin("PAS0016", entry.Path))
+			using (RuleTiming.Begin("PAS006", entry.Path))
 				if (Mathf.Approximately(Time.fixedDeltaTime, 0.02f))
-					entry.AddIssue("PAS0016", Time.fixedDeltaTime.ToString("0.###"), "Tune to the simulation/target-FPS strategy",
+					entry.AddIssue("PAS006", Time.fixedDeltaTime.ToString("0.###"), "Tune to the simulation/target-FPS strategy",
 						options: new List<FixOption> { new FixOption {
 							Label = "Use 0.02s Fixed Timestep",
 							Recommended = true,
@@ -942,9 +942,9 @@ namespace ApexForge.ProjectOptimizer
 							Apply = c => ImporterFixUtility.Project(c, () => Time.fixedDeltaTime = 0.02f)
 						} }
 					);
-			using (RuleTiming.Begin("PAS0017", entry.Path))
+			using (RuleTiming.Begin("PAS007", entry.Path))
 				if (Mathf.Approximately(Time.maximumDeltaTime, 0.1f))
-					entry.AddIssue("PAS0017", Time.maximumDeltaTime.ToString("0.###"), "Tune to the target frame budget",
+					entry.AddIssue("PAS007", Time.maximumDeltaTime.ToString("0.###"), "Tune to the target frame budget",
 						options: new List<FixOption> { new FixOption {
 							Label = "Use 0.10s Maximum Timestep",
 							Recommended = true,
@@ -987,13 +987,13 @@ namespace ApexForge.ProjectOptimizer
 			entry.Set("externalDependencyEdges", (long)dependencyHits);
 			entry.Set("uniqueExternalDependencies", (long)uniqueDependencies.Count);
 			entry.Set("uniqueExternalDependencySourceBytes", dependencyBytes);
-			using (RuleTiming.Begin("PAA3001", entry.Path))
+			using (RuleTiming.Begin("PAA004", entry.Path))
 				if (dependencyHits > 0)
 				{
 					// A single aggregate issue is intentionally used here. The existing UNU002 already
 					// reports which Resources assets are present; this pass adds the missing dependency
 					// footprint without generating thousands of duplicate rows on large projects.
-					var issue = entry.AddIssue("PAA3001", dependencyHits + " external dependency edge(s)",
+					var issue = entry.AddIssue("PAA004", dependencyHits + " external dependency edge(s)",
 						"Keep only intentional Resources dependency graphs");
 					issue?.Note("Estimated unique source size across those dependency assets: " + DisplayUtility.FormatBytes(dependencyBytes), "Footprint");
 				}
@@ -1021,9 +1021,9 @@ namespace ApexForge.ProjectOptimizer
 			var entry = NewEntry(folder, "StreamingAssets", "Project/Assets");
 			entry.Set("files", (long)files);
 			entry.Set("size", size);
-			using (RuleTiming.Begin("PAA3002", entry.Path))
+			using (RuleTiming.Begin("PAA005", entry.Path))
 				if (size >= (long)ctx.Settings.streamingAssetsWarnMb * k_Mb)
-					entry.AddIssue("PAA3002", DisplayUtility.FormatBytes(size), "Keep opaque StreamingAssets content intentionally small");
+					entry.AddIssue("PAA005", DisplayUtility.FormatBytes(size), "Keep opaque StreamingAssets content intentionally small");
 			entry.Finalise();
 			return entry;
 		}
@@ -1060,17 +1060,17 @@ namespace ApexForge.ProjectOptimizer
 					entry.Set("recommended", string.IsNullOrEmpty(recommended) ? "-" : recommended);
 					entry.Set("status", IsPreviewVersion(package.version) ? "Preview" : "Registered");
 
-					using (RuleTiming.Begin("PAP0002", entry.Path))
+					using (RuleTiming.Begin("PAP002", entry.Path))
 						if (IsPreviewVersion(package.version))
 						{
-							entry.AddIssue("PAP0002", package.version, "Stable release when one is available");
+							entry.AddIssue("PAP002", package.version, "Stable release when one is available");
 						}
-						else using (RuleTiming.Begin("PAP0001", entry.Path))
+						else using (RuleTiming.Begin("PAP001", entry.Path))
 							if (package.source == PackageSource.Registry
 									&& !string.IsNullOrEmpty(recommended)
 									&& !string.Equals(package.version, recommended, StringComparison.OrdinalIgnoreCase))
 							{
-								entry.AddIssue("PAP0001", package.version, "Recommended " + recommended);
+								entry.AddIssue("PAP001", package.version, "Recommended " + recommended);
 							}
 
 					entry.Finalise();
@@ -1098,7 +1098,7 @@ namespace ApexForge.ProjectOptimizer
 				entry.Set("recommended", "-");
 				entry.Set("status", IsPreviewVersion(package.Version) ? "Preview" : "Registered");
 				if (IsPreviewVersion(package.Version))
-					entry.AddIssue("PAP0002", package.Version, "Stable release when one is available");
+					entry.AddIssue("PAP002", package.Version, "Stable release when one is available");
 				entry.Finalise();
 				yield return entry;
 			}

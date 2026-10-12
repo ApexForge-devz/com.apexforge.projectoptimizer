@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Reflection;
 using UnityEditor;
 
 namespace ApexForge.ProjectOptimizer
@@ -24,9 +26,10 @@ namespace ApexForge.ProjectOptimizer
                 fix: "Use static/pre-populated assets only when the required glyph set is known and fixed; retain dynamic population for required runtime-generated or localized text.",
                 severity: IssueSeverity.Info, fixKind: FixKind.None, confidence: OptimizationConfidence.HighConfidence);
             Rules.Register(id: "TMP003", title: "TMP fallback chain is long", category: AssetCategory.Font,
-                why: FontAnalysisPolicy.FallbackChainExplanation,
-                fix: "Review the fallback chain and remove redundant fallbacks only when multilingual/localized glyph coverage remains complete.",
-                severity: IssueSeverity.Info, fixKind: FixKind.None, confidence: OptimizationConfidence.HighConfidence);
+                why: FontAnalysisPolicy.FallbackChainExplanation + " Verified automation removes only null slots, repeated references, or static fallbacks whose complete known glyph set is already covered by earlier entries.",
+                fix: "Automatically remove only proven redundant TMP fallback references; retain non-redundant or incompletely understood entries.",
+                severity: IssueSeverity.Info, fixKind: FixKind.Verified, confidence: OptimizationConfidence.HighConfidence,
+                risk: FixRisk.High, backupRequired: true);
             Rules.Register(id: "TMP004", title: "TMP font uses multiple atlas textures", category: AssetCategory.Font,
                 why: FontAnalysisPolicy.MultipleAtlasPagesExplanation,
                 fix: "Review glyph coverage, atlas size and multi-atlas settings. Keep additional pages when the project actually needs them.",
@@ -95,8 +98,24 @@ namespace ApexForge.ProjectOptimizer
                 int fallbackBudget = FontAnalysisPolicy.FallbackCountBudget(ctx.Settings);
                 using (RuleTiming.Begin("TMP003", entry.Path))
                     if (fallbackCount > fallbackBudget)
-                        entry.AddIssue("TMP003", fallbackCount + " fallback assets", "Review for redundant fallbacks", 0, null,
-                            FontAnalysisPolicy.FallbackChainExplanation + " Current project threshold: " + fallbackBudget + " fallback assets.");
+                    {
+                        var fontAsset = AssetDatabase.LoadMainAssetAtPath(assetPath);
+                        var redundantIndices = FindRedundantFallbackIndices(fontAsset, "m_FallbackFontAssetTable");
+                        var issue = entry.AddIssue("TMP003", fallbackCount + " fallback assets", "Remove only proven redundant TMP fallback references", 0,
+                            c => RemoveRedundantFallbacks(c, "m_FallbackFontAssetTable"),
+                            FontAnalysisPolicy.FallbackChainExplanation + " Current project threshold: " + fallbackBudget + " fallback assets. Only exact duplicates/nulls or glyph-subset entries proven against static TMP character tables can be removed.",
+                            SavingsBasis.Unknown,
+                            c => VerifyNoRedundantFallbacks(c.AssetPath, "m_FallbackFontAssetTable"));
+                        if (issue != null && redundantIndices.Count == 0)
+                        {
+                            issue.FixKind = FixKind.None;
+                            issue.Fix = null;
+                            issue.Verify = null;
+                            issue.Recommended = "No automatic change: no null, duplicate, or provably glyph-shadowed TMP fallback reference was found.";
+                        }
+                        else if (issue != null)
+                            issue.Items("Safe redundant fallback indices", FormatIndices(redundantIndices), DetailKind.Good);
+                    }
 
                 using (RuleTiming.Begin("TMP004", entry.Path))
                     if (multiAtlas || atlasCount > 1)
@@ -154,6 +173,127 @@ namespace ApexForge.ProjectOptimizer
         static int ReadArraySize(SerializedObject so, params string[] paths)
         {
             var p = Find(so, paths); return p != null && p.isArray ? p.arraySize : -1;
+        }
+
+        static List<int> FindRedundantFallbackIndices(UnityEngine.Object asset, string fallbackPropertyPath)
+        {
+            var result = new List<int>();
+            if (asset == null) return result;
+            var so = new SerializedObject(asset);
+            var fallback = so.FindProperty(fallbackPropertyPath);
+            if (fallback == null || !fallback.isArray) return result;
+
+            var seen = new HashSet<int>();
+            var covered = new HashSet<uint>();
+            bool canProveGlyphCoverage = IsStaticPopulation(asset) && TryCollectKnownGlyphs(asset, out covered);
+            for (int i = 0; i < fallback.arraySize; i++)
+            {
+                var element = fallback.GetArrayElementAtIndex(i);
+                if (element.propertyType != SerializedPropertyType.ObjectReference) { canProveGlyphCoverage = false; continue; }
+                var candidate = element.objectReferenceValue;
+                if (candidate == null) { result.Add(i); continue; }
+                if (!seen.Add(candidate.GetInstanceID())) { result.Add(i); continue; }
+
+                if (canProveGlyphCoverage && IsStaticPopulation(candidate) && TryCollectKnownGlyphs(candidate, out var candidateGlyphs))
+                {
+                    if (IsSubset(candidateGlyphs, covered)) result.Add(i);
+                    else covered.UnionWith(candidateGlyphs);
+                }
+                else canProveGlyphCoverage = false;
+            }
+            return result;
+        }
+
+        static bool IsStaticPopulation(UnityEngine.Object asset)
+        {
+            if (asset == null) return false;
+            try
+            {
+                object mode = ReadMember(asset, "atlasPopulationMode", "m_AtlasPopulationMode");
+                if (mode != null) return string.Equals(mode.ToString(), "Static", StringComparison.OrdinalIgnoreCase);
+                var so = new SerializedObject(asset);
+                var property = Find(so, "m_AtlasPopulationMode", "m_AtlasPopulationModeSettings.populationMode");
+                return property != null && property.propertyType == SerializedPropertyType.Enum
+                    && property.enumValueIndex >= 0 && property.enumValueIndex < property.enumDisplayNames.Length
+                    && string.Equals(property.enumDisplayNames[property.enumValueIndex], "Static", StringComparison.OrdinalIgnoreCase);
+            }
+            catch { return false; }
+        }
+
+        static bool TryCollectKnownGlyphs(UnityEngine.Object asset, out HashSet<uint> glyphs)
+        {
+            glyphs = new HashSet<uint>();
+            if (asset == null) return false;
+            try
+            {
+                object table = ReadMember(asset, "characterTable", "m_CharacterTable");
+                var enumerable = table as System.Collections.IEnumerable;
+                if (enumerable == null) return false;
+                foreach (object character in enumerable)
+                {
+                    object unicode = ReadMember(character, "unicode", "m_Unicode");
+                    if (unicode == null) return false;
+                    glyphs.Add(Convert.ToUInt32(unicode, System.Globalization.CultureInfo.InvariantCulture));
+                }
+                return true;
+            }
+            catch { glyphs.Clear(); return false; }
+        }
+
+        static object ReadMember(object target, string propertyOrField, string fallbackField = null)
+        {
+            if (target == null) return null;
+            var type = target.GetType();
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            var property = type.GetProperty(propertyOrField, flags);
+            if (property != null && property.GetIndexParameters().Length == 0)
+                try { return property.GetValue(target, null); } catch { }
+            var field = type.GetField(propertyOrField, flags) ?? (!string.IsNullOrEmpty(fallbackField) ? type.GetField(fallbackField, flags) : null);
+            if (field != null) try { return field.GetValue(target); } catch { }
+            return null;
+        }
+
+        static bool IsSubset(HashSet<uint> subset, HashSet<uint> superset)
+        {
+            if (subset == null || superset == null) return false;
+            foreach (uint value in subset) if (!superset.Contains(value)) return false;
+            return true;
+        }
+
+        static void RemoveRedundantFallbacks(FixContext context, string fallbackPropertyPath)
+        {
+            context.EnsureWritable();
+            var asset = AssetDatabase.LoadMainAssetAtPath(context.AssetPath);
+            var indices = FindRedundantFallbackIndices(asset, fallbackPropertyPath);
+            if (indices.Count == 0) throw new InvalidOperationException("No safe redundant TMP fallback references remain; the asset changed since analysis.");
+            var so = new SerializedObject(asset);
+            var fallback = so.FindProperty(fallbackPropertyPath);
+            if (fallback == null || !fallback.isArray) throw new InvalidOperationException("TMP fallback array is unavailable or changed since analysis.");
+            int expectedCount = fallback.arraySize;
+            for (int i = indices.Count - 1; i >= 0; i--)
+            {
+                int index = indices[i];
+                if (index < 0 || index >= fallback.arraySize) throw new InvalidOperationException("TMP fallback array indices changed since analysis.");
+                fallback.DeleteArrayElementAtIndex(index);
+                if (fallback.arraySize == expectedCount) fallback.DeleteArrayElementAtIndex(index);
+                expectedCount = fallback.arraySize;
+            }
+            if (!so.ApplyModifiedProperties()) throw new InvalidOperationException("Unity did not apply the TMP fallback-array changes.");
+            EditorUtility.SetDirty(asset);
+            context.NeedsSave = true;
+        }
+
+        static bool VerifyNoRedundantFallbacks(string assetPath, string fallbackPropertyPath)
+        {
+            var asset = AssetDatabase.LoadMainAssetAtPath(assetPath);
+            return asset != null && FindRedundantFallbackIndices(asset, fallbackPropertyPath).Count == 0;
+        }
+
+        static List<string> FormatIndices(List<int> indices)
+        {
+            var result = new List<string>(indices != null ? indices.Count : 0);
+            if (indices != null) for (int i = 0; i < indices.Count; i++) result.Add("Fallback index " + indices[i]);
+            return result;
         }
     }
 }

@@ -81,7 +81,7 @@ namespace ApexForge.ProjectOptimizer.Tests
                 int targetResolution;
                 Assert.IsTrue(int.TryParse(option.ActionId.Substring(suffix + 1), out targetResolution), "Target resolution must be parseable.");
                 Assert.Less(targetResolution, currentResolution, "Review option must only reduce the analyzed resolution.");
-                Assert.IsTrue(option.BackupRequired, "Terrain mutation must require backup: " + option.ActionId);
+                Assert.IsTrue(FixContract.EffectiveBackupRequired(new OptimizationIssue { Risk = FixRisk.Medium }, option), "Terrain mutation must require backup: " + option.ActionId);
                 Assert.IsNotNull(option.Apply, "Terrain mutation needs an apply callback: " + option.ActionId);
                 Assert.IsNotNull(option.Verify, "High-risk terrain mutation needs its own verifier: " + option.ActionId);
                 count++;

@@ -44,8 +44,7 @@ namespace ApexForge.ProjectOptimizer.Tests
                 m_Settings.audioFileSizeWarnKb = m_OriginalFileSizeWarnKb;
                 m_Settings.audioSfxSampleRate = m_OriginalSfxSampleRate;
                 m_Settings.audioMaxQuality = m_OriginalMaxQuality;
-                EditorUtility.SetDirty(m_Settings);
-                AssetDatabase.SaveAssets();
+                m_Settings.Save();
             }
             if (AssetDatabase.IsValidFolder(TestFolder)) AssetDatabase.DeleteAsset(TestFolder);
             AssetDatabase.Refresh();
@@ -227,7 +226,7 @@ namespace ApexForge.ProjectOptimizer.Tests
             var report = FixEngine.Apply(new[] { new FixRequest { Entry = entry, Issue = issue } }, true, FixExecutionMode.VerifiedSingle);
             Assert.AreEqual(0, report.Blocked, issue.RuleId + " should not be blocked for the tested common case: " + string.Join("; ", report.Errors));
             Assert.AreEqual(0, report.Failed, issue.RuleId + " should apply and verify: " + string.Join("; ", report.Errors));
-            Assert.IsTrue(issue.Verify(ReviewBatch.ProbeContext(path)), issue.RuleId + " postcondition should pass after reimport.");
+            Assert.IsTrue(issue.Verify(ReviewActionCatalog.ProbeContext(path)), issue.RuleId + " postcondition should pass after reimport.");
         }
 
         AssetEntry Analyze(string path) => new AudioAnalyzer().Analyze(path, new ScanContext { Settings = m_Settings });

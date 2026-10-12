@@ -18,7 +18,7 @@ namespace ApexForge.ProjectOptimizer
 		/// or a report field changes shape, so anything written by an older build is discarded
 		/// rather than reinterpreted.
 		/// </summary>
-		public const int Schema = 11;
+		public const int Schema = 12;
 
 		/// <summary>
 		/// Written into fix-batch manifests and exported reports, so a file found later can be

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEditor;
 using UnityEditor.Animations;
@@ -15,6 +17,7 @@ namespace ApexForge.ProjectOptimizer
 
 		static AnimatorControllerAnalyzer()
 		{
+			EditorApplication.projectChanged += InvalidateProjectEvidenceCaches;
 			Rules.Register(id: "CTL001", title: "Many animator layers", category: AssetCategory.Controller,
 							why: "Additional Animator layers add state-machine and blending work to the controller. The cost depends on active layers, masks, synchronization and how the controller is used.",
 							fix: "Merge layers only when their behaviors are genuinely mutually exclusive or otherwise can be represented more simply.",
@@ -36,13 +39,13 @@ namespace ApexForge.ProjectOptimizer
 							);
 
 			Rules.Register(id: "CTL003", title: "Animator parameters not referenced by the controller", category: AssetCategory.Controller,
-							why: "A parameter that no transition, blend tree or state parameter reference uses is not needed by the controller graph itself. However, scripts and StateMachineBehaviours can still access parameters by name or hash, so this is a static-analysis warning rather than a safe automatic deletion.",
-							fix: "Review Fix: delete parameters confirmed unused by scripts, StateMachineBehaviours and other runtime tooling.",
+							why: "A parameter not referenced by the controller graph can be removed automatically only when fresh C# and ForceText serialized-asset scans find no name consumers, no dynamic Animator-parameter calls, no StateMachineBehaviours, and no uninspectable managed plug-in assemblies. Incomplete or ambiguous evidence remains diagnostic-only.",
+							fix: "Automatically remove parameters only when a fresh graph/source/serialized-asset scan proves the common case safe; otherwise keep the finding with no action.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
-							confidence: OptimizationConfidence.Heuristic,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
+							risk: FixRisk.High,
+							backupRequired: true
 							);
 
 			Rules.Register(id: "CTL004", title: "State machine contains many Any State transitions", category: AssetCategory.Controller,
@@ -61,8 +64,8 @@ namespace ApexForge.ProjectOptimizer
 							severity: IssueSeverity.Info,
 							fixKind: FixKind.Review,
 							confidence: OptimizationConfidence.Heuristic,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							risk: FixRisk.High,
+							backupRequired: true
 							);
 
 			Rules.Register(id: "CTL006", title: "Animator state has excessive transition conditions", category: AssetCategory.Controller,
@@ -75,14 +78,14 @@ namespace ApexForge.ProjectOptimizer
 							backupRequired: false
 							);
 
-			Rules.Register(id: "CTL008", title: "Animator states use Write Defaults", category: AssetCategory.Controller,
+			Rules.Register(id: "CTL007", title: "Animator states use Write Defaults", category: AssetCategory.Controller,
 							why: "Write Defaults causes a state to write default values for properties it does not animate. Mixed Write Defaults configurations can create harder-to-predict state behavior and may cause additional property writes.",
 							fix: "Review Write Defaults usage and adopt a consistent project policy rather than changing it blindly.",
 							severity: IssueSeverity.Info,
 							fixKind: FixKind.Review,
 							confidence: OptimizationConfidence.Heuristic,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							risk: FixRisk.High,
+							backupRequired: true
 							);
 		}
 
@@ -185,28 +188,32 @@ namespace ApexForge.ProjectOptimizer
 			using (RuleTiming.Begin("CTL003", entry.Path))
 				if (facts.unusedParameters.Count > 0)
 				{
-					var unused = facts.unusedParameters;
-					entry.AddIssue("CTL003", facts.unusedParameters.Count + " parameter(s) not referenced by the controller graph",
-						"Review Fix: remove them", 0, null,
-						"Animator parameters are often part of a runtime contract with script. Confirm nothing "
-						+ "sets or reads these by name/hash before removing them.",
-						options: new List<FixOption>
+					var unused = new List<string>(facts.unusedParameters);
+					var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(assetPath);
+					string safetyReason;
+					bool safeAtScan = CanSafelyRemoveParameters(controller, unused, out safetyReason);
+					var issue = entry.AddIssue("CTL003", unused.Count + " parameter(s) not referenced by the controller graph",
+						safeAtScan ? "Remove parameters proven unused by controller and project code" : "No safe automatic action: " + safetyReason,
+						0,
+						c =>
 						{
-						new FixOption
-						{
-							Label = "Remove unused parameter(s)",
-							ResultDescription = "Deletes every parameter listed below from the controller.",
-							Recommended = true,
-							Warning = "Breaks any script or StateMachineBehaviour that sets or reads these parameters by name or hash.",
-							Apply = c =>
-							{
-								RemoveParameters((AnimatorController)c.Asset, unused);
-								c.NeedsSave = true;
-							},
-							Verify = c => HasNoParameters(AssetDatabase.LoadAssetAtPath<AnimatorController>(c.AssetPath), unused)
-						}
-						})
-						?.Items("Potentially unused parameters", unused);
+							var target = c.Asset as AnimatorController;
+						string preflightReason;
+						if (!CanSafelyRemoveParameters(target, unused, out preflightReason, true))
+							throw new InvalidOperationException("CTL003 automatic fix preflight blocked: " + preflightReason);
+						Controller(c, ac => RemoveParameters(ac, unused));
+						},
+						"Parameters are removed only when the complete source scan proves no project consumer; any incomplete evidence leaves this finding diagnostic-only.",
+						SavingsBasis.Unknown,
+						c => HasNoParameters(AssetDatabase.LoadAssetAtPath<AnimatorController>(c.AssetPath), unused));
+					if (issue != null && !safeAtScan)
+					{
+						issue.FixKind = FixKind.None;
+						issue.Fix = null;
+						issue.Verify = null;
+						issue.Recommended = "No automatic change: " + safetyReason;
+					}
+					issue?.Items("Potentially unused parameters", unused);
 				}
 
 			int anyStateWarn = Mathf.Max(4, ctx.Settings.animatorStateWarn / 4);
@@ -219,41 +226,56 @@ namespace ApexForge.ProjectOptimizer
 					entry.AddIssue("CTL006", facts.conditionHeavyTransitions.Count + " transition(s) with " + facts.maxTransitionConditions + "+ conditions",
 						"Review complex condition sets", 0, null, "Static heuristic; complex conditions are not inherently incorrect.")?.Items("Condition-heavy transitions", facts.conditionHeavyTransitions);
 
-			using (RuleTiming.Begin("CTL008", entry.Path))
+			using (RuleTiming.Begin("CTL007", entry.Path))
 				if (facts.writeDefaultStates.Count > 0)
-					entry.AddIssue("CTL008", facts.writeDefaultStates.Count + " state(s) with Write Defaults enabled",
-						"Review project-wide Write Defaults policy", 0, null, "This is intentionally advisory; changing Write Defaults can alter animation behavior.",
+				{
+					var expectedWriteDefaultStates = new List<string>(facts.writeDefaultStates);
+					entry.AddIssue("CTL007", expectedWriteDefaultStates.Count + " state(s) with Write Defaults enabled",
+						"Review project-wide Write Defaults policy", 0, null, "This is intentionally advisory. The selected action disables Write Defaults only for the states flagged in this controller; the controller asset is backed up and the resulting state is verified.",
 						options: new List<FixOption> { new FixOption {
-							Label = "Disable Write Defaults",
+							Label = "Disable Write Defaults in this controller",
+							ResultDescription = "Sets Write Defaults off for all states currently flagged by this controller finding.",
 							Recommended = true,
-							Risk = FixRisk.Medium,
-							Warning = "This is a Review Fix. Inspect the target state before applying it.",
-							Apply = c => Controller(c, ac => { foreach (var layer in ac.layers) RemoveWriteDefaultsFromStateMachine(layer.stateMachine); })
+							Risk = FixRisk.High,
+							Warning = "This may change animation property values when states do not animate every relevant property. Confirm this controller should use Write Defaults Off before applying.",
+							Apply = c => Controller(c, ac =>
+							{
+								if (!WriteDefaultStateIdentitiesMatch(ac, expectedWriteDefaultStates))
+									throw new InvalidOperationException("CTL007 preflight blocked: the exact Write Defaults state paths changed since analysis.");
+								foreach (var layer in ac.layers) RemoveWriteDefaultsFromStateMachine(layer.stateMachine);
+							}),
+							Verify = c => CountWriteDefaultStates(AssetDatabase.LoadAssetAtPath<AnimatorController>(c.AssetPath)) == 0
 						} }
 					)?.Items("Write Defaults states", facts.writeDefaultStates);
+				}
 
 			using (RuleTiming.Begin("CTL005", entry.Path))
 				if (facts.ikLayers.Count > 0)
 				{
 					var ikLayers = facts.ikLayers;
-					var ikLayerIndices = facts.ikLayerIndices;
+					var ikLayerIndices = new List<int>(facts.ikLayerIndices);
+					var controllerAtScan = AssetDatabase.LoadAssetAtPath<AnimatorController>(assetPath);
+					var expectedLayerNames = CaptureLayerNames(controllerAtScan, ikLayerIndices);
 					entry.AddIssue("CTL005", facts.ikLayers.Count + " layer(s) with IK Pass enabled",
 						"Review Fix: disable IK Pass on these layers", 0, null,
-						"IK Pass triggers an IK evaluation pass and can invoke OnAnimatorIK. Disabling it stops OnAnimatorIK being called for these layers.",
+						"IK Pass can invoke OnAnimatorIK. Disabling it changes runtime behavior, so this remains Review. The action checks the analyzed layer identities, requires backup, and verifies that only the selected layers are disabled.",
 						options: new List<FixOption>
 						{
 						new FixOption
 						{
-							Label = "Disable IK Pass",
-							ResultDescription = "Disables IK Pass on the layers listed below.",
+							Label = "Disable IK Pass on flagged layers",
+							ResultDescription = "Disables IK Pass only on the layer indices recorded in this finding.",
 							Recommended = true,
-							Warning = "Any script relying on OnAnimatorIK being called for these layers will stop receiving it.",
-							Apply = c =>
+							Risk = FixRisk.High,
+							Warning = "Any script relying on OnAnimatorIK being called for these layers will stop receiving it. A backup is required.",
+							Apply = c => Controller(c, ac =>
 							{
-								SetIkPass((AnimatorController)c.Asset, ikLayerIndices, false);
-								c.NeedsSave = true;
-							},
+								if (!IkTargetsStillMatch(ac, ikLayerIndices, expectedLayerNames))
+									throw new InvalidOperationException("CTL005 preflight blocked: controller layer identities or IK Pass flags changed since analysis.");
+								SetIkPass(ac, ikLayerIndices, false);
+							}),
 							Verify = c => CountIkLayers(AssetDatabase.LoadAssetAtPath<AnimatorController>(c.AssetPath), ikLayerIndices) == 0
+								&& IkTargetNamesStillMatch(AssetDatabase.LoadAssetAtPath<AnimatorController>(c.AssetPath), ikLayerIndices, expectedLayerNames)
 						}
 						})
 						?.Items("IK Pass layers", ikLayers);
@@ -269,7 +291,7 @@ namespace ApexForge.ProjectOptimizer
 			return entry;
 		}
 
-		/// <summary>CTL003's Review Fix: removes the named parameters, by value rather than by index so removing one cannot shift another out from under it.</summary>
+		/// <summary>CTL003 AutoFix: removes the named parameters by value so removing one cannot shift another out from under it.</summary>
 		static void RemoveParameters(AnimatorController controller, List<string> names)
 		{
 			if (controller == null) return;
@@ -500,6 +522,331 @@ namespace ApexForge.ProjectOptimizer
 			if (sm == null) return;
 			foreach (var child in sm.states) child.state.writeDefaultValues = false;
 			foreach (var child in sm.stateMachines) RemoveWriteDefaultsFromStateMachine(child.stateMachine);
+		}
+
+		static bool WriteDefaultStateIdentitiesMatch(AnimatorController controller, List<string> expected)
+		{
+			if (controller == null || expected == null) return false;
+			var conditionHeavy = new List<string>();
+			var actual = new List<string>();
+			int maxConditions = 0;
+			CollectControllerHeuristics(controller, conditionHeavy, actual, ref maxConditions);
+			if (actual.Count != expected.Count) return false;
+			for (int i = 0; i < expected.Count; i++)
+				if (!string.Equals(actual[i], expected[i], StringComparison.Ordinal)) return false;
+			return true;
+		}
+
+		static int CountWriteDefaultStates(AnimatorController controller)
+		{
+			if (controller == null) return int.MaxValue;
+			int count = 0;
+			var visited = new HashSet<int>();
+			foreach (var layer in controller.layers)
+				CountWriteDefaultStates(layer.stateMachine, visited, ref count);
+			return count;
+		}
+
+		static void CountWriteDefaultStates(AnimatorStateMachine machine, HashSet<int> visited, ref int count)
+		{
+			if (machine == null || !visited.Add(machine.GetInstanceID())) return;
+			foreach (var child in machine.states)
+				if (child.state != null && child.state.writeDefaultValues) count++;
+			foreach (var child in machine.stateMachines) CountWriteDefaultStates(child.stateMachine, visited, ref count);
+		}
+
+		static List<string> CaptureLayerNames(AnimatorController controller, List<int> indices)
+		{
+			var names = new List<string>(indices != null ? indices.Count : 0);
+			if (controller == null || indices == null) return names;
+			var layers = controller.layers;
+			foreach (int index in indices)
+				names.Add(index >= 0 && index < layers.Length ? (layers[index].name ?? string.Empty) : string.Empty);
+			return names;
+		}
+
+		static bool IkTargetsStillMatch(AnimatorController controller, List<int> indices, List<string> expectedNames)
+		{
+			if (controller == null || indices == null || expectedNames == null || indices.Count == 0 || indices.Count != expectedNames.Count) return false;
+			var layers = controller.layers;
+			for (int i = 0; i < indices.Count; i++)
+			{
+				int index = indices[i];
+				if (index < 0 || index >= layers.Length || !string.Equals(layers[index].name ?? string.Empty, expectedNames[i], StringComparison.Ordinal)) return false;
+				if (!layers[index].iKPass) return false;
+			}
+			return true;
+		}
+
+		static bool IkTargetNamesStillMatch(AnimatorController controller, List<int> indices, List<string> expectedNames)
+		{
+			if (controller == null || indices == null || expectedNames == null || indices.Count != expectedNames.Count) return false;
+			var layers = controller.layers;
+			for (int i = 0; i < indices.Count; i++)
+			{
+				int index = indices[i];
+				if (index < 0 || index >= layers.Length || !string.Equals(layers[index].name ?? string.Empty, expectedNames[i], StringComparison.Ordinal)) return false;
+			}
+			return true;
+		}
+
+		static bool CanSafelyRemoveParameters(AnimatorController controller, List<string> names, out string reason, bool forceRefresh = false)
+		{
+			reason = null;
+			if (controller == null) { reason = "controller asset is unavailable"; return false; }
+			if (names == null || names.Count == 0) { reason = "no parameter targets were recorded"; return false; }
+			if (HasStateMachineBehaviours(controller)) { reason = "the controller contains StateMachineBehaviours whose parameter access cannot be proven absent"; return false; }
+
+			var graphUsed = GetGraphUsedParameters(controller);
+			foreach (string name in names)
+			{
+				if (string.IsNullOrEmpty(name) || graphUsed.Contains(name)) { reason = "controller graph usage changed or is ambiguous for parameter '" + name + "'"; return false; }
+				bool exists = false;
+				foreach (var parameter in controller.parameters) if (string.Equals(parameter.name, name, StringComparison.Ordinal)) { exists = true; break; }
+				if (!exists) { reason = "parameter '" + name + "' no longer exists on the controller"; return false; }
+			}
+
+			if (!TryGetProjectSourceSnapshot(out var sourceTexts, out reason, forceRefresh)) return false;
+			for (int i = 0; i < sourceTexts.Count; i++)
+			{
+				string source = sourceTexts[i];
+				for (int n = 0; n < names.Count; n++)
+					if (ContainsIdentifier(source, names[n]))
+					{
+						reason = "source code mentions parameter '" + names[n] + "'; cross-controller and reflection usage cannot be ruled out";
+						return false;
+					}
+				if (HasDynamicAnimatorParameterAccess(source))
+				{
+					reason = "source code contains dynamic Animator parameter access that cannot be attributed to a specific controller parameter";
+					return false;
+				}
+			}
+
+			// Serialized project assets can also store parameter names (for example, visual scripting
+			// graphs and custom data assets). Binary/mixed serialization cannot support a complete
+			// name search, so it must fail closed rather than pretend the source scan is exhaustive.
+			if (EditorSettings.serializationMode != SerializationMode.ForceText)
+			{
+				reason = "project asset serialization is not ForceText, so serialized parameter consumers cannot be ruled out";
+				return false;
+			}
+			if (!TryGetSerializedProjectIdentifiers(out var serializedIdentifiers, out reason, forceRefresh)) return false;
+			for (int n = 0; n < names.Count; n++)
+			{
+				if (!Regex.IsMatch(names[n], @"^[A-Za-z_][A-Za-z0-9_]*$"))
+				{
+					reason = "non-standard parameter name '" + names[n] + "' cannot be proven absent from the compact serialized-asset index";
+					return false;
+				}
+				if (serializedIdentifiers.Contains(names[n]))
+				{
+					reason = "serialized project assets mention parameter '" + names[n] + "'; this could be a non-C# consumer";
+					return false;
+				}
+			}
+			return true;
+		}
+
+		static HashSet<string> GetGraphUsedParameters(AnimatorController controller)
+		{
+			var used = new HashSet<string>(StringComparer.Ordinal);
+			var layers = controller.layers;
+			var visitedMachines = new HashSet<int>();
+			for (int i = 0; i < layers.Length; i++)
+			{
+				int sourceIndex = ResolveSourceLayerIndex(layers, i);
+				if (sourceIndex < 0 || sourceIndex >= layers.Length) continue;
+				var sourceLayer = layers[sourceIndex];
+				if (sourceLayer.stateMachine == null || !visitedMachines.Add(sourceLayer.stateMachine.GetInstanceID())) continue;
+				CollectUsedParametersForLayer(sourceLayer.stateMachine, null, used, layers[i]);
+			}
+			return used;
+		}
+
+		static bool HasStateMachineBehaviours(AnimatorController controller)
+		{
+			var visited = new HashSet<int>();
+			foreach (var layer in controller.layers)
+				if (HasStateMachineBehaviours(layer.stateMachine, visited)) return true;
+			return false;
+		}
+
+		static bool HasStateMachineBehaviours(AnimatorStateMachine machine, HashSet<int> visited)
+		{
+			if (machine == null || !visited.Add(machine.GetInstanceID())) return false;
+			if (machine.behaviours != null && machine.behaviours.Length > 0) return true;
+			foreach (var state in machine.states)
+				if (state.state != null && state.state.behaviours != null && state.state.behaviours.Length > 0) return true;
+			foreach (var child in machine.stateMachines)
+				if (HasStateMachineBehaviours(child.stateMachine, visited)) return true;
+			return false;
+		}
+
+		static bool TryGetProjectSourceSnapshot(out List<string> texts, out string reason, bool forceRefresh = false)
+		{
+			texts = new List<string>();
+			reason = null;
+			if (!forceRefresh && s_SourceScanTexts != null) { texts = s_SourceScanTexts; return true; }
+			if (!forceRefresh && !string.IsNullOrEmpty(s_SourceScanBlockedReason)) { reason = s_SourceScanBlockedReason; return false; }
+			try
+			{
+				string projectRoot = Directory.GetParent(Application.dataPath).FullName;
+				string[] sourceRoots = { Path.Combine(projectRoot, "Assets"), Path.Combine(projectRoot, "Packages"), Path.Combine(projectRoot, "Library", "PackageCache") };
+				var files = new List<string>();
+				for (int i = 0; i < sourceRoots.Length; i++)
+				{
+					if (!Directory.Exists(sourceRoots[i])) continue;
+					files.AddRange(Directory.GetFiles(sourceRoots[i], "*.cs", SearchOption.AllDirectories));
+				}
+				files.Sort(StringComparer.OrdinalIgnoreCase);
+				var fingerprint = new System.Text.StringBuilder();
+				for (int i = 0; i < files.Count; i++)
+				{
+					var info = new FileInfo(files[i]);
+					fingerprint.Append(files[i]).Append('|').Append(info.Length).Append('|').Append(info.LastWriteTimeUtc.Ticks).Append('\n');
+				}
+				string currentFingerprint = fingerprint.ToString();
+				// Compiled managed plug-ins cannot be searched for parameter names. Fail closed if one is present.
+				string[] binaryRoots = { Path.Combine(projectRoot, "Assets", "Plugins"), Path.Combine(projectRoot, "Packages"), Path.Combine(projectRoot, "Library", "PackageCache") };
+				for (int i = 0; i < binaryRoots.Length; i++)
+				{
+					if (!Directory.Exists(binaryRoots[i])) continue;
+					string[] dlls = Directory.GetFiles(binaryRoots[i], "*.dll", SearchOption.AllDirectories);
+					if (dlls.Length > 0)
+					{
+						reason = "user plug-in or package-cache assemblies are present and cannot be inspected for Animator parameter-name/hash references";
+						s_SourceScanTexts = null;
+						s_SourceScanFingerprint = null;
+						s_SourceScanBlockedReason = reason;
+						return false;
+					}
+				}
+
+				if (string.Equals(s_SourceScanFingerprint, currentFingerprint, StringComparison.Ordinal) && s_SourceScanTexts != null)
+				{
+					texts = s_SourceScanTexts;
+					return true;
+				}
+
+				var refreshed = new List<string>(files.Count);
+				for (int i = 0; i < files.Count; i++) refreshed.Add(File.ReadAllText(files[i]));
+				s_SourceScanFingerprint = currentFingerprint;
+				s_SourceScanTexts = refreshed;
+				s_SourceScanBlockedReason = null;
+				texts = refreshed;
+				return true;
+			}
+			catch (Exception e)
+			{
+				reason = "whole-project source scan was incomplete: " + e.Message;
+				s_SourceScanTexts = null;
+				s_SourceScanFingerprint = null;
+				s_SourceScanBlockedReason = reason;
+				return false;
+			}
+		}
+
+		static string s_SourceScanBlockedReason;
+
+		static bool TryGetSerializedProjectIdentifiers(out HashSet<string> identifiers, out string reason, bool forceRefresh = false)
+		{
+			identifiers = null;
+			reason = null;
+			if (!forceRefresh && s_SerializedIdentifiers != null) { identifiers = s_SerializedIdentifiers; return true; }
+			if (!forceRefresh && !string.IsNullOrEmpty(s_SerializedScanBlockedReason)) { reason = s_SerializedScanBlockedReason; return false; }
+			try
+			{
+				string projectRoot = Directory.GetParent(Application.dataPath).FullName;
+				string[] roots = { Path.Combine(projectRoot, "Assets"), Path.Combine(projectRoot, "Packages"), Path.Combine(projectRoot, "Library", "PackageCache") };
+				var extensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+				{
+					".asset", ".prefab", ".unity", ".overridecontroller", ".anim", ".playable",
+					".json", ".xml", ".yaml", ".yml", ".uxml", ".uss", ".asmdef", ".asmref", ".shadergraph"
+				};
+				var files = new List<string>();
+				for (int i = 0; i < roots.Length; i++)
+				{
+					if (!Directory.Exists(roots[i])) continue;
+					foreach (string file in Directory.EnumerateFiles(roots[i], "*", SearchOption.AllDirectories))
+						if (extensions.Contains(Path.GetExtension(file))) files.Add(file);
+				}
+				files.Sort(StringComparer.OrdinalIgnoreCase);
+				var fingerprint = new System.Text.StringBuilder();
+				for (int i = 0; i < files.Count; i++)
+				{
+					var info = new FileInfo(files[i]);
+					fingerprint.Append(files[i]).Append('|').Append(info.Length).Append('|').Append(info.LastWriteTimeUtc.Ticks).Append('\n');
+				}
+				string currentFingerprint = fingerprint.ToString();
+				if (string.Equals(s_SerializedScanFingerprint, currentFingerprint, StringComparison.Ordinal) && s_SerializedIdentifiers != null)
+				{
+					identifiers = s_SerializedIdentifiers;
+					return true;
+				}
+
+				// Index identifiers rather than retaining every serialized file's full text in memory.
+				var refreshed = new HashSet<string>(StringComparer.Ordinal);
+				for (int i = 0; i < files.Count; i++)
+				{
+					string serializedText = File.ReadAllText(files[i]);
+					if (serializedText.IndexOf((char)0) >= 0 || serializedText.IndexOf((char)0xFFFD) >= 0)
+						throw new InvalidDataException("serialized asset is not reliably readable as text: " + files[i]);
+					MatchCollection matches = Regex.Matches(serializedText, @"(?<![A-Za-z0-9_])[A-Za-z_][A-Za-z0-9_]*(?![A-Za-z0-9_])");
+					for (int m = 0; m < matches.Count; m++) refreshed.Add(matches[m].Value);
+				}
+				s_SerializedScanFingerprint = currentFingerprint;
+				s_SerializedIdentifiers = refreshed;
+				s_SerializedScanBlockedReason = null;
+				identifiers = refreshed;
+				return true;
+			}
+			catch (Exception e)
+			{
+				reason = "serialized-asset scan was incomplete: " + e.Message;
+				s_SerializedScanFingerprint = null;
+				s_SerializedIdentifiers = null;
+				s_SerializedScanBlockedReason = reason;
+				return false;
+			}
+		}
+
+		static string s_SerializedScanBlockedReason;
+		static string s_SerializedScanFingerprint;
+		static HashSet<string> s_SerializedIdentifiers;
+
+		static string s_SourceScanFingerprint;
+
+		static void InvalidateProjectEvidenceCaches()
+		{
+			s_SourceScanFingerprint = null;
+			s_SourceScanTexts = null;
+			s_SourceScanBlockedReason = null;
+			s_SerializedScanFingerprint = null;
+			s_SerializedIdentifiers = null;
+			s_SerializedScanBlockedReason = null;
+		}
+		static List<string> s_SourceScanTexts;
+		static readonly Regex s_AnimatorParameterApi = new Regex(@"\b(?:SetFloat|GetFloat|SetInteger|GetInteger|SetBool|GetBool|SetTrigger|ResetTrigger|StringToHash)\s*\(\s*([^,\)\r\n]+)", RegexOptions.Compiled);
+
+		static bool HasDynamicAnimatorParameterAccess(string source)
+		{
+			var matches = s_AnimatorParameterApi.Matches(source ?? string.Empty);
+			for (int i = 0; i < matches.Count; i++)
+			{
+				string argument = matches[i].Groups[1].Value.Trim();
+				if (argument.Length == 0) return true;
+				if ((argument[0] == '"' || argument[0] == '\'') && argument.Length >= 2) continue;
+				// Even a hard-coded integer hash cannot be mapped back to a controller parameter with certainty.
+				return true;
+			}
+			return false;
+		}
+
+		static bool ContainsIdentifier(string source, string identifier)
+		{
+			if (string.IsNullOrEmpty(source) || string.IsNullOrEmpty(identifier)) return false;
+			return Regex.IsMatch(source, @"(?<![A-Za-z0-9_])" + Regex.Escape(identifier) + @"(?![A-Za-z0-9_])");
 		}
 	}
 }

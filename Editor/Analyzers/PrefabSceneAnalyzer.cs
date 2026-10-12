@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Playables;
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using UnityEditor.Animations;
 using System.Linq;
 
 namespace ApexForge.ProjectOptimizer
@@ -91,7 +93,7 @@ namespace ApexForge.ProjectOptimizer
 							why: "A component whose MonoBehaviour script is missing has no executable script type to load. Removing that dead component is safe only because the referenced script is already absent; restoring the script is preferable when the behaviour is still required.",
 							fix: "Restore the missing script when it is still needed; otherwise remove the missing component. The removal is reversible through the framework backup.",
 							severity: IssueSeverity.Critical,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.High,
 							backupRequired: true
@@ -99,12 +101,12 @@ namespace ApexForge.ProjectOptimizer
 
 			Rules.Register(id: "PRE002", title: "Missing asset references", category: AssetCategory.Prefab,
 							why: "A serialized reference to a deleted asset stays in the file as a dangling id. At runtime it resolves to null and the feature that needed it fails.",
-							fix: "Reassign the reference, or clear the field if it is genuinely unused.",
+							fix: "Clear dangling serialized object references only when Unity confirms the reference is unresolved; runtime already sees these fields as null. Back up the asset and verify that no dangling reference remains.",
 							severity: IssueSeverity.Critical,
-							fixKind: FixKind.None,
-							confidence: OptimizationConfidence.Heuristic,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
+							risk: FixRisk.High,
+							backupRequired: true
 							);
 
 			Rules.Register(id: "PRE003", title: "Non-convex Mesh Collider", category: AssetCategory.Prefab,
@@ -122,81 +124,81 @@ namespace ApexForge.ProjectOptimizer
 
 			Rules.Register(id: "PRE004", title: "Renderer material count does not match sub-meshes", category: AssetCategory.Prefab,
 							why: "A renderer's material array is normally expected to correspond to the mesh's sub-mesh material assignments. Extra materials can cause Unity to render the last sub-mesh repeatedly, while too few material slots can leave sub-mesh assignments incomplete or otherwise produce unintended rendering. This rule flags the mismatch for inspection rather than assuming a single runtime outcome for every renderer.",
-							fix: "Match the material array to the mesh's sub-mesh count: trim the surplus entries, or add the missing ones.",
+							fix: "Trim only surplus slots that repeat the final assigned material with a supported opaque shader and no per-renderer property block. Differently mapped, transparent, custom-shader, or ambiguous cases remain diagnostic-only; restore missing/reordered slots only from a unique exact source-renderer mapping.",
 							severity: IssueSeverity.Warning,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							risk: FixRisk.High,
+							backupRequired: true
 							);
 
 			Rules.Register(id: "PRE005", title: "Very large hierarchy", category: AssetCategory.Prefab,
 							why: "Every GameObject costs memory, a Transform, and time in scene load, hierarchy updates and culling, whether or not it does anything.",
-							fix: "Flatten the hierarchy, merge static geometry, or split the prefab and load parts on demand.",
+							fix: "Remove only unreferenced default-named empty leaves when the hierarchy is oversized and no Animator, Animation or PlayableDirector path bindings are present; preserve all meaningful nodes.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.None,
-							confidence: OptimizationConfidence.Heuristic,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
+							risk: FixRisk.High,
+							backupRequired: true
 							);
 
 			Rules.Register(id: "PRE006", title: "Deeply nested hierarchy", category: AssetCategory.Prefab,
 							why: "Deep transform chains make every position change propagate through many levels, and the cost is paid again on each dirty transform.",
-							fix: "Flatten intermediate parent objects that exist only for organisation.",
+							fix: "Flatten only identity-transform, single-child, default-named Transform-only containers with no detected serialized references and no Animator, Animation or PlayableDirector path bindings.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.None,
-							confidence: OptimizationConfidence.Heuristic,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
+							risk: FixRisk.High,
+							backupRequired: true
 							);
 
 			Rules.Register(id: "PRE007", title: "Empty GameObjects", category: AssetCategory.Prefab,
 							why: "Objects with no components and no children still cost a Transform, a slot in the hierarchy and scene-load time.",
-							fix: "Delete the ones that are genuinely spare. This is not auto-fixed: an empty object is just as often a deliberate marker - a spawn point, muzzle or attach anchor - that scripts look up by name or hold a reference to.",
+							fix: "Remove only default-named, unreferenced empty leaf GameObjects outside hierarchies with Animator, Animation or PlayableDirector path bindings; preserve marker-like names and detected references.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.None,
-							confidence: OptimizationConfidence.Heuristic,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
+							risk: FixRisk.High,
+							backupRequired: true
 							);
 
 			Rules.Register(id: "PRE008", title: "Raycast Target enabled on apparently non-interactive UI", category: AssetCategory.Prefab,
 							why: "A Graphic with Raycast Target enabled participates in UI raycasts. Decorative graphics can add unnecessary raycast work, but custom input modules can also use raycast results without a standard EventSystem handler on the object, so static inspection cannot prove that a target is unused.",
-							fix: "Review Fix: disable Raycast Target only on graphics that are confirmed not to participate in pointer, custom raycast, drag, selection, or accessibility interaction.",
+							fix: "Disable Raycast Target only for graphics with no EventSystem handlers, no custom MonoBehaviour input dependency in the owning Canvas subtree, and no detected serialized references to their transforms.",
 							severity: IssueSeverity.Warning,
-							fixKind: FixKind.Review,
-							confidence: OptimizationConfidence.Heuristic,
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Medium,
 							backupRequired: false
 							);
 
 			Rules.Register(id: "PRE009", title: "Particle System with a very high particle budget", category: AssetCategory.Prefab,
 							why: "Max Particles reserves buffers up front and caps how much simulation and overdraw the system can generate. Large budgets are usually left over from tuning.",
-							fix: "Lower Max Particles to what the effect actually emits.",
+							fix: "Lower Max Particles only when constant emission, lifetime and burst settings prove a conservative upper bound; leave curve- or distance-driven systems unchanged.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
-							confidence: OptimizationConfidence.Heuristic,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
+							risk: FixRisk.High,
+							backupRequired: true
 							);
 
 			Rules.Register(id: "PRE010", title: "Animator always animates while off-screen", category: AssetCategory.Prefab,
 							why: "Always Animate evaluates the Animator even when its renderers are not visible. It can be intentional for gameplay-driven animation, but cosmetic animators can often use culling to avoid unnecessary work.",
-							fix: "Review Fix: choose Cull Update Transforms or Cull Completely only after confirming what the Animator drives while off-screen. In Unity 6, Cull Update Transforms still evaluates the state machine and root-motion callbacks but stops retargeting, IK and Transform writes when the renderers are invisible; Cull Completely disables animation evaluation while invisible.",
+							fix: "Use Cull Update Transforms only for animators without detected scripts, root motion, animation events or state-machine behaviours; retain Always Animate for ambiguous cases.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
-							confidence: OptimizationConfidence.Heuristic,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
+							risk: FixRisk.High,
+							backupRequired: true
 							);
 
 			Rules.Register(id: "PRE011", title: "static geometry not marked static", category: AssetCategory.Scene,
 							why: "Renderers that never move can be combined by static batching, contribute to occlusion culling and receive baked lighting. Without the static flags none of that applies.",
-							fix: "Set the appropriate static flags on non-moving scene geometry.",
+							fix: "Add only the Batching Static flag to scene MeshRenderers with no detected motion/script/reference dependency; preserve every other static flag.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
-							confidence: OptimizationConfidence.Heuristic,
-							risk: FixRisk.Unspecified,
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
+							risk: FixRisk.Medium,
 							backupRequired: false
 							);
 
@@ -214,13 +216,12 @@ namespace ApexForge.ProjectOptimizer
 							why: "An instance whose prefab asset has been deleted cannot be restored by Unity. It loads as an empty "
 							+ "placeholder, logs an error every time the scene or prefab opens, and silently drops whatever it "
 							+ "was meant to spawn.",
-							fix: "Restore the missing prefab, or delete the broken instances. This is the usual cause of a wall of "
-							+ "\"Missing Prefab Asset\" errors in the console.",
+							fix: "Delete only leaf missing-prefab placeholders with default transforms, no detected incoming serialized references, no marker-like name and no Animator, Animation or PlayableDirector path bindings. Restore/relink all other instances manually.",
 							severity: IssueSeverity.Critical,
-							fixKind: FixKind.None,
-							confidence: OptimizationConfidence.Heuristic,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
+							risk: FixRisk.High,
+							backupRequired: true
 							);
 
 			Rules.Register(id: "PRE014", title: "Dense mesh with no LOD Group", category: AssetCategory.Prefab,
@@ -244,34 +245,34 @@ namespace ApexForge.ProjectOptimizer
 							);
 			Rules.Register(id: "PRE016", title: "Renderer material mapping requires review", category: AssetCategory.Prefab,
 							why: "A renderer's material-slot count does not match the mesh sub-mesh count, but static inspection cannot safely infer the intended mapping for missing or reordered material slots.",
-							fix: "Review the renderer's material-slot and sub-mesh mapping and correct only the assignments that are intentionally missing or reordered.",
+							fix: "Restore a missing or reordered mapping only when the unique prefab/model source renderer has the identical mesh and a complete, non-null material array; otherwise retain a diagnostic-only finding.",
 							severity: IssueSeverity.Warning,
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
+							risk: FixRisk.High,
+							backupRequired: true
+							);
+
+			Rules.Register(id: "PAS028", title: "URP camera has Stop NaNs enabled", category: AssetCategory.Prefab,
+							why: "URP Stop NaNs replaces NaN/Inf output with black pixels. It can prevent some visual failures, but Unity documents it as an expensive safety feature intended for cases where NaN problems cannot otherwise be fixed. It is only effective on URP Base cameras.",
+							fix: "No fix. Stop NaNs is an acceptable URP camera safety setting and must remain enabled when configured.",
+							severity: IssueSeverity.Info,
 							fixKind: FixKind.None,
 							confidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Unspecified,
 							backupRequired: false
 							);
-
-			Rules.Register(id: "PAS1012", title: "URP camera has Stop NaNs enabled", category: AssetCategory.Prefab,
-							why: "URP Stop NaNs replaces NaN/Inf output with black pixels. It can prevent some visual failures, but Unity documents it as an expensive safety feature intended for cases where NaN problems cannot otherwise be fixed. It is only effective on URP Base cameras.",
-							fix: "Review Fix: disable Stop NaNs on production Base cameras after confirming the project does not rely on it for visual safety or debugging.",
-							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
-							confidence: OptimizationConfidence.HighConfidence,
-							risk: FixRisk.Medium,
-							backupRequired: false
-							);
 			Rules.Register(id: "UIT001", title: "Many UI Canvases", category: AssetCategory.Prefab,
 				why: "Each Canvas is a batching/rebuild boundary. Multiple canvases are sometimes intentional, but a high count in one hierarchy is worth reviewing because independent rebuild regions and rendering work can accumulate.",
 				fix: "Keep canvases that isolate independently changing UI; merge static or rarely changing UI where profiling shows that a smaller canvas structure is beneficial.",
-				severity: IssueSeverity.Warning, fixKind: FixKind.Review, confidence: OptimizationConfidence.Heuristic,
+				severity: IssueSeverity.Warning, fixKind: FixKind.None, confidence: OptimizationConfidence.Heuristic,
 				risk: FixRisk.Unspecified, backupRequired: false);
 
 			Rules.Register(id: "UIT002", title: "Many Graphic Raycasters", category: AssetCategory.Prefab,
 				why: "Every active GraphicRaycaster can participate in UI pointer hit testing. A high count can increase query work, particularly in screen-space UI with many canvases.",
-				fix: "Remove raycasters from canvases that never receive pointer input, and keep input handling consolidated where the UI architecture permits.",
-				severity: IssueSeverity.Warning, fixKind: FixKind.Review, confidence: OptimizationConfidence.Heuristic,
-				risk: FixRisk.Unspecified, backupRequired: false);
+				fix: "Disable only GraphicRaycasters whose owning Canvas has no raycastable Graphics and no custom scripts in its Canvas subtree.",
+				severity: IssueSeverity.Warning, fixKind: FixKind.Verified, confidence: OptimizationConfidence.HighConfidence,
+				risk: FixRisk.Medium, backupRequired: false);
 
 			Rules.Register(id: "UIT003", title: "Many UI layout components", category: AssetCategory.Prefab,
 				why: "LayoutGroup and ContentSizeFitter components can trigger layout calculation and rebuild work when hierarchy values change. Large nested layout graphs can become disproportionately expensive.",
@@ -305,8 +306,8 @@ namespace ApexForge.ProjectOptimizer
 
 			Rules.Register(id: "RND001", title: "SkinnedMeshRenderer updates while off-screen", category: AssetCategory.Prefab,
 				why: "updateWhenOffscreen forces a skinned mesh to continue skinning when its renderer is not visible. This may be required for gameplay or off-screen deformation, but it can waste CPU skinning work for purely visual characters.",
-				fix: "Disable Update When Offscreen for cosmetic skinning once gameplay has been verified not to depend on off-screen deformation or bounds updates.",
-				severity: IssueSeverity.Warning, fixKind: FixKind.Review, confidence: OptimizationConfidence.HighConfidence,
+				fix: "Disable Update When Offscreen only for static skinned renderers with no Animator or custom script dependency in their ancestor/descendant chain.",
+				severity: IssueSeverity.Warning, fixKind: FixKind.Verified, confidence: OptimizationConfidence.HighConfidence,
 				risk: FixRisk.Medium, backupRequired: false);
 
 			Rules.Register(id: "VFX001", title: "Expensive particle modules enabled", category: AssetCategory.Prefab,
@@ -498,7 +499,7 @@ namespace ApexForge.ProjectOptimizer
 				MissingPrefabs = settings == null || settings.IsRuleEnabled("PRE013");
 				Dense = settings == null || settings.IsRuleEnabled("PRE014");
 				Continuous = settings == null || settings.IsRuleEnabled("PRE015");
-				StopNaN = settings == null || settings.IsRuleEnabled("PAS1012");
+				StopNaN = settings == null || settings.IsRuleEnabled("PAS028");
 				Canvases = settings == null || settings.IsRuleEnabled("UIT001");
 				Raycasters = settings == null || settings.IsRuleEnabled("UIT002");
 				Layout = settings == null || settings.IsRuleEnabled("UIT003");
@@ -1021,7 +1022,7 @@ namespace ApexForge.ProjectOptimizer
 									: (submeshes - slots) + " sub-mesh(es) not drawn") + ")");
 
 						if (needStatic && renderer is MeshRenderer
-							&& GameObjectUtility.GetStaticEditorFlags(go) == 0
+							&& (GameObjectUtility.GetStaticEditorFlags(go) & StaticEditorFlags.BatchingStatic) == 0
 							&& !hasRigidbodyChain
 							&& !hasAnimatorChain)
 							unstaticGeometry.Add(objectPath ?? Path(transform));
@@ -1243,24 +1244,31 @@ namespace ApexForge.ProjectOptimizer
 				if (missingScripts > 0)
 				{
 					entry.AddIssue("PRE001", missingScripts + " missing script(s)", "0", 0,
-						fixable ? (Action<FixContext>)(c => FixHierarchy(c, isScene, root =>
-						{
-							foreach (var t in root.GetComponentsInChildren<Transform>(true))
-								GameObjectUtility.RemoveMonoBehavioursWithMissingScript(t.gameObject);
-						})) : null,
+						fixable ? (Action<FixContext>)(c => RemoveMissingScriptComponents(c, isScene)) : null,
 						verify: fixable ? (Func<FixContext, bool>)(c => CountMissingScripts(c.AssetPath, isScene) == 0) : null);
 				}
 
 			using (RuleTiming.Begin("PRE002", entry.Path))
 				if (missingRefs.Count > 0)
-					entry.AddIssue("PRE002", missingRefs.Count + " broken reference(s)", "0")
-						?.Items("Broken on", missingRefs);
+				{
+					var issue = entry.AddIssue("PRE002", missingRefs.Count + " dangling serialized reference(s)", "Clear only unresolved object-reference fields", 0,
+						c => ClearDanglingObjectReferences(c, isScene),
+						"Only fields whose serialized object-reference instance ID is non-zero while the resolved object is null are cleared. These already resolve to null at runtime.",
+						verify: c => CountDanglingObjectReferences(c.AssetPath, isScene) == 0);
+					issue?.Items("Broken on", missingRefs);
+				}
 
 			using (RuleTiming.Begin("PRE013", entry.Path))
 				if (missingPrefabs.Count > 0)
 				{
-					entry.AddIssue("PRE013", missingPrefabs.Count + " missing prefab instance(s)", "0")
-							?.Items("Missing on", missingPrefabs);
+					var safePaths = ReadHierarchyOrDefault(entry.Path, isScene, roots => FindSafeMissingPrefabPlaceholderPaths(roots), new List<string>());
+					var issue = entry.AddIssue("PRE013", missingPrefabs.Count + " missing prefab instance(s)",
+						safePaths.Count > 0 ? "Remove " + safePaths.Count + " unreferenced empty missing-prefab placeholder(s)" : "Restore/relink or inspect missing prefab instances; no placeholder passed safe-removal checks",
+						0, safePaths.Count > 0 ? (Action<FixContext>)(c => RemoveSafeMissingPrefabPlaceholders(c, isScene, safePaths)) : null,
+						"Only leaf placeholders containing no components beyond Transform, with identity local transform, unique paths, no inbound serialized references and no marker-like names are removable.",
+						verify: safePaths.Count > 0 ? (Func<FixContext, bool>)(c => PathsAreAbsent(c.AssetPath, isScene, safePaths)) : null);
+					issue?.Items("Missing prefab roots", missingPrefabs);
+					if (safePaths.Count == 0 && issue != null) MakeDiagnosticOnly(issue);
 				}
 
 			using (RuleTiming.Begin("PRE003", entry.Path))
@@ -1275,64 +1283,90 @@ namespace ApexForge.ProjectOptimizer
 					using (RuleTiming.Begin("PRE004", entry.Path))
 						if (surplusOnly)
 						{
-							entry.AddIssue("PRE004", materialMismatches.Count + " renderer(s) have surplus material slots", "Trim only provably unused surplus slots", 0,
-								c => TrimSurplusMaterialSlots(c),
-								"All detected mismatches are surplus-slot cases. The fix trims only slots beyond the mesh sub-mesh count.",
-								verify: c => VerifyNoSurplusMaterialSlots(c));
+							var surplusPaths = ReadHierarchyOrDefault(entry.Path, isScene, roots => FindSurplusMaterialPaths(roots), new List<string>());
+							var issue = entry.AddIssue("PRE004", materialMismatches.Count + " renderer(s) have surplus material slots",
+								surplusPaths.Count > 0 ? "Trim only surplus material slots beyond sub-mesh count" : "Surplus slots were not uniquely targetable; leave this finding diagnostic-only",
+								0, surplusPaths.Count > 0 ? (Action<FixContext>)(c => TrimSurplusMaterialSlots(c, isScene, surplusPaths)) : null,
+								"Only unique paths whose surplus slots repeat the final material with a supported opaque shader, no alpha/blend flags and no MaterialPropertyBlock are eligible. Other mismatches stay diagnostic-only; the asset is backed up before mutation.",
+								verify: surplusPaths.Count > 0 ? (Func<FixContext, bool>)(c => VerifyNoSurplusMaterialSlots(c.AssetPath, isScene, surplusPaths)) : null);
+							issue?.Items("Renderers", materialMismatches);
+							if (surplusPaths.Count == 0 && issue != null) MakeDiagnosticOnly(issue);
 						}
 						else
-							entry.AddIssue("PRE016", materialMismatches.Count + " renderer(s) mismatched", "Review material-slot/sub-mesh mapping", 0, null,
-								"Static analysis cannot safely infer the intended material mapping for missing or reordered slots.")?.Items("Renderers", materialMismatches);
+						{
+							var repairablePaths = ReadHierarchyOrDefault(entry.Path, isScene, roots => FindRepairableMaterialMappingPaths(roots), new List<string>());
+							var issue = entry.AddIssue("PRE016", materialMismatches.Count + " renderer(s) mismatched",
+								repairablePaths.Count > 0 ? "Restore only exact source-renderer material mappings" : "No authoritative source mapping; manual repair is required",
+								0, repairablePaths.Count > 0 ? (Action<FixContext>)(c => ApplySourceMaterialMappings(c, isScene, repairablePaths)) : null,
+								repairablePaths.Count > 0 ? "Target renderers have a unique source renderer with the identical mesh and a complete, non-null material array." : "Static inspection cannot infer missing or reordered material intent. No mutation is offered without a unique exact source mapping.",
+								verify: repairablePaths.Count > 0 ? (Func<FixContext, bool>)(c => VerifySourceMaterialMappings(c.AssetPath, isScene, repairablePaths)) : null);
+							issue?.Items("Renderers", materialMismatches);
+							if (repairablePaths.Count == 0 && issue != null) MakeDiagnosticOnly(issue);
+						}
 				}
 
 			using (RuleTiming.Begin("PRE005", entry.Path))
 				if (objectCount > settings.prefabObjectWarn)
-					entry.AddIssue("PRE005", objectCount + " GameObjects", "under " + settings.prefabObjectWarn);
+				{
+					var safePaths = ReadHierarchyOrDefault(entry.Path, isScene, roots => FindSafeEmptyLeafPaths(roots), new List<string>());
+					var issue = entry.AddIssue("PRE005", objectCount + " GameObjects", safePaths.Count > 0
+						? "Remove " + safePaths.Count + " proven generic empty leaf object(s)"
+						: "No provably removable empty leaves; hierarchy remains diagnostic-only for this asset",
+						0, safePaths.Count > 0 ? (Action<FixContext>)(c => RemoveSafeEmptyLeaves(c, isScene, safePaths)) : null,
+						detail: "Only default-named, unreferenced empty leaves are eligible; all other hierarchy nodes are preserved.",
+						verify: safePaths.Count > 0 ? (Func<FixContext, bool>)(c => PathsAreAbsent(c.AssetPath, isScene, safePaths)) : null);
+					if (safePaths.Count == 0 && issue != null) MakeDiagnosticOnly(issue);
+				}
 
 			using (RuleTiming.Begin("PRE006", entry.Path))
 				if (maxDepth > settings.hierarchyDepthWarn)
-					entry.AddIssue("PRE006", maxDepth + " levels deep", "under " + settings.hierarchyDepthWarn);
+				{
+					var safePaths = ReadHierarchyOrDefault(entry.Path, isScene, roots => FindSafeFlattenableContainerPaths(roots), new List<string>());
+					var issue = entry.AddIssue("PRE006", maxDepth + " levels deep", safePaths.Count > 0
+						? "Flatten " + safePaths.Count + " identity Transform-only container(s)"
+						: "No provably safe containers; hierarchy remains diagnostic-only for this asset",
+						0, safePaths.Count > 0 ? (Action<FixContext>)(c => FlattenSafeContainers(c, isScene, safePaths)) : null,
+						detail: "Only unique-path, generic-name, identity-transform parents with one child, no other components and no detected serialized references are flattened.",
+						verify: safePaths.Count > 0 ? (Func<FixContext, bool>)(c => PathsAreAbsent(c.AssetPath, isScene, safePaths)) : null);
+					if (safePaths.Count == 0 && issue != null) MakeDiagnosticOnly(issue);
+				}
 
 			using (RuleTiming.Begin("PRE007", entry.Path))
 				if (emptyObjects.Count > 0)
 				{
-					// Reported only. An object with nothing but a Transform is very often a deliberate
-					// marker - a spawn point, muzzle, attach anchor - referenced by name or by a direct
-					// reference from a script. Deleting those automatically silently breaks behaviour,
-					// so this one is left for a human to judge.
-					entry.AddIssue("PRE007", emptyObjects.Count + " empty GameObject(s)",
-						"Only the ones that are truly unused", 0, null, Preview(emptyObjects));
+					var safePaths = ReadHierarchyOrDefault(entry.Path, isScene, roots => FindSafeEmptyLeafPaths(roots), new List<string>());
+					var issue = entry.AddIssue("PRE007", emptyObjects.Count + " empty GameObject(s)",
+						safePaths.Count > 0 ? "Remove " + safePaths.Count + " proven generic empty leaf object(s)" : "No provably removable empty objects; inspect marker-like or referenced nodes",
+						0, safePaths.Count > 0 ? (Action<FixContext>)(c => RemoveSafeEmptyLeaves(c, isScene, safePaths)) : null,
+						Preview(emptyObjects), verify: safePaths.Count > 0 ? (Func<FixContext, bool>)(c => PathsAreAbsent(c.AssetPath, isScene, safePaths)) : null);
+					if (safePaths.Count == 0 && issue != null) MakeDiagnosticOnly(issue);
 				}
 
 			using (RuleTiming.Begin("PRE008", entry.Path))
 				if (!IsNativeUnavailable(facts, SerializedUnityHierarchy.NativeCapability.UiInputSemantics) && raycastTargets.Count > 0)
 				{
-					entry.AddIssue("PRE008", raycastTargets.Count + " graphic(s) raycastable", "Review Fix: Raycast Target off", 0,
-						fixable ? (Action<FixContext>)(c => FixHierarchy(c, isScene, root =>
-						{
-							foreach (var graphic in root.GetComponentsInChildren<Graphic>(true))
-							{
-								if (HandlesPointerInput(graphic.gameObject)) continue;
-								graphic.raycastTarget = false;
-							}
-						})) : null,
-						verify: fixable ? (Func<FixContext, bool>)(c => CountLooseRaycastTargets(c.AssetPath, isScene) == 0) : null)
-							?.Items("Raycast targets on", raycastTargets);
+					var safePaths = ReadHierarchyOrDefault(entry.Path, isScene, roots => FindSafeRaycastTargetPaths(roots), new List<string>());
+					var issue = entry.AddIssue("PRE008", raycastTargets.Count + " graphic(s) raycastable",
+						safePaths.Count > 0 ? "Disable Raycast Target on " + safePaths.Count + " proven decorative graphic(s)" : "No graphics passed the automatic-safety gate; no changes proposed",
+						0, safePaths.Count > 0 ? (Action<FixContext>)(c => DisableSafeRaycastTargets(c, isScene, safePaths)) : null,
+						"Graphics with detected input handlers, custom scripts, or ambiguous paths are excluded from automatic changes.",
+						verify: safePaths.Count > 0 ? (Func<FixContext, bool>)(c => SafeRaycastTargetCount(c.AssetPath, isScene, safePaths) == 0) : null);
+					issue?.Items("Raycast targets detected", raycastTargets);
+					if (safePaths.Count == 0 && issue != null) MakeDiagnosticOnly(issue);
 				}
 
 			using (RuleTiming.Begin("PRE009", entry.Path))
 				if (!IsNativeUnavailable(facts, SerializedUnityHierarchy.NativeCapability.ParticleState) && bigParticleSystems.Count > 0)
-					entry.AddIssue("PRE009", bigParticleSystems.Count + " system(s)", "under " + settings.particleMaxWarn + " particles",
-						options: new List<FixOption> { new FixOption {
-							Label = "Lower Particle Budget",
-							Recommended = true,
-							Risk = FixRisk.High,
-							Warning = "This is a Review Fix. Inspect the target state before applying it.",
-							Apply = c => FixHierarchy(c, isScene, root => { int budget = Mathf.Max(64, OptimizerSettings.Instance?.particleMaxWarn ?? 500); foreach (var ps in root.GetComponentsInChildren<ParticleSystem>(true)) { var m = ps.main; if (m.maxParticles > budget) m.maxParticles = budget; } }),
-							Verify = c => ParticleBudgetsWithin(c.AssetPath, isScene, Mathf.Max(64, OptimizerSettings.Instance?.particleMaxWarn ?? 500))
-						} }
-					)
-						?.Items("Systems", bigParticleSystems);
+				{
+					var targets = ReadHierarchyOrDefault(entry.Path, isScene, roots => FindSafeParticleBudgetTargets(roots, settings.particleMaxWarn), new List<ParticleBudgetTarget>());
+					var issue = entry.AddIssue("PRE009", bigParticleSystems.Count + " system(s) above the particle-budget threshold",
+						targets.Count > 0 ? "Apply proven conservative Max Particles bounds to " + targets.Count + " system(s)" : "No conservative bound could be proven; leave all budgets unchanged",
+						0, targets.Count > 0 ? (Action<FixContext>)(c => ApplySafeParticleBudgetTargets(c, isScene, targets, settings.particleMaxWarn)) : null,
+						"Only constant-rate / constant-lifetime / zero-distance-emission systems with no bursts, custom scripts or detected serialized references are eligible. Curve-, burst- and distance-driven systems remain untouched.",
+						verify: targets.Count > 0 ? (Func<FixContext, bool>)(c => VerifyParticleBudgetTargets(c.AssetPath, isScene, targets)) : null);
+					issue?.Items("Systems above configured threshold", bigParticleSystems);
+					if (targets.Count == 0 && issue != null) MakeDiagnosticOnly(issue);
+				}
 
 		static bool ParticleBudgetsWithin(string assetPath, bool isScene, int budget)
 		{
@@ -1360,8 +1394,16 @@ namespace ApexForge.ProjectOptimizer
 
 			using (RuleTiming.Begin("UIT002", entry.Path))
 				if (facts.graphicRaycasterCount > settings.uiRaycasterWarn)
-					entry.AddIssue("UIT002", facts.graphicRaycasterCount + " GraphicRaycaster component(s)", "at most " + settings.uiRaycasterWarn + " unless multiple input surfaces are intentional")
-						?.Note("Remove raycasters only from canvases that are confirmed not to receive pointer/input queries.", "Context");
+				{
+					var safePaths = ReadHierarchyOrDefault(entry.Path, isScene, roots => FindSafeRedundantRaycasterPaths(roots), new List<string>());
+					var issue = entry.AddIssue("UIT002", facts.graphicRaycasterCount + " GraphicRaycaster component(s)",
+						safePaths.Count > 0 ? "Disable " + safePaths.Count + " raycaster(s) whose Canvas has no raycastable Graphics or custom scripts" : "No raycaster passed the automatic-safety gate",
+						0, safePaths.Count > 0 ? (Action<FixContext>)(c => DisableSafeRaycasters(c, isScene, safePaths)) : null,
+						"Raycasters are excluded when their Canvas has any raycastable Graphic or any MonoBehaviour in its subtree.",
+						verify: safePaths.Count > 0 ? (Func<FixContext, bool>)(c => VerifySafeRaycastersDisabled(c.AssetPath, isScene, safePaths)) : null);
+					if (safePaths.Count == 0 && issue != null) MakeDiagnosticOnly(issue);
+					issue?.Note("Canvases with real Graphic hit targets or scripts are left unchanged.", "Safety gate");
+				}
 
 			using (RuleTiming.Begin("UIT003", entry.Path))
 				if (facts.layoutComponentCount > settings.uiLayoutWarn)
@@ -1375,13 +1417,54 @@ namespace ApexForge.ProjectOptimizer
 
 			using (RuleTiming.Begin("PHY002", entry.Path))
 				if (!IsNativeUnavailable(facts, SerializedUnityHierarchy.NativeCapability.RigidbodyState) && highSolverIterations.Count > 0)
-					entry.AddIssue("PHY002", highSolverIterations.Count + " Rigidbody(s) above " + settings.physicsSolverIterationsWarn + " solver iterations", "review per-body solver iteration overrides")
-						?.Items("Rigidbodies", highSolverIterations);
+				{
+					string[] paths = highSolverIterations.Select(GetMetricPath).ToArray();
+					bool targetable = paths.All(x => !string.IsNullOrEmpty(x)) && paths.Distinct(StringComparer.Ordinal).Count() == paths.Length;
+					int projectDefault = Mathf.Max(1, Physics.defaultSolverIterations);
+					int threshold = Mathf.Max(1, settings.physicsSolverIterationsWarn);
+					var options = new List<FixOption>();
+					if (targetable)
+					{
+						options.Add(new FixOption { ActionId = "project_default", Label = "Use project default (" + projectDefault + ")", Recommended = true,
+							ResultDescription = "Sets only the listed high-iteration Rigidbodies to the current Physics.defaultSolverIterations value.", Risk = FixRisk.Medium,
+							Apply = c => SetRigidbodySolverIterations(c, isScene, paths, threshold, projectDefault),
+							Verify = c => VerifyRigidbodySolverIterations(c.AssetPath, isScene, paths, projectDefault) });
+						if (threshold != projectDefault) options.Add(new FixOption { ActionId = "warning_threshold", Label = "Set to warning threshold (" + threshold + ")",
+							ResultDescription = "Sets only the listed Rigidbodies to the configured warning threshold.", Risk = FixRisk.Medium,
+							Apply = c => SetRigidbodySolverIterations(c, isScene, paths, threshold, threshold),
+							Verify = c => VerifyRigidbodySolverIterations(c.AssetPath, isScene, paths, threshold) });
+					}
+					var issue = entry.AddIssue("PHY002", highSolverIterations.Count + " Rigidbody(s) above " + settings.physicsSolverIterationsWarn + " solver iterations",
+						targetable ? "Choose project default or configured threshold; confirm physics stability" : "No batch action: Rigidbody paths are ambiguous",
+						basis: SavingsBasis.Unknown, options: options);
+					issue?.Items("Rigidbodies", highSolverIterations);
+					issue?.Note("Compare contacts/joint stability and target-device physics cost after choosing a mode. No change is automatic for this Review rule.", "Review gate");
+				}
 
 			using (RuleTiming.Begin("PHY003", entry.Path))
 				if (!IsNativeUnavailable(facts, SerializedUnityHierarchy.NativeCapability.RigidbodyState) && facts.continuousDynamicKinematicBodies.Count > 0)
-					entry.AddIssue("PHY003", facts.continuousDynamicKinematicBodies.Count + " kinematic Rigidbody(s) on Continuous Dynamic CCD", "review CCD mode; use the least expensive mode that meets tunnelling requirements")
-						?.Items("Rigidbodies", facts.continuousDynamicKinematicBodies);
+				{
+					string[] paths = facts.continuousDynamicKinematicBodies.ToArray();
+					bool targetable = paths.All(x => !string.IsNullOrEmpty(x)) && paths.Distinct(StringComparer.Ordinal).Count() == paths.Length;
+					var options = new List<FixOption>();
+					if (targetable)
+					{
+						options.Add(new FixOption { ActionId = "continuous_speculative", Label = "Continuous Speculative", Recommended = true,
+							ResultDescription = "Changes only the listed kinematic bodies from Continuous Dynamic to speculative CCD.",
+							Warning = "Validate tunnelling-sensitive interactions; speculative CCD can behave differently for some fast-moving shapes.", Risk = FixRisk.Medium,
+							Apply = c => SetKinematicCcdMode(c, isScene, paths, CollisionDetectionMode.ContinuousSpeculative),
+							Verify = c => VerifyKinematicCcdMode(c.AssetPath, isScene, paths, CollisionDetectionMode.ContinuousSpeculative) });
+						options.Add(new FixOption { ActionId = "discrete", Label = "Discrete (only if CCD is unnecessary)",
+							Warning = "Fast kinematic movement may tunnel through colliders. Select only after physics/gameplay validation.", Risk = FixRisk.Medium,
+							Apply = c => SetKinematicCcdMode(c, isScene, paths, CollisionDetectionMode.Discrete),
+							Verify = c => VerifyKinematicCcdMode(c.AssetPath, isScene, paths, CollisionDetectionMode.Discrete) });
+					}
+					var issue = entry.AddIssue("PHY003", facts.continuousDynamicKinematicBodies.Count + " kinematic Rigidbody(s) on Continuous Dynamic CCD",
+						targetable ? "Choose a collision mode and test tunnelling-sensitive interactions" : "No batch action: Rigidbody paths are ambiguous",
+						basis: SavingsBasis.Unknown, options: options);
+					issue?.Items("Rigidbodies", facts.continuousDynamicKinematicBodies);
+					issue?.Note("This remains a human-approved Review Fix; no automatic mode change is made.", "Review gate");
+				}
 
 			using (RuleTiming.Begin("PHY004", entry.Path))
 				if (facts.jointCount > settings.jointCountWarn)
@@ -1390,8 +1473,16 @@ namespace ApexForge.ProjectOptimizer
 
 			using (RuleTiming.Begin("RND001", entry.Path))
 				if (facts.skinnedAlwaysUpdate.Count > 0)
-					entry.AddIssue("RND001", facts.skinnedAlwaysUpdate.Count + " SkinnedMeshRenderer(s) update off-screen", "disable Update When Offscreen for cosmetic-only skinning")
-						?.Items("Skinned renderers", facts.skinnedAlwaysUpdate);
+				{
+					var safePaths = ReadHierarchyOrDefault(entry.Path, isScene, roots => FindSafeOffscreenSkinPaths(roots), new List<string>());
+					var issue = entry.AddIssue("RND001", facts.skinnedAlwaysUpdate.Count + " SkinnedMeshRenderer(s) update off-screen",
+						safePaths.Count > 0 ? "Disable Update When Offscreen on " + safePaths.Count + " static skin renderer(s)" : "No skinned renderer passed the automatic-safety gate",
+						0, safePaths.Count > 0 ? (Action<FixContext>)(c => DisableSafeOffscreenSkinning(c, isScene, safePaths)) : null,
+						"Animated/deformed renderers and any renderer with a detected script dependency are excluded.",
+						verify: safePaths.Count > 0 ? (Func<FixContext, bool>)(c => VerifyOffscreenSkinning(c.AssetPath, isScene, safePaths)) : null);
+					issue?.Items("Skinned renderers", facts.skinnedAlwaysUpdate);
+					if (safePaths.Count == 0 && issue != null) MakeDiagnosticOnly(issue);
+				}
 
 			using (RuleTiming.Begin("VFX001", entry.Path))
 				if (!IsNativeUnavailable(facts, SerializedUnityHierarchy.NativeCapability.ParticleState) && facts.particleExpensiveModuleCount > settings.particleModuleCountWarn)
@@ -1410,52 +1501,28 @@ namespace ApexForge.ProjectOptimizer
 			using (RuleTiming.Begin("PRE010", entry.Path))
 				if (alwaysAnimate.Count > 0)
 				{
-					// A Review Fix, not a Verified one: culling an animator stops its state machine, root
-					// motion and animation events while it is off-screen. For a background prop that is a
-					// saving; for anything the game reads back it is a bug that only shows up when the
-					// player is not looking - which is exactly why a human has to choose this, per animator
-					// group, rather than the tool choosing it for every prefab and scene at once.
-					var options = new List<FixOption>
-				{
-					new FixOption
-					{
-						Label = "Cull Update Transforms",
-						ResultDescription = "Keeps the state machine and root motion evaluated off-screen, but skips retargeting, IK "
-											+ "and Transform writes when the renderers are invisible.",
-						Recommended = true,
-						Apply = c => SetAlwaysAnimateCulling(c, isScene, AnimatorCullingMode.CullUpdateTransforms),
-						Verify = c => CountAlwaysAnimate(c.AssetPath, isScene) == 0
-					},
-					new FixOption
-					{
-						Label = "Cull Completely",
-						ResultDescription = "Stops all evaluation off-screen: state machine, root motion, "
-											+ "animation events and gameplay reads all stop while out of view.",
-						Warning = "Anything reading animation state, root motion or animation events while "
-								  + "off-screen will stop doing so. Choose this only for purely cosmetic animation.",
-						Apply = c => SetAlwaysAnimateCulling(c, isScene, AnimatorCullingMode.CullCompletely),
-						Verify = c => CountAlwaysAnimate(c.AssetPath, isScene) == 0
-					}
-				};
-
-					entry.AddIssue("PRE010", alwaysAnimate.Count + " animator(s) on Always Animate",
-						"Review Fix: choose a culling mode below",
-						basis: SavingsBasis.Unknown, options: options)
-							?.Items("Animators", alwaysAnimate);
+					var safePaths = ReadHierarchyOrDefault(entry.Path, isScene, roots => FindSafeAnimatorPaths(roots), new List<string>());
+					var issue = entry.AddIssue("PRE010", alwaysAnimate.Count + " animator(s) on Always Animate",
+						safePaths.Count > 0 ? "Use Cull Update Transforms on " + safePaths.Count + " safe cosmetic animator(s)" : "No animator passed the automatic-safety gate; retain Always Animate",
+						0, safePaths.Count > 0 ? (Action<FixContext>)(c => SetSafeAnimatorCulling(c, isScene, safePaths)) : null,
+						"Only animators without detected MonoBehaviour dependencies, root motion, animation events, or state-machine behaviours are changed.",
+						verify: safePaths.Count > 0 ? (Func<FixContext, bool>)(c => VerifySafeAnimatorCulling(c.AssetPath, isScene, safePaths)) : null);
+					issue?.Items("Always Animate animators", alwaysAnimate);
+					if (safePaths.Count == 0 && issue != null) MakeDiagnosticOnly(issue);
 				}
 
 			using (RuleTiming.Begin("PRE011", entry.Path))
 				if (unstaticGeometry.Count > 0)
-					entry.AddIssue("PRE011", unstaticGeometry.Count + " non-static renderer(s)", "Static flags set",
-						options: new List<FixOption> { new FixOption {
-							Label = "Mark Static Geometry",
-							Recommended = true,
-							Risk = FixRisk.Medium,
-							Warning = "This is a Review Fix. Inspect the target state before applying it.",
-							Apply = c => GameObjectAsset(c, go => { foreach (var r in go.GetComponentsInChildren<Renderer>(true)) r.gameObject.isStatic = true; })
-						} }
-					)
-						?.Items("Renderers", unstaticGeometry);
+				{
+					var safePaths = ReadHierarchyOrDefault(entry.Path, isScene, roots => FindSafeBatchingStaticPaths(roots), new List<string>());
+					var issue = entry.AddIssue("PRE011", unstaticGeometry.Count + " non-static renderer(s)",
+						safePaths.Count > 0 ? "Add only the Batching Static flag to " + safePaths.Count + " eligible MeshRenderer(s)" : "No geometry passed the static-safety gate",
+						0, safePaths.Count > 0 ? (Action<FixContext>)(c => SetBatchingStatic(c, isScene, safePaths)) : null,
+						"The action adds only StaticEditorFlags.BatchingStatic and preserves all other static flags.",
+						verify: safePaths.Count > 0 ? (Func<FixContext, bool>)(c => VerifyBatchingStatic(c.AssetPath, isScene, safePaths)) : null);
+					issue?.Items("Non-static renderers", unstaticGeometry);
+					if (safePaths.Count == 0 && issue != null) MakeDiagnosticOnly(issue);
+				}
 
 			using (RuleTiming.Begin("PRE014", entry.Path))
 				if (!IsNativeUnavailable(facts, SerializedUnityHierarchy.NativeCapability.MeshStats) && denseNoLod.Count > 0)
@@ -1522,29 +1589,27 @@ namespace ApexForge.ProjectOptimizer
 						issue?.Note("The displayed hierarchy paths are missing or ambiguous, so no batch action is offered. Rename duplicate hierarchy objects or rescan so each Rigidbody can be targeted safely.", "Fix unavailable");
 				}
 
-			using (RuleTiming.Begin("PAS1012", entry.Path))
+			using (RuleTiming.Begin("PAS028", entry.Path))
 				if (!IsNativeUnavailable(facts, SerializedUnityHierarchy.NativeCapability.StopNaNCameraState) && stopNaNCameras > 0)
-				{
-					entry.AddIssue("PAS1012",
+					entry.AddIssue("PAS028",
 						stopNaNCameras + " URP Base camera(s) have Stop NaNs enabled",
-						"Review Fix: disable Stop NaNs",
-						0,
-						fixable ? (Action<FixContext>)(c => SetStopNaN(c, isScene, false)) : null,
-						verify: fixable ? (Func<FixContext, bool>)(c => CountStopNaNCameras(c.AssetPath, isScene) == 0) : null)
-						?.Note("Stop NaNs is a URP camera safety feature. Disable it when it is not needed on production cameras, especially on performance-sensitive targets.", "Review");
-				}
+						"No action — keep Stop NaNs enabled")
+						?.Note("Stop NaNs remains enabled by product policy. This finding is diagnostic-only and never changes the camera setting.", "Policy");
 
 			using (RuleTiming.Begin("PRE012", entry.Path))
 				if (isScene && !IsNativeUnavailable(facts, SerializedUnityHierarchy.NativeCapability.LightSemantics) && shadowLights > settings.realtimeLightWarn)
-					entry.AddIssue("PRE012", shadowLights + " shadow-casting realtime lights", "at most " + settings.realtimeLightWarn,
-						options: new List<FixOption> { new FixOption {
-							Label = "Reduce Realtime Shadow Lights",
-							Recommended = true,
-							Risk = FixRisk.Medium,
-							Warning = "This is a Review Fix. Inspect the target state before applying it.",
-							Apply = c => GameObjectAsset(c, go => { var lights = go.GetComponentsInChildren<Light>(true); int kept = 0; foreach (var l in lights) if (l.bakingOutput.lightmapBakeType == LightmapBakeType.Realtime && l.shadows != LightShadows.None && ++kept > Mathf.Max(1, OptimizerSettings.Instance.Profile.RealtimeLightWarn)) l.shadows = LightShadows.None; })
-						} }
-					);
+				{
+					var issue = entry.AddIssue("PRE012", shadowLights + " shadow-casting realtime lights", "Review which lights should retain realtime shadows",
+						basis: SavingsBasis.Unknown, options: new List<FixOption> { new FixOption {
+							ActionId = "keep_brightest_directional",
+							Label = "Keep the brightest directional light; disable other realtime shadows",
+							Recommended = true, Risk = FixRisk.High, BackupRequiredOverride = true,
+							Warning = "Human decision required. This alters lighting appearance; confirm the chosen key light and validate a representative scene.",
+							Apply = c => ReduceShadowCastingLights(c, isScene),
+							Verify = c => CountRealtimeShadowLights(c.AssetPath, isScene) <= 1
+						} });
+					issue?.Note("The option keeps the brightest enabled realtime directional light with shadows; if no directional light is present, it keeps the brightest enabled realtime shadow-casting light. Ties are rejected.", "Review action");
+				}
 		}
 
 		// --- helpers -------------------------------------------------------------
@@ -1746,25 +1811,35 @@ namespace ApexForge.ProjectOptimizer
 			FixHierarchy(c, isScene, root =>
 			{
 				var bodies = root.GetComponentsInChildren<Rigidbody>(true);
-				var matchedPaths = new HashSet<string>(StringComparer.Ordinal);
+				var byPath = bodies.Where(body => body != null).GroupBy(body => Path(body.transform))
+					.ToDictionary(group => group.Key, group => group.ToList(), StringComparer.Ordinal);
+				var pathsInThisRoot = wanted.Where(byPath.ContainsKey).ToArray();
+				if (pathsInThisRoot.Length == 0) return;
 
-				// Preflight every target before mutating any body. A stale result must fail atomically,
-				// especially for scenes that remain loaded in memory when a save is rejected.
-				foreach (var body in bodies)
+				// Scene fixes invoke the mutation once per scene root, so validate only paths
+				// belonging to this root. The postcondition checks the complete target set.
+				foreach (var path in pathsInThisRoot)
 				{
-					string path = Path(body.transform);
-					if (!wanted.Contains(path)) continue;
-					matchedPaths.Add(path);
+					if (byPath[path].Count != 1)
+						throw new InvalidOperationException("A PRE015 target Rigidbody path is ambiguous. Rescan before applying this action.");
+					var body = byPath[path][0];
 					if (mode != CollisionDetectionMode.Discrete && body.collisionDetectionMode == CollisionDetectionMode.Discrete)
 						throw new InvalidOperationException("A PRE015 target Rigidbody became Discrete after the finding was created. Rescan before applying this action.");
 				}
 
-				if (matchedPaths.Count != wanted.Count)
-					throw new InvalidOperationException("One or more PRE015 target Rigidbody paths no longer exist. Rescan before applying this action.");
+				foreach (var path in pathsInThisRoot)
+					if (byPath[path][0].collisionDetectionMode != mode) byPath[path][0].collisionDetectionMode = mode;
+			});
+		}
 
-				foreach (var body in bodies)
-					if (wanted.Contains(Path(body.transform)) && body.collisionDetectionMode != mode)
-						body.collisionDetectionMode = mode;
+		static void RemoveMissingScriptComponents(FixContext c, bool isScene)
+		{
+			if (CountMissingScripts(c.AssetPath, isScene) <= 0)
+				throw new InvalidOperationException("PRE001 no longer has missing script components. Rescan before applying the fix.");
+			FixHierarchy(c, isScene, root =>
+			{
+				foreach (var t in root.GetComponentsInChildren<Transform>(true))
+					GameObjectUtility.RemoveMonoBehavioursWithMissingScript(t.gameObject);
 			});
 		}
 
@@ -1994,50 +2069,6 @@ namespace ApexForge.ProjectOptimizer
 			return filter != null && filter.sharedMesh != null ? filter.sharedMesh.vertexCount : 0;
 		}
 
-		static int CountStopNaNCameras(string assetPath, bool isScene)
-		{
-			if (isScene)
-				return CountInPreviewScene(assetPath, go => IsUrpStopNaNEnabled(go) ? 1 : 0);
-
-			var root = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
-			if (root == null) return 0;
-
-			int count = 0;
-			foreach (var camera in root.GetComponentsInChildren<Camera>(true))
-				if (IsUrpStopNaNEnabled(camera.gameObject)) count++;
-			return count;
-		}
-
-		static void SetStopNaN(FixContext c, bool isScene, bool enabled)
-		{
-			FixHierarchy(c, isScene, root =>
-			{
-				if (!s_ResolvedUrpCameraData)
-					IsUrpStopNaNEnabled(root);
-
-				if (s_UrpAdditionalCameraDataType == null || s_UrpStopNaNProperty == null)
-					return;
-
-				foreach (var camera in root.GetComponentsInChildren<Camera>(true))
-				{
-					var component = camera.gameObject.GetComponent(s_UrpAdditionalCameraDataType);
-					if (component == null) continue;
-
-					try
-					{
-						var renderType = s_UrpRenderTypeProperty?.GetValue(component, null);
-						if (renderType == null || !string.Equals(renderType.ToString(), "Base", StringComparison.Ordinal))
-							continue;
-						s_UrpStopNaNProperty.SetValue(component, enabled, null);
-					}
-					catch
-					{
-						// Package/version mismatches should not make an unrelated hierarchy fix fail.
-					}
-				}
-			});
-		}
-
 		static string Preview(List<string> items)
 		{
 			int shown = Mathf.Min(items.Count, 8);
@@ -2046,29 +2077,1000 @@ namespace ApexForge.ProjectOptimizer
 			if (items.Count > shown) lines.Add("  - and " + (items.Count - shown) + " more");
 			return string.Join("\n", lines);
 		}
-		static void TrimSurplusMaterialSlots(FixContext c)
+		// --- Session 03 FixKind audit helpers ------------------------------------
+
+		sealed class ParticleBudgetTarget
 		{
-			var root = c.Asset as GameObject;
-			if (root == null) throw new InvalidOperationException("Prefab/scene root is unavailable for PRE004 fix.");
-			var renderers = root.GetComponentsInChildren<Renderer>(true);
-			for (int i = 0; i < renderers.Length; i++)
-			{
-				var r = renderers[i];
-				var mf = r.GetComponent<MeshFilter>();
-				if (mf == null || mf.sharedMesh == null) continue;
-				int sub = mf.sharedMesh.subMeshCount; var mats = r.sharedMaterials;
-				if (mats.Length > sub) { var trimmed = new Material[sub]; Array.Copy(mats, trimmed, sub); r.sharedMaterials = trimmed; }
-			}
-			c.NeedsSave = true;
+			public string Path;
+			public int MaxParticles;
 		}
 
-		static bool VerifyNoSurplusMaterialSlots(FixContext c)
+		static void MakeDiagnosticOnly(OptimizationIssue issue)
 		{
-			var root = AssetDatabase.LoadAssetAtPath<GameObject>(c.AssetPath);
-			if (root == null) return false;
-			var renderers = root.GetComponentsInChildren<Renderer>(true);
-			for (int i = 0; i < renderers.Length; i++) { var mf = renderers[i].GetComponent<MeshFilter>(); if (mf != null && mf.sharedMesh != null && renderers[i].sharedMaterials.Length > mf.sharedMesh.subMeshCount) return false; }
+			if (issue == null) return;
+			issue.FixKind = FixKind.None;
+			issue.Fix = null;
+			issue.Verify = null;
+			issue.Options.Clear();
+		}
+
+		static T ReadHierarchy<T>(string assetPath, bool isScene, Func<GameObject[], T> read)
+		{
+			if (read == null) throw new ArgumentNullException(nameof(read));
+			if (!isScene)
+			{
+				var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
+				if (prefab == null) throw new InvalidOperationException("Prefab is unavailable for preflight: " + assetPath);
+				return read(new[] { prefab });
+			}
+
+			var scene = EditorSceneManager.OpenPreviewScene(assetPath);
+			if (!scene.IsValid()) throw new InvalidOperationException("Scene is unavailable for preflight: " + assetPath);
+			try { return read(scene.GetRootGameObjects()); }
+			finally { EditorSceneManager.ClosePreviewScene(scene); }
+		}
+
+		static T ReadHierarchyOrDefault<T>(string assetPath, bool isScene, Func<GameObject[], T> read, T fallback)
+		{
+			try { return ReadHierarchy(assetPath, isScene, read); }
+			catch (Exception ex)
+			{
+				UnityEngine.Debug.LogWarning(ProjectOptimizerConstants.LogPrefix + " Could not preflight " + assetPath + "; no automatic candidates will be offered. " + ex.Message);
+				return fallback;
+			}
+		}
+
+		static bool IsIdentityTransform(Transform transform)
+		{
+			return transform != null
+				&& (transform.localPosition.sqrMagnitude <= 0.000001f)
+				&& Quaternion.Angle(transform.localRotation, Quaternion.identity) <= 0.001f
+				&& (transform.localScale - Vector3.one).sqrMagnitude <= 0.000001f;
+		}
+
+		static bool IsGenericDefaultName(string name)
+		{
+			if (string.IsNullOrWhiteSpace(name)) return false;
+			string value = name.Trim();
+			if (value == "GameObject" || value == "Empty" || value == "Empty GameObject" || value == "New Game Object") return true;
+			return value.StartsWith("GameObject (", StringComparison.Ordinal)
+				|| value.StartsWith("Empty (", StringComparison.Ordinal)
+				|| value.StartsWith("New Game Object (", StringComparison.Ordinal);
+		}
+
+		static bool HasMarkerLikeName(string name)
+		{
+			if (string.IsNullOrEmpty(name)) return true;
+			string value = name.Replace("_", string.Empty).Replace("-", string.Empty).Replace(" ", string.Empty).ToLowerInvariant();
+			string[] tokens = { "spawn", "anchor", "socket", "muzzle", "attach", "point", "pivot", "root", "origin", "bone", "marker", "start", "end", "target", "lookat", "grip", "hand", "foot", "eye", "camera", "slot", "mount", "waypoint", "respawn", "interact", "trigger", "weapon", "hold", "offset", "locator" };
+			for (int i = 0; i < tokens.Length; i++) if (value.Contains(tokens[i])) return true;
+			return false;
+		}
+
+		static HashSet<int> CollectIncomingObjectReferences(GameObject[] roots)
+		{
+			var incoming = new HashSet<int>();
+			foreach (var root in roots)
+			{
+				if (root == null) continue;
+				foreach (var component in root.GetComponentsInChildren<Component>(true))
+				{
+					if (component == null || component is Transform) continue; // Transform.m_Father is structural, not a semantic dependency.
+					try
+					{
+						var serialized = new SerializedObject(component);
+						var property = serialized.GetIterator();
+						while (property.Next(true))
+						{
+							if (property.propertyType != SerializedPropertyType.ObjectReference) continue;
+						var referenced = property.objectReferenceValue;
+						// Self-references die with the owning object and are not inbound dependencies.
+						if (referenced is GameObject go && go != component.gameObject)
+						{
+							incoming.Add(go.GetInstanceID());
+							incoming.Add(go.transform.GetInstanceID());
+						}
+						else if (referenced is Component referencedComponent && referencedComponent.gameObject != component.gameObject)
+						{
+							incoming.Add(referencedComponent.GetInstanceID());
+							incoming.Add(referencedComponent.gameObject.GetInstanceID());
+							incoming.Add(referencedComponent.transform.GetInstanceID());
+						}
+						}
+					}
+					catch
+					{
+						// Unknown serialized types make the incoming-reference audit incomplete; callers must fail closed.
+						return null;
+					}
+				}
+			}
+			return incoming;
+		}
+
+		static Dictionary<string, int> CountHierarchyPaths(GameObject[] roots)
+		{
+			var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+			foreach (var root in roots)
+			{
+				if (root == null) continue;
+				foreach (var transform in root.GetComponentsInChildren<Transform>(true))
+				{
+					string path = Path(transform);
+					counts.TryGetValue(path, out int count);
+					counts[path] = count + 1;
+				}
+			}
+			return counts;
+		}
+
+		static bool HasIncomingReference(GameObject go, HashSet<int> incoming)
+			=> go != null && (incoming.Contains(go.GetInstanceID()) || incoming.Contains(go.transform.GetInstanceID()));
+
+		static bool HasAnimationPathDependencies(GameObject[] roots)
+		{
+			// Animation bindings and Timeline tracks target transform paths, not necessarily direct
+			// serialized references to the leaf GameObject. Changing a generic transform path can
+			// therefore break animation while passing an object-reference-only scan.
+			foreach (var root in roots)
+			{
+				if (root == null) continue;
+				if (root.GetComponentsInChildren<Animator>(true).Length > 0
+					|| root.GetComponentsInChildren<Animation>(true).Length > 0
+					|| root.GetComponentsInChildren<PlayableDirector>(true).Length > 0) return true;
+			}
+			return false;
+		}
+
+		static List<string> FindSafeEmptyLeafPaths(GameObject[] roots)
+		{
+			if (HasAnimationPathDependencies(roots)) return new List<string>();
+			var paths = CountHierarchyPaths(roots);
+			var incoming = CollectIncomingObjectReferences(roots);
+			var result = new List<string>();
+			if (incoming == null) return result;
+			foreach (var root in roots)
+			{
+				if (root == null) continue;
+				foreach (var transform in root.GetComponentsInChildren<Transform>(true))
+				{
+					var go = transform.gameObject;
+					if (transform.parent == null || transform.childCount != 0 || !IsIdentityTransform(transform)) continue;
+					if (!IsGenericDefaultName(go.name) || HasMarkerLikeName(go.name)) continue;
+					if (go.GetComponents<Component>().Length != 1 || PrefabUtility.IsPartOfPrefabInstance(go)) continue;
+					if (go.hideFlags != HideFlags.None || HasIncomingReference(go, incoming)) continue;
+					string path = Path(transform);
+					if (paths.TryGetValue(path, out int count) && count == 1) result.Add(path);
+				}
+			}
+			return result.Distinct(StringComparer.Ordinal).ToList();
+		}
+
+		static List<string> FindSafeFlattenableContainerPaths(GameObject[] roots)
+		{
+			if (HasAnimationPathDependencies(roots)) return new List<string>();
+			var paths = CountHierarchyPaths(roots);
+			var incoming = CollectIncomingObjectReferences(roots);
+			var result = new List<string>();
+			if (incoming == null) return result;
+			foreach (var root in roots)
+			{
+				if (root == null) continue;
+				foreach (var transform in root.GetComponentsInChildren<Transform>(true))
+				{
+					var go = transform.gameObject;
+					if (transform.parent == null || transform.childCount != 1 || !IsIdentityTransform(transform)) continue;
+					if (!IsGenericDefaultName(go.name) || HasMarkerLikeName(go.name)) continue;
+					if (go.GetComponents<Component>().Length != 1 || PrefabUtility.IsPartOfPrefabInstance(go)) continue;
+					if (go.hideFlags != HideFlags.None || HasIncomingReference(go, incoming)) continue;
+					string path = Path(transform);
+					if (paths.TryGetValue(path, out int count) && count == 1) result.Add(path);
+				}
+			}
+			return result.Distinct(StringComparer.Ordinal).ToList();
+		}
+
+		static bool PathsAreAbsent(string assetPath, bool isScene, List<string> paths)
+		{
+			if (paths == null || paths.Count == 0) return false;
+			return ReadHierarchy(assetPath, isScene, roots =>
+			{
+				var existing = new HashSet<string>(StringComparer.Ordinal);
+				foreach (var root in roots) if (root != null) foreach (var t in root.GetComponentsInChildren<Transform>(true)) existing.Add(Path(t));
+				return paths.All(path => !existing.Contains(path));
+			});
+		}
+
+		static void RemoveSafeEmptyLeaves(FixContext c, bool isScene, List<string> targetPaths)
+		{
+			var wanted = new HashSet<string>(targetPaths ?? new List<string>(), StringComparer.Ordinal);
+			if (wanted.Count == 0 || !ReadHierarchy(c.AssetPath, isScene, roots => wanted.IsSubsetOf(new HashSet<string>(FindSafeEmptyLeafPaths(roots), StringComparer.Ordinal))))
+				throw new InvalidOperationException("PRE005/PRE007 targets no longer pass the empty-leaf safety checks. Rescan before applying the fix.");
+			FixHierarchy(c, isScene, root =>
+			{
+				var roots = new[] { root };
+				var candidates = FindSafeEmptyLeafPaths(roots).Where(wanted.Contains).ToList();
+				if (candidates.Count == 0) return;
+				var byPath = root.GetComponentsInChildren<Transform>(true).Where(t => t != null).GroupBy(Path).ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+				foreach (var path in candidates)
+					if (byPath.TryGetValue(path, out var matches) && matches.Count == 1 && matches[0] != null && matches[0].parent != null)
+						UnityEngine.Object.DestroyImmediate(matches[0].gameObject);
+			});
+		}
+
+		static void FlattenSafeContainers(FixContext c, bool isScene, List<string> targetPaths)
+		{
+			var wanted = new HashSet<string>(targetPaths ?? new List<string>(), StringComparer.Ordinal);
+			if (wanted.Count == 0 || !ReadHierarchy(c.AssetPath, isScene, roots => wanted.IsSubsetOf(new HashSet<string>(FindSafeFlattenableContainerPaths(roots), StringComparer.Ordinal))))
+				throw new InvalidOperationException("PRE006 targets no longer pass the container-flattening safety checks. Rescan before applying the fix.");
+			FixHierarchy(c, isScene, root =>
+			{
+				var safe = FindSafeFlattenableContainerPaths(new[] { root }).Where(wanted.Contains).ToList();
+				var map = root.GetComponentsInChildren<Transform>(true).Where(t => t != null).GroupBy(Path).ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+				// Deepest paths are removed first so parents are not invalidated mid-pass.
+				foreach (var path in safe.OrderByDescending(x => x.Count(ch => ch == '/')))
+				{
+					if (!map.TryGetValue(path, out var matches) || matches.Count != 1) continue;
+					var parent = matches[0];
+					if (parent == null || parent.parent == null || parent.childCount != 1 || !IsIdentityTransform(parent)) continue;
+					var child = parent.GetChild(0);
+					child.SetParent(parent.parent, true);
+					UnityEngine.Object.DestroyImmediate(parent.gameObject);
+				}
+			});
+		}
+
+		static int CountDanglingObjectReferences(string assetPath, bool isScene)
+		{
+			return ReadHierarchy(assetPath, isScene, roots =>
+			{
+				int count = 0;
+				foreach (var root in roots)
+				{
+					if (root == null) continue;
+					foreach (var component in root.GetComponentsInChildren<Component>(true))
+					{
+						if (component == null) continue;
+						var serialized = new SerializedObject(component);
+						var property = serialized.GetIterator();
+						while (property.Next(true))
+							if (property.propertyType == SerializedPropertyType.ObjectReference && property.objectReferenceInstanceIDValue != 0 && property.objectReferenceValue == null) count++;
+					}
+				}
+				return count;
+			});
+		}
+
+		static void ClearDanglingObjectReferences(FixContext c, bool isScene)
+		{
+			if (CountDanglingObjectReferences(c.AssetPath, isScene) <= 0)
+				throw new InvalidOperationException("PRE002 no longer has dangling object references. Rescan before applying the fix.");
+			FixHierarchy(c, isScene, root =>
+			{
+				foreach (var component in root.GetComponentsInChildren<Component>(true))
+				{
+					if (component == null) continue;
+					var serialized = new SerializedObject(component);
+					serialized.UpdateIfRequiredOrScript();
+					var property = serialized.GetIterator();
+					bool changed = false;
+					while (property.Next(true))
+					{
+						if (property.propertyType != SerializedPropertyType.ObjectReference) continue;
+						if (property.objectReferenceInstanceIDValue == 0 || property.objectReferenceValue != null) continue;
+						property.objectReferenceValue = null;
+						changed = true;
+					}
+					if (changed) serialized.ApplyModifiedProperties();
+				}
+			});
+		}
+
+		static bool HasProvablyRedundantOpaqueSurplusSlots(Renderer renderer)
+		{
+			if (renderer == null || renderer.HasPropertyBlock()) return false;
+			int submeshes = SubMeshCount(renderer);
+			var materials = renderer.sharedMaterials;
+			if (submeshes <= 0 || materials == null || materials.Length <= submeshes) return false;
+
+			// Removing an arbitrary extra slot can change the image: Unity can draw the final
+			// submesh once per surplus material and those materials may blend, clip, or intentionally
+			// overlay. Only duplicate references to the final assigned material are candidates.
+			var repeatedMaterial = materials[submeshes - 1];
+			if (!IsConservativelyOpaqueMaterial(repeatedMaterial)) return false;
+			for (int i = submeshes; i < materials.Length; i++)
+				if (materials[i] != repeatedMaterial) return false;
 			return true;
+		}
+
+		static bool IsConservativelyOpaqueMaterial(Material material)
+		{
+			if (material == null || material.shader == null) return false;
+			string shaderName = material.shader.name;
+			// Restrict to common built-in lit shaders whose opaque pass semantics are known. Custom
+			// shaders remain diagnostic-only even when their queue happens to be in the opaque range.
+			if (shaderName != "Standard"
+				&& shaderName != "Universal Render Pipeline/Lit"
+				&& shaderName != "Universal Render Pipeline/Simple Lit"
+				&& shaderName != "Legacy Shaders/Diffuse"
+				&& shaderName != "Legacy Shaders/Specular") return false;
+
+			if (!string.Equals(material.GetTag("RenderType", false, string.Empty), "Opaque", StringComparison.Ordinal)) return false;
+			int queue = material.renderQueue >= 0 ? material.renderQueue : material.shader.renderQueue;
+			if (queue >= (int)UnityEngine.Rendering.RenderQueue.AlphaTest) return false;
+			if (material.IsKeywordEnabled("_ALPHATEST_ON") || material.IsKeywordEnabled("_ALPHABLEND_ON")
+				|| material.IsKeywordEnabled("_ALPHAPREMULTIPLY_ON") || material.IsKeywordEnabled("_SURFACE_TYPE_TRANSPARENT")
+				|| material.IsKeywordEnabled("_ALPHAMODULATE_ON")) return false;
+			if (material.HasProperty("_Surface") && material.GetFloat("_Surface") > 0.5f) return false;
+			if (material.HasProperty("_AlphaClip") && material.GetFloat("_AlphaClip") > 0.5f) return false;
+			if (material.HasProperty("_Mode") && material.GetFloat("_Mode") > 0.001f) return false;
+			if (material.HasProperty("_SrcBlend") && Mathf.Abs(material.GetFloat("_SrcBlend") - (float)UnityEngine.Rendering.BlendMode.One) > 0.001f) return false;
+			if (material.HasProperty("_DstBlend") && Mathf.Abs(material.GetFloat("_DstBlend") - (float)UnityEngine.Rendering.BlendMode.Zero) > 0.001f) return false;
+			if (material.HasProperty("_ZWrite") && material.GetFloat("_ZWrite") < 0.5f) return false;
+			if (material.HasProperty("_ZTest") && Mathf.Abs(material.GetFloat("_ZTest") - (float)UnityEngine.Rendering.CompareFunction.LessEqual) > 0.001f) return false;
+			return true;
+		}
+
+		static List<string> FindSurplusMaterialPaths(GameObject[] roots)
+		{
+			var pathCounts = CountHierarchyPaths(roots);
+			var surplusByPath = new Dictionary<string, List<Renderer>>(StringComparer.Ordinal);
+			foreach (var root in roots) if (root != null) foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
+			{
+				if (renderer == null) continue;
+				int submeshes = SubMeshCount(renderer);
+				var materials = renderer.sharedMaterials;
+				if (submeshes <= 0 || materials == null || materials.Length <= submeshes) continue;
+				string path = Path(renderer.transform);
+				if (!surplusByPath.TryGetValue(path, out var renderers)) surplusByPath[path] = renderers = new List<Renderer>();
+				renderers.Add(renderer);
+			}
+
+			var result = new List<string>();
+			foreach (var pair in surplusByPath)
+			{
+				if (!pathCounts.TryGetValue(pair.Key, out int count) || count != 1) continue;
+				// Multiple Renderer components can share one transform path. All surplus renderers
+				// at that path must be safe; otherwise the path is not a valid atomic target.
+				if (pair.Value.All(HasProvablyRedundantOpaqueSurplusSlots)) result.Add(pair.Key);
+			}
+			return result;
+		}
+
+		static int CountSurplusMaterialSlots(string assetPath, bool isScene, HashSet<string> onlyPaths = null)
+		{
+			return ReadHierarchy(assetPath, isScene, roots =>
+			{
+				int count = 0;
+				foreach (var root in roots) if (root != null) foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
+					if (renderer != null && (onlyPaths == null || onlyPaths.Contains(Path(renderer.transform)))
+						&& SubMeshCount(renderer) > 0 && renderer.sharedMaterials.Length > SubMeshCount(renderer)) count++;
+				return count;
+			});
+		}
+
+		static void TrimSurplusMaterialSlots(FixContext c, bool isScene, List<string> targetPaths)
+		{
+			var wanted = new HashSet<string>(targetPaths ?? new List<string>(), StringComparer.Ordinal);
+			if (wanted.Count == 0 || !ReadHierarchy(c.AssetPath, isScene, roots => wanted.IsSubsetOf(new HashSet<string>(FindSurplusMaterialPaths(roots), StringComparer.Ordinal))))
+				throw new InvalidOperationException("PRE004 targets no longer have provably redundant surplus slots. Rescan before applying the fix.");
+			FixHierarchy(c, isScene, root =>
+			{
+				var paths = CountHierarchyPaths(new[] { root });
+				var candidates = root.GetComponentsInChildren<Renderer>(true).Where(r => r != null && wanted.Contains(Path(r.transform))).ToList();
+				var pathsInThisRoot = wanted.Where(path => candidates.Any(r => Path(r.transform) == path)).ToArray();
+				var freshSafePaths = new HashSet<string>(FindSurplusMaterialPaths(new[] { root }), StringComparer.Ordinal);
+				foreach (var path in pathsInThisRoot)
+				{
+					if (!paths.TryGetValue(path, out int transformCount) || transformCount != 1 || !freshSafePaths.Contains(path))
+						throw new InvalidOperationException("A PRE004 target changed, became ambiguous, or no longer has redundant opaque material slots. Rescan before applying the fix.");
+				}
+				foreach (var renderer in candidates)
+				{
+					if (!wanted.Contains(Path(renderer.transform))) continue;
+					int submeshes = SubMeshCount(renderer);
+					var materials = renderer.sharedMaterials;
+					if (submeshes <= 0 || materials == null || materials.Length <= submeshes) continue;
+					if (!HasProvablyRedundantOpaqueSurplusSlots(renderer))
+						throw new InvalidOperationException("A PRE004 renderer no longer passes the redundant-slot safety check. Rescan before applying the fix.");
+					var trimmed = new Material[submeshes];
+					Array.Copy(materials, trimmed, submeshes);
+					renderer.sharedMaterials = trimmed;
+				}
+			});
+		}
+
+		static bool VerifyNoSurplusMaterialSlots(string assetPath, bool isScene, List<string> targetPaths)
+		{
+			var wanted = new HashSet<string>(targetPaths ?? new List<string>(), StringComparer.Ordinal);
+			if (wanted.Count == 0) return false;
+			// A safe AutoFix may intentionally leave transparent, custom-shader, differently mapped,
+			// or otherwise ambiguous surplus slots untouched elsewhere in the same asset. Verify only
+			// the captured targets; the remaining renderers keep their diagnostic findings.
+			return CountSurplusMaterialSlots(assetPath, isScene, wanted) == 0;
+		}
+
+		static bool HasUserScriptsInSubtree(GameObject go)
+		{
+			if (go == null) return true;
+			foreach (var behaviour in go.GetComponentsInChildren<MonoBehaviour>(true)) if (behaviour != null) return true;
+			return false;
+		}
+
+		static bool HasUserScriptsInAncestorChain(Transform transform)
+		{
+			for (var current = transform; current != null; current = current.parent)
+				foreach (var behaviour in current.GetComponents<MonoBehaviour>()) if (behaviour != null) return true;
+			return false;
+		}
+
+		static List<string> FindSafeRaycastTargetPaths(GameObject[] roots)
+		{
+			var counts = CountHierarchyPaths(roots);
+			var incoming = CollectIncomingObjectReferences(roots);
+			var result = new List<string>();
+			if (incoming == null) return result;
+			foreach (var root in roots)
+			{
+				if (root == null) continue;
+				foreach (var graphic in root.GetComponentsInChildren<Graphic>(true))
+				{
+					if (graphic == null || !graphic.raycastTarget || HandlesPointerInput(graphic.gameObject)) continue;
+					var canvas = graphic.GetComponentInParent<Canvas>();
+					if (canvas == null || HasUserScriptsInAncestorChain(canvas.transform) || HasUserScriptsInAncestorChain(graphic.transform)) continue;
+					if (HasUserScriptsInSubtree(canvas.gameObject) || HasIncomingReference(graphic.gameObject, incoming)) continue;
+					string path = Path(graphic.transform);
+					if (counts.TryGetValue(path, out int count) && count == 1) result.Add(path);
+				}
+			}
+			return result.Distinct(StringComparer.Ordinal).ToList();
+		}
+
+		static void DisableSafeRaycastTargets(FixContext c, bool isScene, List<string> paths)
+		{
+			var wanted = new HashSet<string>(paths ?? new List<string>(), StringComparer.Ordinal);
+			if (wanted.Count == 0 || !ReadHierarchy(c.AssetPath, isScene, roots => wanted.IsSubsetOf(new HashSet<string>(FindSafeRaycastTargetPaths(roots), StringComparer.Ordinal))))
+				throw new InvalidOperationException("PRE008 targets no longer pass the raycast input-safety checks. Rescan before applying the fix.");
+			FixHierarchy(c, isScene, root =>
+			{
+				foreach (var graphic in root.GetComponentsInChildren<Graphic>(true))
+					if (graphic != null && wanted.Contains(Path(graphic.transform)) && !HandlesPointerInput(graphic.gameObject)) graphic.raycastTarget = false;
+			});
+		}
+
+		static int SafeRaycastTargetCount(string assetPath, bool isScene, List<string> paths)
+		{
+			var wanted = new HashSet<string>(paths ?? new List<string>(), StringComparer.Ordinal);
+			return ReadHierarchy(assetPath, isScene, roots =>
+			{
+				int count = 0;
+				foreach (var root in roots) if (root != null) foreach (var graphic in root.GetComponentsInChildren<Graphic>(true))
+					if (graphic != null && wanted.Contains(Path(graphic.transform)) && graphic.raycastTarget) count++;
+				return count;
+			});
+		}
+
+		static bool TryGetConservativeParticleBudget(ParticleSystem ps, out int budget)
+		{
+			budget = 0;
+			if (ps == null || HasUserScriptsInAncestorChain(ps.transform) || HasUserScriptsInSubtree(ps.gameObject)) return false;
+			var main = ps.main;
+			var emission = ps.emission;
+			if (!emission.enabled || main.duration <= 0f) return false;
+			if (!IsConstantOrTwoConstants(main.startLifetime) || !IsConstantOrTwoConstants(emission.rateOverTime)) return false;
+			if (!IsConstantOrTwoConstants(emission.rateOverDistance) || emission.rateOverDistance.constantMax > 0.0001f) return false;
+			float lifetime = Mathf.Max(0f, main.startLifetime.constantMax);
+			if (main.startLifetime.mode == ParticleSystemCurveMode.TwoConstants)
+				lifetime = Mathf.Max(main.startLifetime.constantMin, main.startLifetime.constantMax);
+			float rate = Mathf.Max(0f, emission.rateOverTime.constantMax);
+			float rateOverDistance = emission.rateOverDistance.constantMax;
+			if (float.IsNaN(lifetime) || float.IsInfinity(lifetime) || float.IsNaN(rate) || float.IsInfinity(rate)
+				|| float.IsNaN(rateOverDistance) || float.IsInfinity(rateOverDistance)) return false;
+			// Burst repetition, cycle count and timing can create multiple overlapping bursts. Until all
+			// of those cases have a separately proven upper bound, leave every burst-driven system alone.
+			if (emission.burstCount > 0) return false;
+			// Add one particle for a discrete emission/lifetime boundary where a particle at expiry can
+			// coexist for a frame with the next scheduled emission.
+			double upperEstimate = Math.Ceiling((double)rate * Math.Max(0f, lifetime)) + 1d;
+			if (double.IsNaN(upperEstimate) || double.IsInfinity(upperEstimate) || upperEstimate > int.MaxValue) return false;
+			int upper = (int)upperEstimate;
+			budget = Mathf.Max(1, upper);
+			return true;
+		}
+
+		static bool IsConstantOrTwoConstants(ParticleSystem.MinMaxCurve curve)
+			=> curve.mode == ParticleSystemCurveMode.Constant || curve.mode == ParticleSystemCurveMode.TwoConstants;
+
+		static List<ParticleBudgetTarget> FindSafeParticleBudgetTargets(GameObject[] roots, int warningThreshold)
+		{
+			var counts = CountHierarchyPaths(roots);
+			var result = new List<ParticleBudgetTarget>();
+			var incoming = CollectIncomingObjectReferences(roots);
+			if (incoming == null) return result;
+			var referencedAsSubEmitter = new HashSet<int>();
+			foreach (var root in roots) if (root != null) foreach (var source in root.GetComponentsInChildren<ParticleSystem>(true))
+			{
+				if (source == null) continue;
+				var subEmitters = source.subEmitters;
+				for (int i = 0; i < subEmitters.subEmittersCount; i++)
+				{
+					var child = subEmitters.GetSubEmitterSystem(i);
+					if (child != null) referencedAsSubEmitter.Add(child.GetInstanceID());
+				}
+			}
+			foreach (var root in roots)
+			{
+				if (root == null) continue;
+				foreach (var ps in root.GetComponentsInChildren<ParticleSystem>(true))
+				{
+					if (ps == null || referencedAsSubEmitter.Contains(ps.GetInstanceID())
+						|| incoming.Contains(ps.GetInstanceID()) || incoming.Contains(ps.gameObject.GetInstanceID())
+						|| ps.main.maxParticles <= warningThreshold || !TryGetConservativeParticleBudget(ps, out int safeBudget)
+						|| ps.main.maxParticles <= safeBudget) continue;
+					string path = Path(ps.transform);
+					if (!counts.TryGetValue(path, out int count) || count != 1) continue;
+					result.Add(new ParticleBudgetTarget { Path = path, MaxParticles = safeBudget });
+				}
+			}
+			return result;
+		}
+
+		static void ApplySafeParticleBudgetTargets(FixContext c, bool isScene, List<ParticleBudgetTarget> targets, int warningThreshold)
+		{
+			var map = (targets ?? new List<ParticleBudgetTarget>()).ToDictionary(t => t.Path, t => t.MaxParticles, StringComparer.Ordinal);
+			if (map.Count == 0 || !ReadHierarchy(c.AssetPath, isScene, roots =>
+				new HashSet<string>(map.Keys, StringComparer.Ordinal).IsSubsetOf(new HashSet<string>(FindSafeParticleBudgetTargets(roots, warningThreshold).Select(t => t.Path), StringComparer.Ordinal))))
+				throw new InvalidOperationException("PRE009 targets no longer pass the conservative particle-budget checks. Rescan before applying the fix.");
+			FixHierarchy(c, isScene, root =>
+			{
+				foreach (var ps in root.GetComponentsInChildren<ParticleSystem>(true))
+				{
+					if (ps == null || !map.TryGetValue(Path(ps.transform), out int safeBudget)) continue;
+					if (!TryGetConservativeParticleBudget(ps, out int currentBound) || currentBound != safeBudget || ps.main.maxParticles <= safeBudget)
+						throw new InvalidOperationException("Particle emission evidence changed after the scan. Rescan before applying PRE009.");
+				}
+				foreach (var ps in root.GetComponentsInChildren<ParticleSystem>(true))
+					if (ps != null && map.TryGetValue(Path(ps.transform), out int safeBudget)) { var main = ps.main; main.maxParticles = safeBudget; }
+			});
+		}
+
+		static bool VerifyParticleBudgetTargets(string assetPath, bool isScene, List<ParticleBudgetTarget> targets)
+		{
+			var map = (targets ?? new List<ParticleBudgetTarget>()).ToDictionary(t => t.Path, t => t.MaxParticles, StringComparer.Ordinal);
+			return ReadHierarchy(assetPath, isScene, roots =>
+			{
+				var seen = new HashSet<string>(StringComparer.Ordinal);
+				foreach (var root in roots) if (root != null) foreach (var ps in root.GetComponentsInChildren<ParticleSystem>(true))
+				{
+					if (ps == null || !map.TryGetValue(Path(ps.transform), out int expected)) continue;
+					seen.Add(Path(ps.transform));
+					if (!TryGetConservativeParticleBudget(ps, out int bound) || bound != expected || ps.main.maxParticles > expected) return false;
+				}
+				return seen.Count == map.Count;
+			});
+		}
+
+		static bool HasAnimatorScriptDependency(Animator animator)
+		{
+			if (animator == null || animator.applyRootMotion) return true;
+			for (var current = animator.transform; current != null; current = current.parent)
+				foreach (var behaviour in current.GetComponents<MonoBehaviour>()) if (behaviour != null) return true;
+			foreach (var behaviour in animator.GetComponentsInChildren<MonoBehaviour>(true)) if (behaviour != null) return true;
+			var controller = animator.runtimeAnimatorController;
+			if (controller == null) return false;
+			foreach (var clip in controller.animationClips) if (clip != null && clip.events != null && clip.events.Length > 0) return true;
+			AnimatorController editable = controller as AnimatorController;
+			if (controller is AnimatorOverrideController overrider) editable = overrider.runtimeAnimatorController as AnimatorController;
+			// Runtime-only controllers cannot be inspected for StateMachineBehaviour callbacks, so fail closed.
+			if (editable == null) return true;
+			foreach (var layer in editable.layers) if (HasStateMachineBehaviour(layer.stateMachine)) return true;
+			return false;
+		}
+
+		static bool HasStateMachineBehaviour(AnimatorStateMachine stateMachine)
+		{
+			if (stateMachine == null) return true;
+			if (stateMachine.behaviours != null && stateMachine.behaviours.Length > 0) return true;
+			foreach (var child in stateMachine.states)
+				if (child.state != null && child.state.behaviours != null && child.state.behaviours.Length > 0) return true;
+			foreach (var child in stateMachine.stateMachines)
+				if (HasStateMachineBehaviour(child.stateMachine)) return true;
+			return false;
+		}
+
+		static List<string> FindSafeAnimatorPaths(GameObject[] roots)
+		{
+			var counts = CountHierarchyPaths(roots);
+			var incoming = CollectIncomingObjectReferences(roots);
+			var result = new List<string>();
+			if (incoming == null) return result;
+			foreach (var root in roots) if (root != null) foreach (var animator in root.GetComponentsInChildren<Animator>(true))
+				if (animator != null && animator.cullingMode == AnimatorCullingMode.AlwaysAnimate && !HasAnimatorScriptDependency(animator)
+					&& !HasIncomingReference(animator.gameObject, incoming) && !incoming.Contains(animator.GetInstanceID())
+					&& counts.TryGetValue(Path(animator.transform), out int count) && count == 1) result.Add(Path(animator.transform));
+			return result.Distinct(StringComparer.Ordinal).ToList();
+		}
+
+		static void SetSafeAnimatorCulling(FixContext c, bool isScene, List<string> paths)
+		{
+			var wanted = new HashSet<string>(paths ?? new List<string>(), StringComparer.Ordinal);
+			if (wanted.Count == 0 || !ReadHierarchy(c.AssetPath, isScene, roots => wanted.IsSubsetOf(new HashSet<string>(FindSafeAnimatorPaths(roots), StringComparer.Ordinal))))
+				throw new InvalidOperationException("PRE010 animators no longer pass the culling safety checks. Rescan before applying the fix.");
+			FixHierarchy(c, isScene, root => foreachAnimator(root, animator =>
+			{
+				if (wanted.Contains(Path(animator.transform)) && animator.cullingMode == AnimatorCullingMode.AlwaysAnimate && !HasAnimatorScriptDependency(animator))
+					animator.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
+			}));
+		}
+
+		static void foreachAnimator(GameObject root, Action<Animator> action)
+		{
+			foreach (var animator in root.GetComponentsInChildren<Animator>(true)) if (animator != null) action(animator);
+		}
+
+		static bool VerifySafeAnimatorCulling(string assetPath, bool isScene, List<string> paths)
+		{
+			var wanted = new HashSet<string>(paths ?? new List<string>(), StringComparer.Ordinal);
+			return ReadHierarchy(assetPath, isScene, roots =>
+			{
+				var seen = new HashSet<string>(StringComparer.Ordinal);
+				foreach (var root in roots) if (root != null) foreach (var animator in root.GetComponentsInChildren<Animator>(true))
+					if (animator != null && wanted.Contains(Path(animator.transform))) { seen.Add(Path(animator.transform)); if (animator.cullingMode == AnimatorCullingMode.AlwaysAnimate || HasAnimatorScriptDependency(animator)) return false; }
+				return seen.Count == wanted.Count;
+			});
+		}
+
+		static List<string> FindSafeBatchingStaticPaths(GameObject[] roots)
+		{
+			var counts = CountHierarchyPaths(roots);
+			var incoming = CollectIncomingObjectReferences(roots);
+			var result = new List<string>();
+			if (incoming == null) return result;
+			foreach (var root in roots) if (root != null) foreach (var renderer in root.GetComponentsInChildren<MeshRenderer>(true))
+			{
+				if (renderer == null || (GameObjectUtility.GetStaticEditorFlags(renderer.gameObject) & StaticEditorFlags.BatchingStatic) != 0) continue;
+				if (renderer.GetComponentInParent<Rigidbody>() != null || renderer.GetComponentInParent<Animator>() != null || HasUserScriptsInAncestorChain(renderer.transform)) continue;
+				if (HasIncomingReference(renderer.gameObject, incoming) || renderer.gameObject.hideFlags != HideFlags.None) continue;
+				string path = Path(renderer.transform);
+				if (counts.TryGetValue(path, out int count) && count == 1) result.Add(path);
+			}
+			return result.Distinct(StringComparer.Ordinal).ToList();
+		}
+
+		static void SetBatchingStatic(FixContext c, bool isScene, List<string> paths)
+		{
+			var wanted = new HashSet<string>(paths ?? new List<string>(), StringComparer.Ordinal);
+			if (wanted.Count == 0 || !ReadHierarchy(c.AssetPath, isScene, roots => wanted.IsSubsetOf(new HashSet<string>(FindSafeBatchingStaticPaths(roots), StringComparer.Ordinal))))
+				throw new InvalidOperationException("PRE011 objects no longer pass the static-batching safety checks. Rescan before applying the fix.");
+			FixHierarchy(c, isScene, root =>
+			{
+				foreach (var renderer in root.GetComponentsInChildren<MeshRenderer>(true))
+				{
+					if (renderer == null || !wanted.Contains(Path(renderer.transform))) continue;
+					if (renderer.GetComponentInParent<Rigidbody>() != null || renderer.GetComponentInParent<Animator>() != null || HasUserScriptsInAncestorChain(renderer.transform))
+						throw new InvalidOperationException("A static-batching target gained a movement dependency. Rescan before applying PRE011.");
+					var flags = GameObjectUtility.GetStaticEditorFlags(renderer.gameObject);
+					GameObjectUtility.SetStaticEditorFlags(renderer.gameObject, flags | StaticEditorFlags.BatchingStatic);
+				}
+			});
+		}
+
+		static bool VerifyBatchingStatic(string assetPath, bool isScene, List<string> paths)
+		{
+			var wanted = new HashSet<string>(paths ?? new List<string>(), StringComparer.Ordinal);
+			return ReadHierarchy(assetPath, isScene, roots =>
+			{
+				var seen = new HashSet<string>(StringComparer.Ordinal);
+				foreach (var root in roots) if (root != null) foreach (var renderer in root.GetComponentsInChildren<MeshRenderer>(true))
+					if (renderer != null && wanted.Contains(Path(renderer.transform))) { seen.Add(Path(renderer.transform)); if ((GameObjectUtility.GetStaticEditorFlags(renderer.gameObject) & StaticEditorFlags.BatchingStatic) == 0) return false; }
+				return seen.Count == wanted.Count;
+			});
+		}
+
+		static List<string> FindSafeMissingPrefabPlaceholderPaths(GameObject[] roots)
+		{
+			if (HasAnimationPathDependencies(roots)) return new List<string>();
+			var counts = CountHierarchyPaths(roots);
+			var incoming = CollectIncomingObjectReferences(roots);
+			var result = new List<string>();
+			if (incoming == null) return result;
+			foreach (var root in roots) if (root != null) foreach (var t in root.GetComponentsInChildren<Transform>(true))
+			{
+				var go = t.gameObject;
+				if (!PrefabUtility.IsPrefabAssetMissing(go) || t.parent == null || t.childCount != 0 || go.GetComponents<Component>().Length != 1) continue;
+				if (!IsIdentityTransform(t) || HasMarkerLikeName(go.name) || HasIncomingReference(go, incoming)) continue;
+				string path = Path(t);
+				if (counts.TryGetValue(path, out int count) && count == 1) result.Add(path);
+			}
+			return result.Distinct(StringComparer.Ordinal).ToList();
+		}
+
+		static void RemoveSafeMissingPrefabPlaceholders(FixContext c, bool isScene, List<string> paths)
+		{
+			var wanted = new HashSet<string>(paths ?? new List<string>(), StringComparer.Ordinal);
+			if (wanted.Count == 0 || !ReadHierarchy(c.AssetPath, isScene, roots => wanted.IsSubsetOf(new HashSet<string>(FindSafeMissingPrefabPlaceholderPaths(roots), StringComparer.Ordinal))))
+				throw new InvalidOperationException("PRE013 placeholders no longer pass safe-removal checks. Rescan before applying the fix.");
+			FixHierarchy(c, isScene, root =>
+			{
+				// Recompute the full safe subset against the editable hierarchy, not only the
+				// earlier preview scan. This rechecks marker names and inbound references after load.
+				var currentlySafe = new HashSet<string>(FindSafeMissingPrefabPlaceholderPaths(new[] { root }), StringComparer.Ordinal);
+				foreach (var t in root.GetComponentsInChildren<Transform>(true).Where(t => t != null).OrderByDescending(t => Depth(t)).ToArray())
+					if (wanted.Contains(Path(t)) && currentlySafe.Contains(Path(t)) && t.parent != null && t.childCount == 0
+						&& t.GetComponents<Component>().Length == 1 && PrefabUtility.IsPrefabAssetMissing(t.gameObject) && IsIdentityTransform(t))
+						UnityEngine.Object.DestroyImmediate(t.gameObject);
+			});
+		}
+
+		static int SubMeshCountForRenderer(Renderer renderer) => SubMeshCount(renderer);
+
+		static List<string> FindRepairableMaterialMappingPaths(GameObject[] roots)
+		{
+			var counts = CountHierarchyPaths(roots);
+			var result = new List<string>();
+			foreach (var root in roots) if (root != null) foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
+			{
+				if (renderer == null) continue;
+				int submeshes = SubMeshCountForRenderer(renderer);
+				if (submeshes <= 0 || renderer.sharedMaterials.Length == submeshes) continue;
+				if (!TryGetAuthoritativeSourceMaterials(renderer, out var sourceMaterials)) continue;
+				string path = Path(renderer.transform);
+				if (counts.TryGetValue(path, out int count) && count == 1) result.Add(path);
+			}
+			return result.Distinct(StringComparer.Ordinal).ToList();
+		}
+
+		static bool TryGetAuthoritativeSourceMaterials(Renderer renderer, out Material[] materials, bool rejectMaterialOverrides = true)
+		{
+			materials = null;
+			if (renderer == null) return false;
+			var source = PrefabUtility.GetCorrespondingObjectFromSource(renderer) as Renderer;
+			if (source == null || source == renderer) return false;
+			int localSubmeshes = SubMeshCount(renderer);
+			if (localSubmeshes <= 0 || SubMeshCount(source) != localSubmeshes) return false;
+			if (source.sharedMaterials == null || source.sharedMaterials.Length != localSubmeshes || source.sharedMaterials.Any(m => m == null)) return false;
+			Mesh localMesh = renderer is SkinnedMeshRenderer localSkinned ? localSkinned.sharedMesh : renderer.GetComponent<MeshFilter>()?.sharedMesh;
+			Mesh sourceMesh = source is SkinnedMeshRenderer sourceSkinned ? sourceSkinned.sharedMesh : source.GetComponent<MeshFilter>()?.sharedMesh;
+			if (localMesh == null || sourceMesh == null || localMesh != sourceMesh) return false;
+			try
+			{
+				var modifications = PrefabUtility.GetPropertyModifications(renderer);
+				if (rejectMaterialOverrides && modifications != null && modifications.Any(m => m != null && m.propertyPath != null && m.propertyPath.IndexOf("m_Materials", StringComparison.Ordinal) >= 0)) return false;
+			}
+			catch { return false; }
+			materials = source.sharedMaterials;
+			return true;
+		}
+
+		static void ApplySourceMaterialMappings(FixContext c, bool isScene, List<string> paths)
+		{
+			var wanted = new HashSet<string>(paths ?? new List<string>(), StringComparer.Ordinal);
+			if (wanted.Count == 0 || !ReadHierarchy(c.AssetPath, isScene, roots =>
+				wanted.IsSubsetOf(new HashSet<string>(FindRepairableMaterialMappingPaths(roots), StringComparer.Ordinal))))
+				throw new InvalidOperationException("PRE016 source mappings no longer pass the unique-source checks. Rescan before applying the fix.");
+			FixHierarchy(c, isScene, root =>
+			{
+				var byPath = root.GetComponentsInChildren<Renderer>(true).Where(r => r != null).GroupBy(r => Path(r.transform)).ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+				var pathsInThisRoot = wanted.Where(byPath.ContainsKey).ToArray();
+				foreach (var path in pathsInThisRoot)
+				{
+					if (byPath[path].Count != 1 || !TryGetAuthoritativeSourceMaterials(byPath[path][0], out _))
+						throw new InvalidOperationException("A source material mapping is no longer unique or valid at " + path + ". Rescan before applying PRE016.");
+				}
+				foreach (var path in pathsInThisRoot)
+				{
+					var renderer = byPath[path][0];
+					TryGetAuthoritativeSourceMaterials(renderer, out var materials);
+					renderer.sharedMaterials = (Material[])materials.Clone();
+				}
+			});
+		}
+
+		static bool VerifySourceMaterialMappings(string assetPath, bool isScene, List<string> paths)
+		{
+			var wanted = new HashSet<string>(paths ?? new List<string>(), StringComparer.Ordinal);
+			return ReadHierarchy(assetPath, isScene, roots =>
+			{
+				var byPath = roots.Where(r => r != null).SelectMany(r => r.GetComponentsInChildren<Renderer>(true)).Where(r => r != null).GroupBy(r => Path(r.transform)).ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+				foreach (var path in wanted)
+				{
+					if (!byPath.TryGetValue(path, out var matches) || matches.Count != 1 || !TryGetAuthoritativeSourceMaterials(matches[0], out var expected, rejectMaterialOverrides: false)) return false;
+					var renderer = matches[0];
+					if (renderer.sharedMaterials.Length != expected.Length || !renderer.sharedMaterials.SequenceEqual(expected)) return false;
+				}
+				return wanted.Count > 0;
+			});
+		}
+
+		static List<string> FindSafeOffscreenSkinPaths(GameObject[] roots)
+		{
+			var counts = CountHierarchyPaths(roots);
+			var incoming = CollectIncomingObjectReferences(roots);
+			var result = new List<string>();
+			if (incoming == null) return result;
+			foreach (var root in roots) if (root != null) foreach (var skin in root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+			{
+				if (skin == null || !skin.updateWhenOffscreen || HasIncomingReference(skin.gameObject, incoming) || incoming.Contains(skin.GetInstanceID())) continue;
+				if (skin.GetComponentInParent<Animator>() != null || skin.GetComponentInChildren<Animator>(true) != null) continue;
+				if (HasUserScriptsInAncestorChain(skin.transform) || HasUserScriptsInSubtree(skin.gameObject)) continue;
+				string path = Path(skin.transform);
+				if (counts.TryGetValue(path, out int count) && count == 1) result.Add(path);
+			}
+			return result.Distinct(StringComparer.Ordinal).ToList();
+		}
+
+		static void DisableSafeOffscreenSkinning(FixContext c, bool isScene, List<string> paths)
+		{
+			var wanted = new HashSet<string>(paths ?? new List<string>(), StringComparer.Ordinal);
+			if (wanted.Count == 0 || !ReadHierarchy(c.AssetPath, isScene, roots => wanted.IsSubsetOf(new HashSet<string>(FindSafeOffscreenSkinPaths(roots), StringComparer.Ordinal))))
+				throw new InvalidOperationException("RND001 targets no longer pass the off-screen safety checks. Rescan before applying the fix.");
+			FixHierarchy(c, isScene, root =>
+			{
+				foreach (var skin in root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+					if (skin != null && wanted.Contains(Path(skin.transform)) && skin.GetComponentInParent<Animator>() == null && skin.GetComponentInChildren<Animator>(true) == null
+						&& !HasUserScriptsInAncestorChain(skin.transform) && !HasUserScriptsInSubtree(skin.gameObject)) skin.updateWhenOffscreen = false;
+			});
+		}
+
+		static bool VerifyOffscreenSkinning(string assetPath, bool isScene, List<string> paths)
+		{
+			var wanted = new HashSet<string>(paths ?? new List<string>(), StringComparer.Ordinal);
+			return ReadHierarchy(assetPath, isScene, roots =>
+			{
+				var seen = new HashSet<string>(StringComparer.Ordinal);
+				foreach (var root in roots) if (root != null) foreach (var skin in root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+					if (skin != null && wanted.Contains(Path(skin.transform))) { seen.Add(Path(skin.transform)); if (skin.updateWhenOffscreen) return false; }
+				return seen.Count == wanted.Count;
+			});
+		}
+
+		static List<string> FindSafeRedundantRaycasterPaths(GameObject[] roots)
+		{
+			var counts = CountHierarchyPaths(roots);
+			var incoming = CollectIncomingObjectReferences(roots);
+			var result = new List<string>();
+			if (incoming == null) return result;
+			foreach (var root in roots) if (root != null) foreach (var raycaster in root.GetComponentsInChildren<GraphicRaycaster>(true))
+			{
+				if (raycaster == null || !raycaster.enabled || HasIncomingReference(raycaster.gameObject, incoming)) continue;
+				var canvas = raycaster.GetComponent<Canvas>();
+				if (canvas == null || HasUserScriptsInAncestorChain(canvas.transform) || HasUserScriptsInSubtree(canvas.gameObject)) continue;
+				bool hasTargets = false;
+				foreach (var graphic in canvas.GetComponentsInChildren<Graphic>(true))
+				{
+					if (graphic == null || !graphic.raycastTarget || graphic.GetComponentInParent<Canvas>() != canvas) continue;
+					hasTargets = true; break;
+				}
+				if (hasTargets) continue;
+				string path = Path(raycaster.transform);
+				if (counts.TryGetValue(path, out int count) && count == 1) result.Add(path);
+			}
+			return result.Distinct(StringComparer.Ordinal).ToList();
+		}
+
+		static void DisableSafeRaycasters(FixContext c, bool isScene, List<string> paths)
+		{
+			var wanted = new HashSet<string>(paths ?? new List<string>(), StringComparer.Ordinal);
+			if (wanted.Count == 0 || !ReadHierarchy(c.AssetPath, isScene, roots => wanted.IsSubsetOf(new HashSet<string>(FindSafeRedundantRaycasterPaths(roots), StringComparer.Ordinal))))
+				throw new InvalidOperationException("UIT002 raycasters no longer pass the input-safety checks. Rescan before applying the fix.");
+			FixHierarchy(c, isScene, root =>
+			{
+				foreach (var raycaster in root.GetComponentsInChildren<GraphicRaycaster>(true))
+				{
+					if (raycaster == null || !wanted.Contains(Path(raycaster.transform))) continue;
+					var canvas = raycaster.GetComponent<Canvas>();
+					if (canvas == null || HasUserScriptsInAncestorChain(canvas.transform) || HasUserScriptsInSubtree(canvas.gameObject))
+						throw new InvalidOperationException("A raycaster gained a script dependency. Rescan before applying UIT002.");
+					bool hasTargets = canvas.GetComponentsInChildren<Graphic>(true).Any(g => g != null && g.raycastTarget && g.GetComponentInParent<Canvas>() == canvas);
+					if (hasTargets) throw new InvalidOperationException("A Canvas gained raycastable graphics. Rescan before applying UIT002.");
+					raycaster.enabled = false;
+				}
+			});
+		}
+
+		static bool VerifySafeRaycastersDisabled(string assetPath, bool isScene, List<string> paths)
+		{
+			var wanted = new HashSet<string>(paths ?? new List<string>(), StringComparer.Ordinal);
+			return ReadHierarchy(assetPath, isScene, roots =>
+			{
+				var seen = new HashSet<string>(StringComparer.Ordinal);
+				foreach (var root in roots) if (root != null) foreach (var raycaster in root.GetComponentsInChildren<GraphicRaycaster>(true))
+					if (raycaster != null && wanted.Contains(Path(raycaster.transform))) { seen.Add(Path(raycaster.transform)); if (raycaster.enabled) return false; }
+				return seen.Count == wanted.Count;
+			});
+		}
+
+		static string GetMetricPath(string metric)
+		{
+			if (string.IsNullOrEmpty(metric)) return string.Empty;
+			int suffix = metric.LastIndexOf(" (", StringComparison.Ordinal);
+			return suffix > 0 ? metric.Substring(0, suffix) : metric;
+		}
+
+		static void SetRigidbodySolverIterations(FixContext c, bool isScene, string[] targetPaths, int staleThreshold, int targetIterations)
+		{
+			var wanted = new HashSet<string>(targetPaths ?? Array.Empty<string>(), StringComparer.Ordinal);
+			if (wanted.Count == 0) throw new InvalidOperationException("No Rigidbody targets were captured for PHY002.");
+			FixHierarchy(c, isScene, root =>
+			{
+				var bodies = root.GetComponentsInChildren<Rigidbody>(true);
+				var byPath = bodies.Where(b => b != null).GroupBy(b => Path(b.transform)).ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+				var pathsInThisRoot = wanted.Where(byPath.ContainsKey).ToArray();
+				foreach (var path in pathsInThisRoot)
+					if (byPath[path].Count != 1 || byPath[path][0].solverIterations <= staleThreshold)
+						throw new InvalidOperationException("A PHY002 Rigidbody target changed or became ambiguous. Rescan before applying the Review Fix.");
+				foreach (var path in pathsInThisRoot) byPath[path][0].solverIterations = targetIterations;
+			});
+		}
+
+		static bool VerifyRigidbodySolverIterations(string assetPath, bool isScene, string[] targetPaths, int target)
+		{
+			var wanted = new HashSet<string>(targetPaths ?? Array.Empty<string>(), StringComparer.Ordinal);
+			return ReadHierarchy(assetPath, isScene, roots =>
+			{
+				var bodies = roots.Where(r => r != null).SelectMany(r => r.GetComponentsInChildren<Rigidbody>(true)).Where(b => b != null).GroupBy(b => Path(b.transform)).ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+				foreach (var path in wanted) if (!bodies.TryGetValue(path, out var matches) || matches.Count != 1 || matches[0].solverIterations != target) return false;
+				return wanted.Count > 0;
+			});
+		}
+
+		static void SetKinematicCcdMode(FixContext c, bool isScene, string[] targetPaths, CollisionDetectionMode mode)
+		{
+			var wanted = new HashSet<string>(targetPaths ?? Array.Empty<string>(), StringComparer.Ordinal);
+			if (wanted.Count == 0) throw new InvalidOperationException("No kinematic Rigidbody targets were captured for PHY003.");
+			FixHierarchy(c, isScene, root =>
+			{
+				var bodies = root.GetComponentsInChildren<Rigidbody>(true).Where(b => b != null).GroupBy(b => Path(b.transform)).ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+				var pathsInThisRoot = wanted.Where(bodies.ContainsKey).ToArray();
+				foreach (var path in pathsInThisRoot)
+					if (bodies[path].Count != 1 || !bodies[path][0].isKinematic || bodies[path][0].collisionDetectionMode != CollisionDetectionMode.ContinuousDynamic)
+						throw new InvalidOperationException("A PHY003 body changed after scanning. Rescan before applying the Review Fix.");
+				foreach (var path in pathsInThisRoot) bodies[path][0].collisionDetectionMode = mode;
+			});
+		}
+
+		static bool VerifyKinematicCcdMode(string assetPath, bool isScene, string[] targetPaths, CollisionDetectionMode mode)
+		{
+			var wanted = new HashSet<string>(targetPaths ?? Array.Empty<string>(), StringComparer.Ordinal);
+			return ReadHierarchy(assetPath, isScene, roots =>
+			{
+				var bodies = roots.Where(r => r != null).SelectMany(r => r.GetComponentsInChildren<Rigidbody>(true)).Where(b => b != null).GroupBy(b => Path(b.transform)).ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+				foreach (var path in wanted) if (!bodies.TryGetValue(path, out var matches) || matches.Count != 1 || !matches[0].isKinematic || matches[0].collisionDetectionMode != mode) return false;
+				return wanted.Count > 0;
+			});
+		}
+
+		static void ReduceShadowCastingLights(FixContext c, bool isScene)
+		{
+			string keeperPath = ReadHierarchy(c.AssetPath, isScene, roots =>
+			{
+				var enabledLights = roots.Where(r => r != null).SelectMany(r => r.GetComponentsInChildren<Light>(true))
+					.Where(l => l != null && l.enabled && l.shadows != LightShadows.None && l.lightmapBakeType != LightmapBakeType.Baked).ToList();
+				var directional = enabledLights.Where(l => l.type == LightType.Directional).ToList();
+				var candidates = directional.Count > 0 ? directional : enabledLights;
+				if (candidates.Count == 0) throw new InvalidOperationException("No eligible realtime shadow-casting lights remain.");
+				if (candidates.GroupBy(l => Path(l.transform), StringComparer.Ordinal).Any(group => group.Count() > 1))
+					throw new InvalidOperationException("PRE012 contains multiple candidate lights on the same transform path; a deterministic single-light choice is not possible.");
+				float maxIntensity = candidates.Max(l => l.intensity);
+				var brightest = candidates.Where(l => Mathf.Abs(l.intensity - maxIntensity) < 0.0001f).ToList();
+				if (brightest.Count != 1) throw new InvalidOperationException("PRE012 has tied brightest lights; no unique key light can be selected safely.");
+				return Path(brightest[0].transform);
+			});
+			FixHierarchy(c, isScene, root =>
+			{
+				foreach (var light in root.GetComponentsInChildren<Light>(true))
+				{
+					if (light == null || !light.enabled || light.shadows == LightShadows.None || light.lightmapBakeType == LightmapBakeType.Baked) continue;
+					if (string.Equals(Path(light.transform), keeperPath, StringComparison.Ordinal)) continue;
+					light.shadows = LightShadows.None;
+				}
+			});
+		}
+
+		static int CountRealtimeShadowLights(string assetPath, bool isScene)
+		{
+			return ReadHierarchy(assetPath, isScene, roots => roots.Where(r => r != null).SelectMany(r => r.GetComponentsInChildren<Light>(true))
+				.Count(l => l != null && l.enabled && l.shadows != LightShadows.None && l.lightmapBakeType != LightmapBakeType.Baked));
 		}
 
 		static void GameObjectAsset(FixContext c, Action<GameObject> mutate)

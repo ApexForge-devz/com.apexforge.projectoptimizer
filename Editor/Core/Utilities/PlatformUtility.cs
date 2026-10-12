@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEngine;
@@ -84,30 +85,55 @@ namespace ApexForge.ProjectOptimizer
                 || name.IndexOf("GameCore", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
-        /// <summary>Moves Vulkan to the front of Android graphics APIs while preserving existing fallbacks.</summary>
+        /// <summary>Prefers Vulkan, guarantees OpenGLES3 fallback, and preserves other configured APIs.</summary>
         public static void PreferAndroidVulkan()
         {
             const BuildTarget target = BuildTarget.Android;
+            bool useDefaultApis = PlayerSettings.GetUseDefaultGraphicsAPIs(target);
             var current = PlayerSettings.GetGraphicsAPIs(target) ?? Array.Empty<GraphicsDeviceType>();
-            bool hasVulkan = false;
-            for (int i = 0; i < current.Length; i++) if (current[i] == GraphicsDeviceType.Vulkan) { hasVulkan = true; break; }
-
-            if (!hasVulkan)
-            {
-                var withVulkan = new GraphicsDeviceType[current.Length + 1];
-                withVulkan[0] = GraphicsDeviceType.Vulkan;
-                Array.Copy(current, 0, withVulkan, 1, current.Length);
-                PlayerSettings.SetGraphicsAPIs(target, withVulkan);
-                return;
-            }
-
-            var reordered = new GraphicsDeviceType[current.Length];
-            reordered[0] = GraphicsDeviceType.Vulkan;
-            int write = 1;
-            for (int i = 0; i < current.Length; i++) if (current[i] != GraphicsDeviceType.Vulkan) reordered[write++] = current[i];
-            if (write != current.Length) throw new InvalidOperationException("Android graphics API list could not be reordered.");
-            PlayerSettings.SetGraphicsAPIs(target, reordered);
+            PreferAndroidVulkan(useDefaultApis, current, BuildAndroidVulkanPreferredOrder(current));
         }
+
+        /// <summary>Applies the scanned API order only if Android graphics settings have not changed since analysis.</summary>
+        internal static void PreferAndroidVulkan(bool expectedUseDefaultApis, GraphicsDeviceType[] expectedCurrent, GraphicsDeviceType[] preferred)
+        {
+            const BuildTarget target = BuildTarget.Android;
+            bool useDefaultApis = PlayerSettings.GetUseDefaultGraphicsAPIs(target);
+            var current = PlayerSettings.GetGraphicsAPIs(target) ?? Array.Empty<GraphicsDeviceType>();
+            if (useDefaultApis != expectedUseDefaultApis || !GraphicsApiListsEqual(current, expectedCurrent))
+                throw new InvalidOperationException("Android graphics API settings changed after analysis. Rescan before applying this fix.");
+            if (preferred == null || preferred.Length < 2
+                || preferred[0] != GraphicsDeviceType.Vulkan || preferred[1] != GraphicsDeviceType.OpenGLES3)
+                throw new InvalidOperationException("The requested Android graphics API order must place Vulkan first and OpenGLES3 second.");
+
+            PlayerSettings.SetUseDefaultGraphicsAPIs(target, false);
+            PlayerSettings.SetGraphicsAPIs(target, preferred);
+        }
+
+        internal static bool GraphicsApiListsEqual(GraphicsDeviceType[] left, GraphicsDeviceType[] right)
+        {
+            left = left ?? Array.Empty<GraphicsDeviceType>();
+            right = right ?? Array.Empty<GraphicsDeviceType>();
+            if (left.Length != right.Length) return false;
+            for (int i = 0; i < left.Length; i++) if (left[i] != right[i]) return false;
+            return true;
+        }
+
+        internal static GraphicsDeviceType[] BuildAndroidVulkanPreferredOrder(GraphicsDeviceType[] current)
+        {
+            var ordered = new List<GraphicsDeviceType> { GraphicsDeviceType.Vulkan, GraphicsDeviceType.OpenGLES3 };
+            if (current != null)
+            {
+                for (int i = 0; i < current.Length; i++)
+                {
+                    GraphicsDeviceType api = current[i];
+                    if (api == GraphicsDeviceType.Vulkan || api == GraphicsDeviceType.OpenGLES3 || ordered.Contains(api)) continue;
+                    ordered.Add(api);
+                }
+            }
+            return ordered.ToArray();
+        }
+
 
         static BuildTarget GetStandaloneTarget()
         {

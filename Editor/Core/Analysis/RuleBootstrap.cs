@@ -40,13 +40,11 @@ namespace ApexForge.ProjectOptimizer
                 RuntimeHelpers.RunClassConstructor(typeof(MaterialShaderAnalyzer).TypeHandle);
                 RuntimeHelpers.RunClassConstructor(typeof(AndroidCompatibilityAnalyzer).TypeHandle);
 
-                // Preserve historical IDs in saved findings and settings without activating them as rules.
-                RuleCatalog.RegisterAlias("PRJ077", "PRJ014");
-                RuleCatalog.RegisterAlias("PRJ078", "PRJ015");
-                RuleCatalog.RegisterAlias("PRJ081", "PRJ063");
-                RuleCatalog.RegisterAlias("PAS0031", "PRJ031");
-                RuleCatalog.RegisterAlias("PAS1007", "PRJ008");
-                RuleCatalog.RegisterAlias("VID007", "VID001");
+                // Retain aliases only where their historical IDs do not identify active rules.
+                RuleCatalog.RegisterAlias("PRJ077", "PRJ013");
+                RuleCatalog.RegisterAlias("PRJ078", "PRJ014");
+                RuleCatalog.RegisterAlias("PRJ081", "PRJ059");
+                RuleCatalog.RegisterAlias("PAS0031", "PRJ030");
                 s_Initialized = true;
             }
             finally

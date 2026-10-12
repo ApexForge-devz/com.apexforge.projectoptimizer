@@ -104,8 +104,8 @@ namespace ApexForge.ProjectOptimizer.Tests
             string packageRoot = ProjectOptimizerConstants.PackageRoot;
             Assert.That(string.IsNullOrEmpty(packageRoot), Is.False);
             string projectSettings = File.ReadAllText(Path.Combine(packageRoot, "Editor/Analyzers/ProjectSettingsAnalyzer.cs"));
-            string setOwnedStart = projectSettings.IndexOf("static void SetOwnedBool(", StringComparison.Ordinal);
-            string setOwnedEnd = projectSettings.IndexOf("// --- physics", setOwnedStart, StringComparison.Ordinal);
+            int setOwnedStart = projectSettings.IndexOf("static void SetOwnedBool(", StringComparison.Ordinal);
+            int setOwnedEnd = projectSettings.IndexOf("// --- physics", setOwnedStart, StringComparison.Ordinal);
             Assert.That(setOwnedStart, Is.GreaterThanOrEqualTo(0));
             Assert.That(setOwnedEnd, Is.GreaterThan(setOwnedStart));
             string setOwned = projectSettings.Substring(setOwnedStart, setOwnedEnd - setOwnedStart);
@@ -135,8 +135,8 @@ namespace ApexForge.ProjectOptimizer.Tests
             StringAssert.Contains("context.ChangedProjectSettings = true", fastSrgb);
 
             string fixEngine = File.ReadAllText(Path.Combine(packageRoot, "Editor/Core/Fixes/FixEngine.cs"));
-            string rollbackStart = fixEngine.IndexOf("static bool RollbackProjectSettingsWorks(", StringComparison.Ordinal);
-            string rollbackEnd = fixEngine.IndexOf("static void ReloadProjectSettingsFromDisk(", rollbackStart, StringComparison.Ordinal);
+            int rollbackStart = fixEngine.IndexOf("static bool RollbackProjectSettingsWorks(", StringComparison.Ordinal);
+            int rollbackEnd = fixEngine.IndexOf("static void ReloadProjectSettingsFromDisk(", rollbackStart, StringComparison.Ordinal);
             Assert.That(rollbackStart, Is.GreaterThanOrEqualTo(0));
             Assert.That(rollbackEnd, Is.GreaterThan(rollbackStart));
             string rollback = fixEngine.Substring(rollbackStart, rollbackEnd - rollbackStart);

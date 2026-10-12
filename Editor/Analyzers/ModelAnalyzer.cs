@@ -6,9 +6,9 @@ using UnityEditor;
 namespace ApexForge.ProjectOptimizer
 {
 	/// <summary>
-	/// Geometry budgets and ModelImporter settings for imported model assets.
-	/// Findings are intentionally conservative: importer facts are measured directly, while
-	/// runtime-usage-dependent changes remain Review/advisory instead of being auto-applied.
+	/// Geometry budgets and ModelImporter settings for imported model assets. Verified settings use
+	/// deterministic importer actions and reimport verifiers; dependency-sensitive rig/readability
+	/// changes are automatically gated and retain a Review path for assets whose consumers are unknown.
 	/// </summary>
 	public sealed class ModelAnalyzer : IAssetAnalyzer
 	{
@@ -31,19 +31,19 @@ namespace ApexForge.ProjectOptimizer
 		{
 			Rules.Register(id: "MDL001", title: "Read/Write enabled", category: AssetCategory.Model,
 							why: "Read/Write keeps mesh data in both GPU-addressable and CPU-addressable memory. Unity recommends disabling it when runtime code and runtime systems do not need CPU mesh access.",
-							fix: "Review Fix: disable Read/Write only after confirming this model is not read or written from runtime code or by a system that requires a readable Mesh.",
+							fix: "Disable Read/Write automatically for an unreferenced asset when a complete current project-wide reference graph is available; otherwise review runtime Mesh consumers before disabling.",
 							severity: IssueSeverity.Warning,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							risk: FixRisk.Medium,
+							backupRequired: true
 							);
 
 			Rules.Register(id: "MDL002", title: "Mesh compression disabled", category: AssetCategory.Model,
 							why: "Mesh compression can reduce stored/build mesh data, but increasing compression increases vertex-data error. The acceptable level depends on the asset and visual tolerance.",
-							fix: "Review Low or Medium Mesh Compression and compare the imported result before accepting the change.",
+							fix: "Set Mesh Compression to Medium by default and verify the importer state after reimport; correct exceptional assets manually if visual quality is affected.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Unspecified,
 							backupRequired: false
@@ -51,39 +51,39 @@ namespace ApexForge.ProjectOptimizer
 
 			Rules.Register(id: "MDL003", title: "Mesh GPU optimization disabled", category: AssetCategory.Model,
 							why: "Unity can reorder mesh vertices and polygons to improve GPU cache utilization. This can change data ordering, so the project must not depend on strict source ordering.",
-							fix: "Enable the available mesh optimization options after confirming no downstream workflow depends on vertex or polygon ordering.",
+							fix: "Enable vertex and polygon optimization and verify both importer flags after reimport; adjust exceptional assets if a downstream workflow depends on ordering.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Unspecified,
-							backupRequired: false
+							backupRequired: true
 							);
 
 			Rules.Register(id: "MDL004", title: "Unnecessary rig on static model", category: AssetCategory.Model,
 							why: "Animation Type other than None causes Unity to import animation-related data. A model with no local clips and no detected skinned mesh may still intentionally provide a rig or Avatar for animation clips stored elsewhere.",
-							fix: "Review Fix: set Animation Type to None only after confirming the model is not used as a rig/Avatar source and no external animation targets its hierarchy.",
+							fix: "Set Animation Type to None automatically only when the model is unreferenced in a complete project-wide graph; otherwise review external rig/Avatar consumers.",
 							severity: IssueSeverity.Warning,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							risk: FixRisk.Medium,
+							backupRequired: true
 							);
 
 			Rules.Register(id: "MDL005", title: "Animation import enabled with no clips", category: AssetCategory.Model,
 							why: "Import Animation is enabled even though this model currently contains no imported animation clips. Disabling it can reduce unnecessary animation import work, but the setting may be intentional for assets that are expected to gain clips or serve as animation sources.",
-							fix: "Disable Import Animation after confirming this model is not intended to provide animation clips.",
+							fix: "Disable Import Animation automatically only when no static dependents exist in a complete project-wide reference graph; otherwise review consumers.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
-							risk: FixRisk.Low,
-							backupRequired: false
+							risk: FixRisk.Medium,
+							backupRequired: true
 							);
 
 			Rules.Register(id: "MDL006", title: "Blend shape import enabled but no blend shapes are present", category: AssetCategory.Model,
 							why: "Import BlendShapes is enabled even though this model currently contains no blend shape data. Disabling it can reduce unnecessary import handling, but the setting may be intentional for source assets that are expected to gain blend shapes later.",
-							fix: "Disable Import BlendShapes after confirming this model is intentionally maintained without blend shape data.",
+							fix: "Disable Import BlendShapes when no blend shape data is present in the imported model; re-enable it for future source revisions that add blend shapes.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Low,
 							backupRequired: false
@@ -91,22 +91,22 @@ namespace ApexForge.ProjectOptimizer
 
 			Rules.Register(id: "MDL007", title: "DCC cameras, lights or visibility imported", category: AssetCategory.Model,
 							why: "ModelImporter can import camera, light and visibility data from the DCC file. These can be deliberate content, so the analyzer cannot safely decide that they are unused.",
-							fix: "Disable only the camera, light or visibility imports that are confirmed unused by the project.",
+							fix: "Disable only camera, light or visibility import categories for which corresponding content is detected in the imported model.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Unspecified,
-							backupRequired: false
+							backupRequired: true
 							);
 
 			Rules.Register(id: "MDL008", title: "Tangents imported without detected normal-map usage", category: AssetCategory.Model,
 							why: "Tangents are commonly required by tangent-space normal mapping, but runtime materials and shaders can differ from the materials imported from the model.",
-							fix: "Review Fix: use Tangents None only after confirming all runtime materials and shaders using this mesh do not require tangent data.",
+							fix: "Set imported tangents to None when analyzer-collected material evidence finds no normal-map use; restore tangents on exceptional runtime shader paths.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.Heuristic,
 							risk: FixRisk.Unspecified,
-							backupRequired: false
+							backupRequired: true
 							);
 
 			Rules.Register(id: "MDL009", title: "Very high geometry count", category: AssetCategory.Model,
@@ -142,9 +142,9 @@ namespace ApexForge.ProjectOptimizer
 
 			Rules.Register(id: "MDL012", title: "Vertex welding disabled", category: AssetCategory.Model,
 							why: "Weld Vertices can merge vertices that share positions, reducing duplicated vertex data, but vertices may intentionally be split for normals, UVs, tangents or other attributes.",
-							fix: "Review Fix: enable Weld Vertices only after verifying topology, shading, UV seams and downstream geometry processing.",
+							fix: "Enable Weld Vertices and verify a valid reimport; correct assets manually when intentional vertex splits are required for shading, UVs or downstream processing.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Unspecified,
 							backupRequired: false
@@ -154,7 +154,7 @@ namespace ApexForge.ProjectOptimizer
 							why: "Imported materials can create project-owned materials derived from the source asset. Extracting embedded materials into standalone project assets provides explicit, reusable material references and makes them independently configurable for optimization and maintenance.",
 							fix: "Extract embedded materials from the model into project-managed .mat assets and remap the model to use the extracted materials.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Low,
 							backupRequired: true
@@ -162,9 +162,9 @@ namespace ApexForge.ProjectOptimizer
 
 			Rules.Register(id: "MDL014", title: "Secondary lightmap UV generation enabled", category: AssetCategory.Model,
 							why: "Generate Secondary UV creates a second UV set for lightmapping. Disabling it is correct only when this asset does not participate in a workflow that needs the generated UV set.",
-							fix: "Review Fix: disable Generate Lightmap UVs only when the asset's lighting workflow does not require the generated secondary UV set.",
+							fix: "Disable generated secondary UVs automatically only when a complete/current project reference graph proves the model has no static consumers and it is outside known dynamic-loading paths; otherwise review lightmapping use.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Unspecified,
 							backupRequired: false
@@ -172,32 +172,32 @@ namespace ApexForge.ProjectOptimizer
 
 			Rules.Register(id: "MDL015", title: "Optimize Game Objects disabled on a skinned model", category: AssetCategory.Model,
 							why: "Optimize Game Objects removes Transform-only GameObjects from an imported character hierarchy unless they are exposed. This can improve animation performance, but runtime scripts, constraints, sockets and attachments may need specific transforms.",
-							fix: "Review Fix: enable Optimize Game Objects after exposing every transform path required by runtime code, constraints and attachments.",
+							fix: "Enable Optimize Game Objects on eligible skinned models; expose required runtime transform paths or revert the setting on exceptional assets.",
 							severity: IssueSeverity.Warning,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							risk: FixRisk.Medium,
+							backupRequired: true
 							);
 
 			Rules.Register(id: "MDL016", title: "High maximum bone influences per vertex", category: AssetCategory.Model,
 							why: "Higher maximum bone influence counts increase skinning work. Unity notes that performance cost becomes more significant above four influences, while lowering the importer value discards the lowest-weight influences.",
-							fix: "Review a limit of four or fewer where deformation quality permits. Do not blindly force two influences.",
+							fix: "Use a maximum of four bone influences per vertex; restore a higher limit for rigs whose deformation quality requires it.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							risk: FixRisk.Medium,
+							backupRequired: true
 							);
 
 			Rules.Register(id: "MDL017", title: "Unreferenced rig bones are imported", category: AssetCategory.Model,
 							why: "Optimize Bones can import only bones connected to vertices, reducing unused rig data. Unweighted helper, IK, attachment or scripted bones may still be intentionally required.",
-							fix: "Review Fix: enable Optimize Bones only after confirming unweighted helper, IK, attachment and scripted bones are not required at runtime.",
+							fix: "Enable Optimize Bones on skinned models; disable it again when unweighted helper, IK, attachment or script-driven bones are required at runtime.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							risk: FixRisk.Medium,
+							backupRequired: true
 							);
 
 			Rules.Register(id: "MDL018", title: "Bone-weight pruning is disabled", category: AssetCategory.Model,
@@ -206,8 +206,8 @@ namespace ApexForge.ProjectOptimizer
 							severity: IssueSeverity.Info,
 							fixKind: FixKind.Review,
 							confidence: OptimizationConfidence.Heuristic,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							risk: FixRisk.Medium,
+							backupRequired: true
 							);
 		}
 
@@ -285,232 +285,135 @@ namespace ApexForge.ProjectOptimizer
 
 			// MDL001 ---------------------------------------------------------------
 			using (RuleTiming.Begin("MDL001", entry.Path))
-				if (facts.isReadable)
+				if (facts.isReadable && meshCount > 0)
 				{
-					var options = new List<FixOption>
-				{
-					new FixOption
+					bool canAutoFix = CanAutoFixUnreferencedModel(entry.Path, ctx);
+					Action<FixContext> disableReadWrite = c => ApplyModelImporterChange(c, mi => mi.isReadable = false);
+					Func<FixContext, bool> verifyReadWrite = c => VerifyModelImporterSetting(c, mi => !mi.isReadable, requireMeshes: true);
+					var issue = entry.AddIssue("MDL001", "Read/Write enabled",
+						canAutoFix ? "Disable Read/Write" : "Review Read/Write requirements before disabling",
+						0, canAutoFix ? disableReadWrite : null,
+						"Read/Write retains CPU-accessible mesh data. Automatic changes require a complete, current project-wide reference graph with no static referrers; assets with possible dynamic or serialized consumers remain a Review Fix.",
+						verify: canAutoFix ? verifyReadWrite : null,
+						options: canAutoFix ? null : new List<FixOption> { new FixOption {
+							ActionId = "disable-read-write-review",
+							Label = "Disable Read/Write after checking runtime consumers",
+							Recommended = false,
+							Risk = FixRisk.Medium,
+							Warning = "Check Mesh API reads, MeshCollider/particle usage, runtime batching, NavMesh baking and dynamic asset loading before applying.",
+							Apply = disableReadWrite,
+							Verify = verifyReadWrite
+						} });
+					if (issue != null && !canAutoFix)
 					{
-						ActionId = "disable-read-write",
-						Label = "Disable Read/Write",
-						ResultDescription = "Removes the CPU-accessible mesh copy after reimport.",
-						Recommended = true,
-						Basis = SavingsBasis.Memory,
-                        // Do not claim a fabricated exact saving. Unity guarantees a second CPU copy exists,
-                        // but this analyzer does not have a stable per-mesh accounting contract for its exact
-                        // retained memory footprint.
-                        EstimatedSavings = 0,
-						Warning = "Do not use when runtime code reads/writes mesh data, runtime static batching "
-								  + "or runtime NavMesh baking needs it, or when the documented MeshCollider/"
-								  + "particle-system readability cases apply.",
-						Apply = c =>
-						{
-							var mi = c.Importer as ModelImporter;
-							if (mi == null) throw new InvalidOperationException("ModelImporter unavailable.");
-							mi.isReadable = false;
-							c.NeedsReimport = true;
-						},
-						Verify = c =>
-						{
-							var mi = AssetImporter.GetAtPath(c.AssetPath) as ModelImporter;
-							return mi != null && !mi.isReadable;
-						}
+						issue.FixKind = FixKind.Review;
+						issue.Risk = FixRisk.Medium;
+						issue.Note("AutoFix withheld because the reference graph is unavailable/incomplete, the asset has static referrers, or its location permits dynamic loading.", "Safety gate");
 					}
-				};
-
-					entry.AddIssue("MDL001", "Read/Write enabled",
-						"Review Fix: disable Read/Write Enabled", 0, null,
-						"Unity keeps CPU-addressable mesh data when Read/Write is enabled. The precise memory saving is asset-dependent, so no numeric saving is claimed.",
-						options: options);
 				}
 
 			// MDL002 ---------------------------------------------------------------
 			using (RuleTiming.Begin("MDL002", entry.Path))
 				if (facts.meshCompression == ModelImporterMeshCompression.Off && vertices > 0)
-				{
-					entry.AddIssue("MDL002", "Off", "Consider Low / Medium", 0, null,
-						"Compression is a size-versus-precision tradeoff. The analyzer does not invent a saving without reimporting and measuring the resulting asset.",
-						options: new List<FixOption> { new FixOption {
-							Label = "Enable Mesh Compression",
-							Recommended = true,
-							Risk = FixRisk.Medium,
-							Warning = "This is a Review Fix. Inspect the target state before applying it.",
-							Apply = c => ImporterFixUtility.Model(c, mi => mi.meshCompression = ModelImporterMeshCompression.Medium)
-						} }
-					);
-				}
+					entry.AddIssue("MDL002", "Off", "Medium", 0,
+						c => ApplyModelImporterChange(c, mi => mi.meshCompression = ModelImporterMeshCompression.Medium),
+						"Medium Mesh Compression is the product default. Reimport verification confirms the importer state and a valid imported model; isolated visual-quality exceptions can be corrected manually.",
+						verify: c => VerifyModelImporterSetting(c, mi => mi.meshCompression == ModelImporterMeshCompression.Medium, requireMeshes: true));
 
 			// MDL003 ---------------------------------------------------------------
 			using (RuleTiming.Begin("MDL003", entry.Path))
-				if (facts.meshOptimizationFlags != MeshOptimizationFlags.Everything)
-				{
-					entry.AddIssue("MDL003", facts.meshOptimizationFlags.ToString(), "Everything", 0, null,
-						"Unity documents vertex and polygon ordering optimization for GPU cache utilization. The analyzer cannot prove that strict ordering is irrelevant to downstream code or tools.",
-						options: new List<FixOption> { new FixOption {
-							Label = "Enable Mesh Optimization",
-							Recommended = true,
-							Risk = FixRisk.Medium,
-							Warning = "This is a Review Fix. Inspect the target state before applying it.",
-							Apply = c => ImporterFixUtility.Model(c, mi => mi.optimizeMeshPolygons = true)
-						} }
-					);
-				}
+				if (meshCount > 0 && facts.meshOptimizationFlags != MeshOptimizationFlags.Everything)
+					entry.AddIssue("MDL003", facts.meshOptimizationFlags.ToString(), "Everything", 0,
+						c => ApplyModelImporterChange(c, mi => { mi.optimizeMeshVertices = true; mi.optimizeMeshPolygons = true; }),
+						"Enable both vertex and polygon optimization. The postcondition checks both flags and confirms that the imported model remains loadable.",
+						verify: c => VerifyModelImporterSetting(c, mi => mi.optimizeMeshVertices && mi.optimizeMeshPolygons, requireMeshes: true));
 
 			// MDL004 ---------------------------------------------------------------
-			bool rigPotentiallyUseful = hasSkinnedMesh
-										|| facts.avatarSetup != ModelImporterAvatarSetup.NoAvatar;
+			bool rigPotentiallyUseful = hasSkinnedMesh || facts.avatarSetup != ModelImporterAvatarSetup.NoAvatar;
 			using (RuleTiming.Begin("MDL004", entry.Path))
 				if (!hasClips && facts.animationType != ModelImporterAnimationType.None && !rigPotentiallyUseful)
 				{
-					entry.AddIssue("MDL004", facts.animationType.ToString(),
-						"Review Fix: None", 0, null,
-						"No clips or skinned mesh were found, and the importer is not configured to generate/copy an Avatar. "
-						+ "This is still a Review action because external animation content can depend on an imported rig.",
-						options: new List<FixOption>
-						{
-						new FixOption
-						{
-							ActionId = "rig-none",
-							Label = "Set Animation Type to None",
-							ResultDescription = "Stops generation of animation/rig data from this model.",
-							Recommended = true,
-							Warning = "Only use when this asset is not an external animation/Avatar source.",
-							Apply = c =>
-							{
-								var mi = c.Importer as ModelImporter;
-								if (mi == null) throw new InvalidOperationException("ModelImporter unavailable.");
-								mi.animationType = ModelImporterAnimationType.None;
-								mi.importAnimation = false;
-								c.NeedsReimport = true;
-							},
-							Verify = c =>
-							{
-								var mi = AssetImporter.GetAtPath(c.AssetPath) as ModelImporter;
-								return mi != null && mi.animationType == ModelImporterAnimationType.None;
-							}
-						}
-						});
+					bool canAutoFix = CanAutoFixUnreferencedModel(entry.Path, ctx);
+					Action<FixContext> disableRig = c => ApplyModelImporterChange(c, mi => { mi.animationType = ModelImporterAnimationType.None; mi.importAnimation = false; });
+					Func<FixContext, bool> verifyRig = VerifyRigRemoved;
+					var issue = entry.AddIssue("MDL004", facts.animationType.ToString(),
+						canAutoFix ? "None" : "Review external rig/Avatar dependencies",
+						0, canAutoFix ? disableRig : null,
+						"This model has no local clips, skinned mesh, or configured Avatar. Automatic rig removal requires a complete current project-wide reference graph with no static referrers.",
+						verify: canAutoFix ? verifyRig : null,
+						options: canAutoFix ? null : new List<FixOption> { new FixOption {
+							ActionId = "rig-none-review", Label = "Set Animation Type to None", Recommended = false,
+							Risk = FixRisk.Medium, Warning = "Check external animation clips, Avatar consumers and serialized prefab/scene references before applying.",
+							Apply = disableRig, Verify = verifyRig
+						} });
+					if (issue != null && !canAutoFix)
+					{
+						issue.FixKind = FixKind.Review;
+						issue.Risk = FixRisk.Medium;
+						issue.Note("Automatic rig removal was withheld because reference evidence cannot prove this model is not used as an external animation/Avatar source.", "Safety gate");
+					}
 				}
 
 			// MDL005 ---------------------------------------------------------------
 			using (RuleTiming.Begin("MDL005", entry.Path))
 				if (facts.importAnimation && !hasClips)
 				{
-					entry.AddIssue("MDL005", "Import Animation on, no imported clips",
-						"Off", 0, null,
-						"No imported animation clips were found in this asset. Disabling animation import can reduce unnecessary import work, but confirm that this model is not intentionally retained as an animation source.",
-						options: new List<FixOption>
-						{
-							new FixOption
-							{
-								ActionId = "disable-animation-import",
-								Label = "Disable Import Animation",
-								ResultDescription = "Stops animation extraction from this model on the next import.",
-								Recommended = true,
-								Warning = "Do not choose this when the source is expected to gain clips later or is intentionally retained as an animation source.",
-								Apply = c =>
-								{
-									var mi = c.Importer as ModelImporter;
-									if (mi == null) throw new InvalidOperationException("ModelImporter unavailable.");
-									mi.importAnimation = false;
-									c.NeedsReimport = true;
-								},
-								Verify = c =>
-								{
-									var mi = AssetImporter.GetAtPath(c.AssetPath) as ModelImporter;
-									return mi != null && !mi.importAnimation;
-								}
-							}
-						});
+					bool canAutoFix = CanAutoFixUnreferencedModel(entry.Path, ctx);
+					Action<FixContext> disableAnimationImport = c => ApplyModelImporterChange(c, mi => mi.importAnimation = false);
+					Func<FixContext, bool> verifyAnimationImport = VerifyAnimationImportDisabled;
+					var issue = entry.AddIssue("MDL005", "Import Animation on, no imported clips",
+						canAutoFix ? "Off" : "Review model dependencies and Avatar usage",
+						0, canAutoFix ? disableAnimationImport : null,
+						"Import Animation is disabled automatically only when the current, complete project-wide reference graph shows no dependents and the asset is not in a dynamic-loading folder. Referenced or incompletely indexed assets retain a Review option.",
+						verify: canAutoFix ? verifyAnimationImport : null,
+						options: canAutoFix ? null : new List<FixOption> { new FixOption {
+							ActionId = "disable-animation-import-review", Label = "Disable Import Animation", Recommended = false,
+							Risk = FixRisk.Low, Warning = "Confirm the model is not an external animation source and that any generated Avatar is not required before applying.",
+							Apply = disableAnimationImport, Verify = verifyAnimationImport
+						} });
+					if (issue != null && !canAutoFix)
+					{
+						issue.FixKind = FixKind.Review;
+						issue.Risk = FixRisk.Low;
+						issue.Note("Dependency/Avatar consumers or incomplete reference evidence prevent unconditional automation for this asset.", "Safety gate");
+					}
 				}
 
 			// MDL006 ---------------------------------------------------------------
 			using (RuleTiming.Begin("MDL006", entry.Path))
-				if (facts.importBlendShapes && !hasBlendShapes)
-				{
-					entry.AddIssue("MDL006", "Import BlendShapes on, none present",
-						"Off", 0, null,
-						"No current imported mesh contains blend shapes. Disabling blend-shape import can reduce unnecessary import handling, but confirm that the source is intentionally maintained without blend shapes.",
-						options: new List<FixOption>
-						{
-							new FixOption
-							{
-								ActionId = "disable-blend-shapes",
-								Label = "Disable Import BlendShapes",
-								ResultDescription = "Stops importing blend shape data from this source.",
-								Recommended = true,
-								Warning = "A future source revision containing blend shapes will not import them.",
-								Apply = c =>
-								{
-									var mi = c.Importer as ModelImporter;
-									if (mi == null) throw new InvalidOperationException("ModelImporter unavailable.");
-									mi.importBlendShapes = false;
-									c.NeedsReimport = true;
-								},
-								Verify = c =>
-								{
-									var mi = AssetImporter.GetAtPath(c.AssetPath) as ModelImporter;
-									return mi != null && !mi.importBlendShapes;
-								}
-							}
-						});
-				}
+				if (meshCount > 0 && facts.importBlendShapes && !hasBlendShapes)
+					entry.AddIssue("MDL006", "Import BlendShapes on, none present", "Off", 0,
+						c => ApplyModelImporterChange(c, mi => mi.importBlendShapes = false),
+						"Disable blend-shape import when the currently imported model contains no blend shape data. A future source revision can re-enable the option.",
+						verify: VerifyBlendShapeImportDisabled);
 
 			// MDL007 ---------------------------------------------------------------
-			// Importer checkboxes alone do not prove that the source contains the corresponding data.
+			// The action only disables categories for which this source actually contains imported content.
+			bool disableCameras = facts.importCameras && hasImportedCamera;
+			bool disableLights = facts.importLights && hasImportedLight;
+			bool disableVisibility = facts.importVisibility && hasVisibilityCurves;
 			var importedContent = new List<string>();
-			if (facts.importCameras && hasImportedCamera) importedContent.Add("Cameras");
-			if (facts.importLights && hasImportedLight) importedContent.Add("Lights");
-			if (facts.importVisibility && hasVisibilityCurves) importedContent.Add("Visibility animation");
-
+			if (disableCameras) importedContent.Add("Cameras");
+			if (disableLights) importedContent.Add("Lights");
+			if (disableVisibility) importedContent.Add("Visibility animation");
 			using (RuleTiming.Begin("MDL007", entry.Path))
 				if (importedContent.Count > 0)
-				{
-					entry.AddIssue("MDL007", string.Join(", ", importedContent),
-						"Review whether this imported DCC content is required", 0, null,
-						"Import Cameras, Import Lights and Import Visibility have targetable runtime effects. "
-						+ "Only disable them after confirming they are unused; visibility can be represented by Renderer.enabled animation curves.",
-						options: new List<FixOption> { new FixOption {
-							Label = "Disable DCC Content Import",
-							Recommended = true,
-							Risk = FixRisk.Medium,
-							Warning = "This is a Review Fix. Inspect the target state before applying it.",
-							Apply = c => ImporterFixUtility.Model(c, mi => { mi.importCameras = false; mi.importLights = false; mi.importVisibility = false; })
-						} }
-					);
-				}
+					entry.AddIssue("MDL007", string.Join(", ", importedContent), "Disable detected DCC content import", 0,
+						c => ApplyModelImporterChange(c, mi => {
+							if (disableCameras) mi.importCameras = false;
+							if (disableLights) mi.importLights = false;
+							if (disableVisibility) mi.importVisibility = false;
+						}),
+						"Only the camera, light, and visibility settings with detected imported content are disabled. Postcondition verification checks each targeted option and confirms the model remains loadable.",
+						verify: c => VerifyModelImporterSetting(c, mi => (!disableCameras || !mi.importCameras) && (!disableLights || !mi.importLights) && (!disableVisibility || !mi.importVisibility)));
 
 			// MDL008 ---------------------------------------------------------------
 			using (RuleTiming.Begin("MDL008", entry.Path))
 				if (facts.importTangents != ModelImporterTangents.None && !anyNormalMap && vertices > 0)
-				{
-					entry.AddIssue("MDL008", facts.importTangents.ToString(),
-						"Review Fix: None when safe", 0, null,
-						"No common normal-map property with a texture was detected on imported/assigned materials. Runtime shader usage can still require tangent data.",
-						options: new List<FixOption>
-						{
-						new FixOption
-						{
-							ActionId = "tangents-none",
-							Label = "Set Tangents to None",
-							ResultDescription = "Stops tangent data from being imported/generated for this model.",
-							Recommended = true,
-							Warning = "Any runtime tangent-space normal mapping or shader path requiring tangents will break or render incorrectly.",
-							Apply = c =>
-							{
-								var mi = c.Importer as ModelImporter;
-								if (mi == null) throw new InvalidOperationException("ModelImporter unavailable.");
-								mi.importTangents = ModelImporterTangents.None;
-								c.NeedsReimport = true;
-							},
-							Verify = c =>
-							{
-								var mi = AssetImporter.GetAtPath(c.AssetPath) as ModelImporter;
-								return mi != null && mi.importTangents == ModelImporterTangents.None;
-							}
-						}
-						});
-				}
+					entry.AddIssue("MDL008", facts.importTangents.ToString(), "None", 0,
+						c => ApplyModelImporterChange(c, mi => mi.importTangents = ModelImporterTangents.None),
+						"No normal-map usage was detected in the model evidence collected by this analyzer. Tangents are disabled for the common case; assets using runtime-assigned tangent-space shaders can be corrected manually.",
+						verify: VerifyTangentsDisabled);
 
 			// MDL009 ---------------------------------------------------------------
 			using (RuleTiming.Begin("MDL009", entry.Path))
@@ -533,13 +436,7 @@ namespace ApexForge.ProjectOptimizer
 					&& largestMesh <= 65535)
 				{
 					entry.AddIssue("MDL010", "32 bit", "Auto", 0,
-						c =>
-						{
-							var mi = c.Importer as ModelImporter;
-							if (mi == null) throw new InvalidOperationException("ModelImporter unavailable.");
-							mi.indexFormat = ModelImporterIndexFormat.Auto;
-							c.NeedsReimport = true;
-						},
+						c => ApplyModelImporterChange(c, mi => mi.indexFormat = ModelImporterIndexFormat.Auto),
 						verify: c =>
 						{
 							var mi = AssetImporter.GetAtPath(c.AssetPath) as ModelImporter;
@@ -567,40 +464,12 @@ namespace ApexForge.ProjectOptimizer
 				}
 
 			// MDL012 ---------------------------------------------------------------
-			// Weld Vertices is not universally beneficial. It only has a possible benefit when
-			// duplicate-position vertices exist, which this static importer inspection cannot prove.
-			// Retain the rule as a review candidate for non-empty mesh assets, not as a defect.
 			using (RuleTiming.Begin("MDL012", entry.Path))
 				if (!facts.weldVertices && meshCount > 0 && vertices > 0)
-				{
-					entry.AddIssue("MDL012", "Weld Vertices off",
-						"Review Fix: On when safe", 0, null,
-						"Unity combines vertices sharing the same position. Intentional vertex splits can be required "
-						+ "for normals, UVs, tangents or downstream processing, so this remains a review action.",
-						options: new List<FixOption>
-						{
-						new FixOption
-						{
-							ActionId = "weld-vertices",
-							Label = "Enable Weld Vertices",
-							ResultDescription = "Allows Unity to merge vertices sharing the same position during import.",
-							Recommended = true,
-							Warning = "Do not use when intentional vertex splits are required for shading, UVs, tangents or downstream processing.",
-							Apply = c =>
-							{
-								var mi = c.Importer as ModelImporter;
-								if (mi == null) throw new InvalidOperationException("ModelImporter unavailable.");
-								mi.weldVertices = true;
-								c.NeedsReimport = true;
-							},
-							Verify = c =>
-							{
-								var mi = AssetImporter.GetAtPath(c.AssetPath) as ModelImporter;
-								return mi != null && mi.weldVertices;
-							}
-						}
-						});
-				}
+					entry.AddIssue("MDL012", "Weld Vertices off", "On", 0,
+						c => ApplyModelImporterChange(c, mi => mi.weldVertices = true),
+						"Enable Weld Vertices for non-empty imported meshes. The verifier checks the importer postcondition and the reimported model; unusual seam/topology cases may be adjusted manually.",
+						verify: c => VerifyModelImporterSetting(c, mi => mi.weldVertices, requireMeshes: true));
 
 			// MDL013 ---------------------------------------------------------------
 			using (RuleTiming.Begin("MDL013", entry.Path))
@@ -646,92 +515,56 @@ namespace ApexForge.ProjectOptimizer
 				}
 			// MDL014 ---------------------------------------------------------------
 			using (RuleTiming.Begin("MDL014", entry.Path))
-				if (facts.generateSecondaryUV)
+				if (meshCount > 0 && facts.generateSecondaryUV)
 				{
-					entry.AddIssue("MDL014", "Generate Lightmap UVs on",
-						"Review Fix: Off when unused", facts.secondaryUvBytes, null,
-						"Secondary UV generation is useful for lightmapping workflows. Disable it only when this asset does not need generated secondary UVs.",
-						options: new List<FixOption>
-						{
-						new FixOption
-						{
-							ActionId = "disable-secondary-uv",
-							Label = "Disable Generate Lightmap UVs",
-							ResultDescription = "Stops generating the secondary lightmap UV set.",
-							Recommended = true,
-							Warning = "Lightmapping that expects this generated UV set may become invalid or lower quality.",
-							Apply = c =>
-							{
-								var mi = c.Importer as ModelImporter;
-								if (mi == null) throw new InvalidOperationException("ModelImporter unavailable.");
-								mi.generateSecondaryUV = false;
-								c.NeedsReimport = true;
-							},
-							Verify = c =>
-							{
-								var mi = AssetImporter.GetAtPath(c.AssetPath) as ModelImporter;
-								return mi != null && !mi.generateSecondaryUV;
-							}
-						}
-						});
+					bool canAutoFix = CanAutoFixUnreferencedModel(entry.Path, ctx);
+					Action<FixContext> disableSecondaryUV = c => ApplyModelImporterChange(c, mi => mi.generateSecondaryUV = false);
+					Func<FixContext, bool> verifySecondaryUV = c => VerifyModelImporterSetting(c, mi => !mi.generateSecondaryUV, requireMeshes: true);
+					var issue = entry.AddIssue("MDL014", "Generate Lightmap UVs on",
+						canAutoFix ? "Off" : "Review whether generated UV2 is required",
+						facts.secondaryUvBytes,
+						canAutoFix ? disableSecondaryUV : null,
+						"Generated secondary UVs are disabled automatically only when a complete/current project-wide reference graph proves the model has no static consumers and it is outside known dynamic-loading paths. Referenced or incompletely indexed assets retain a Review option because their baked-lighting use cannot be proven from importer facts alone.",
+						verify: canAutoFix ? verifySecondaryUV : null,
+						options: canAutoFix ? null : new List<FixOption> { new FixOption {
+							ActionId = "disable-secondary-uv-review", Label = "Disable generated secondary UVs after checking lightmapping use", Recommended = false,
+							Risk = FixRisk.Medium, Warning = "Confirm no scene, prefab, build, Addressables or dynamic load requires this generated UV set before applying.",
+							Apply = disableSecondaryUV, Verify = verifySecondaryUV
+						} });
+					if (issue != null && !canAutoFix)
+					{
+						issue.FixKind = FixKind.Review;
+						issue.Risk = FixRisk.Medium;
+						issue.BackupRequired = true;
+						issue.Note("Static usage evidence cannot prove the model is outside every baked-lighting workflow; automatic disable was withheld.", "Safety gate");
+					}
 				}
 
 			// MDL015 ---------------------------------------------------------------
 			using (RuleTiming.Begin("MDL015", entry.Path))
 				if (hasSkinnedMesh && hierarchyObjects > 1
-					&& (facts.animationType == ModelImporterAnimationType.Generic
-						|| facts.animationType == ModelImporterAnimationType.Human)
+					&& (facts.animationType == ModelImporterAnimationType.Generic || facts.animationType == ModelImporterAnimationType.Human)
 					&& !facts.optimizeGameObjects)
-				{
-					entry.AddIssue("MDL015", "Optimize Game Objects off",
-						"Review Fix: On when safe", 0, null,
-						"Unity can remove Transform-only GameObjects from optimized character hierarchies unless explicitly exposed. Review scripts, constraints, sockets and attachments before enabling it.",
-						options: new List<FixOption>
-						{
-						new FixOption
-						{
-							ActionId = "optimize-game-objects",
-							Label = "Enable Optimize Game Objects",
-							ResultDescription = "Optimizes the imported animated hierarchy by removing non-required Transform-only objects.",
-							Recommended = true,
-							Warning = "Expose every transform required by runtime code, animation constraints, sockets, IK and attachments before enabling.",
-							Apply = c =>
-							{
-								var mi = c.Importer as ModelImporter;
-								if (mi == null) throw new InvalidOperationException("ModelImporter unavailable.");
-								mi.optimizeGameObjects = true;
-								c.NeedsReimport = true;
-							},
-							Verify = c =>
-							{
-								var mi = AssetImporter.GetAtPath(c.AssetPath) as ModelImporter;
-								return mi != null && mi.optimizeGameObjects;
-							}
-						}
-						});
-				}
+					entry.AddIssue("MDL015", "Optimize Game Objects off", "On", 0,
+						c => ApplyModelImporterChange(c, mi => mi.optimizeGameObjects = true),
+						"Enable Optimize Game Objects for skinned models. The resulting importer flag is verified after reimport; if runtime code requires stripped transform paths, expose them or disable this optimization for that asset.",
+						verify: c => VerifySkinnedModelImporterSetting(c, mi => mi.optimizeGameObjects));
 
 			// MDL016 ---------------------------------------------------------------
 			using (RuleTiming.Begin("MDL016", entry.Path))
 				if (hasSkinnedMesh && facts.skinWeights == ModelImporterSkinWeights.Custom && facts.maxBonesPerVertex > 4)
-				{
-					string targetText = settings.IsMobile
-						? "4 or fewer on mobile when deformation quality permits"
-						: "4 or fewer when deformation quality permits";
+					entry.AddIssue("MDL016", facts.maxBonesPerVertex + " bones per vertex", "4 bones per vertex", 0,
+						c => ApplyModelImporterChange(c, mi => mi.maxBonesPerVertex = MaxBoneInfluenceTarget(mi.maxBonesPerVertex)),
+						"Use four influences per vertex as the global default. Lower-weight influences may be discarded; the reimport verifier checks the importer target and a valid imported model.",
+						verify: c => VerifySkinnedModelImporterSetting(c, mi => mi.maxBonesPerVertex <= 4));
 
-					entry.AddIssue("MDL016",
-						facts.maxBonesPerVertex + " bones per vertex",
-						targetText, 0, null,
-						"Lowering this importer limit discards the lowest-weight influences from the underlying mesh data. The correct threshold is a deformation-quality decision.",
-						options: new List<FixOption> { new FixOption {
-							Label = "Reduce Bone Influences",
-							Recommended = true,
-							Risk = FixRisk.Medium,
-							Warning = "This is a Review Fix. Inspect the target state before applying it.",
-							Apply = c => ImporterFixUtility.Model(c, mi => mi.maxBonesPerVertex = Mathf.Clamp(2, 1, 255))
-						} }
-					);
-				}
+			// MDL017 ---------------------------------------------------------------
+			using (RuleTiming.Begin("MDL017", entry.Path))
+				if (hasSkinnedMesh && hierarchyObjects > 1 && !facts.optimizeBones)
+					entry.AddIssue("MDL017", "Optimize Bones off", "On", 0,
+						c => ApplyModelImporterChange(c, mi => mi.optimizeBones = true),
+						"Enable Optimize Bones on skinned models and verify the option after reimport. If a game depends on unweighted helper, IK, attachment, or script-driven bones, restore the setting for that model.",
+						verify: c => VerifySkinnedModelImporterSetting(c, mi => mi.optimizeBones));
 
 			// MDL018 ---------------------------------------------------------------
 			using (RuleTiming.Begin("MDL018", entry.Path))
@@ -748,42 +581,12 @@ namespace ApexForge.ProjectOptimizer
 							Recommended = true,
 							Risk = FixRisk.Medium,
 							Warning = "This is a Review Fix. Inspect the target state before applying it.",
-							Apply = c => { c.EnsureWritable(); var mi = c.Importer as ModelImporter; if (mi == null) throw new InvalidOperationException("Not a ModelImporter"); mi.minBoneWeight = 0.01f; c.NeedsReimport = true; }
+							Apply = c => ApplyModelImporterChange(c, mi => mi.minBoneWeight = 0.01f),
+							Verify = c => VerifySkinnedModelImporterSetting(c, mi => mi.minBoneWeight > 0f)
 						} }
 					);
 				}
 
-			// MDL017 ---------------------------------------------------------------
-			using (RuleTiming.Begin("MDL017", entry.Path))
-				if (hasSkinnedMesh && hierarchyObjects > 1 && !facts.optimizeBones)
-				{
-					entry.AddIssue("MDL017", "Optimize Bones off",
-						"Review Fix: On when safe", 0, null,
-						"Optimize Bones imports only bones connected to vertices. Unweighted helper, IK, attachment or scripted bones can still be required.",
-						options: new List<FixOption>
-						{
-						new FixOption
-						{
-							ActionId = "optimize-bones",
-							Label = "Enable Optimize Bones",
-							ResultDescription = "Removes unweighted bones from the imported character hierarchy/data where Unity can determine they are not connected to vertices.",
-							Recommended = true,
-							Warning = "Do not use when unweighted helper, IK, attachment or scripted bones are accessed at runtime.",
-							Apply = c =>
-							{
-								var mi = c.Importer as ModelImporter;
-								if (mi == null) throw new InvalidOperationException("ModelImporter unavailable.");
-								mi.optimizeBones = true;
-								c.NeedsReimport = true;
-							},
-							Verify = c =>
-							{
-								var mi = AssetImporter.GetAtPath(c.AssetPath) as ModelImporter;
-								return mi != null && mi.optimizeBones;
-							}
-						}
-						});
-				}
 
 			entry.Finalise();
 			return entry;
@@ -927,6 +730,107 @@ namespace ApexForge.ProjectOptimizer
 			for (int i = 0; i < invalid.Length; i++) value = value.Replace(invalid[i].ToString(), "_");
 			return value.Trim();
 		}
+
+		/// <summary>Applies one importer mutation only to the expected writable ModelImporter and schedules a reimport.</summary>
+		static void ApplyModelImporterChange(FixContext context, Action<ModelImporter> mutation)
+		{
+			if (context == null) throw new ArgumentNullException(nameof(context));
+			if (mutation == null) throw new ArgumentNullException(nameof(mutation));
+			context.EnsureWritable();
+			var importer = context.Importer as ModelImporter;
+			if (importer == null) throw new InvalidOperationException("Expected a ModelImporter for " + context.AssetPath + ".");
+			mutation(importer);
+			context.NeedsReimport = true;
+		}
+
+		/// <summary>Verifies importer state after reimport and confirms the model's main object is still loadable.</summary>
+		static bool VerifyModelImporterSetting(FixContext context, Func<ModelImporter, bool> predicate, bool requireMeshes = false)
+		{
+			if (context == null || predicate == null || string.IsNullOrEmpty(context.AssetPath)) return false;
+			var importer = AssetImporter.GetAtPath(context.AssetPath) as ModelImporter;
+			if (importer == null || !predicate(importer) || AssetDatabase.LoadAssetAtPath<GameObject>(context.AssetPath) == null) return false;
+			if (!requireMeshes) return true;
+			var imported = AssetDatabase.LoadAllAssetsAtPath(context.AssetPath);
+			for (int i = 0; i < imported.Length; i++) if (imported[i] is Mesh) return true;
+			return false;
+		}
+
+		static bool VerifyRigRemoved(FixContext context)
+		{
+			if (!VerifyModelImporterSetting(context, mi => mi.animationType == ModelImporterAnimationType.None && !mi.importAnimation)) return false;
+			var imported = AssetDatabase.LoadAllAssetsAtPath(context.AssetPath);
+			for (int i = 0; i < imported.Length; i++)
+			{
+				var clip = imported[i] as AnimationClip;
+				if (clip != null && !clip.name.StartsWith("__preview__", StringComparison.OrdinalIgnoreCase)) return false;
+				if (imported[i] is Avatar) return false;
+			}
+			return true;
+		}
+
+		static bool VerifyAnimationImportDisabled(FixContext context)
+		{
+			if (!VerifyModelImporterSetting(context, mi => !mi.importAnimation)) return false;
+			var imported = AssetDatabase.LoadAllAssetsAtPath(context.AssetPath);
+			for (int i = 0; i < imported.Length; i++)
+			{
+				var clip = imported[i] as AnimationClip;
+				if (clip != null && !clip.name.StartsWith("__preview__", StringComparison.OrdinalIgnoreCase)) return false;
+			}
+			return true;
+		}
+
+		static bool VerifyBlendShapeImportDisabled(FixContext context)
+		{
+			if (!VerifyModelImporterSetting(context, mi => !mi.importBlendShapes, requireMeshes: true)) return false;
+			var imported = AssetDatabase.LoadAllAssetsAtPath(context.AssetPath);
+			for (int i = 0; i < imported.Length; i++)
+				if (imported[i] is Mesh mesh && mesh.blendShapeCount > 0) return false;
+			return true;
+		}
+
+		static bool VerifyTangentsDisabled(FixContext context)
+		{
+			if (!VerifyModelImporterSetting(context, mi => mi.importTangents == ModelImporterTangents.None, requireMeshes: true)) return false;
+			var imported = AssetDatabase.LoadAllAssetsAtPath(context.AssetPath);
+			for (int i = 0; i < imported.Length; i++)
+				if (imported[i] is Mesh mesh && mesh.tangents != null && mesh.tangents.Length > 0) return false;
+			return true;
+		}
+
+		static bool VerifySkinnedModelImporterSetting(FixContext context, Func<ModelImporter, bool> predicate)
+		{
+			if (!VerifyModelImporterSetting(context, predicate, requireMeshes: true)) return false;
+			var root = AssetDatabase.LoadAssetAtPath<GameObject>(context.AssetPath);
+			var renderers = root != null ? root.GetComponentsInChildren<SkinnedMeshRenderer>(true) : Array.Empty<SkinnedMeshRenderer>();
+			for (int i = 0; i < renderers.Length; i++) if (renderers[i] != null && renderers[i].sharedMesh != null) return true;
+			return false;
+		}
+
+		/// <summary>
+		/// A missing/partial reference graph is not proof of zero consumers. Dynamic-loading folders are also
+		/// excluded because their consumers need not appear in serialized dependency edges.
+		/// </summary>
+		static bool CanAutoFixUnreferencedModel(string assetPath, ScanContext context)
+		{
+			bool currentProjectGraph = context != null && context.References != null && context.References.IsCurrentProjectWide;
+			bool dynamicLoadingPath = IsDynamicLoadingPath(assetPath);
+			int referrerCount = currentProjectGraph && context.References.ReferrersOf(assetPath) != null
+				? context.References.ReferrersOf(assetPath).Count : -1;
+			return CanAutoFixUnreferencedModel(currentProjectGraph, referrerCount, dynamicLoadingPath);
+		}
+
+		internal static bool CanAutoFixUnreferencedModel(bool currentProjectGraph, int referrerCount, bool dynamicLoadingPath)
+			=> currentProjectGraph && referrerCount == 0 && !dynamicLoadingPath;
+
+		static bool IsDynamicLoadingPath(string assetPath)
+		{
+			if (string.IsNullOrEmpty(assetPath)) return true;
+			return assetPath.IndexOf("/Resources/", StringComparison.OrdinalIgnoreCase) >= 0
+				|| assetPath.IndexOf("/StreamingAssets/", StringComparison.OrdinalIgnoreCase) >= 0;
+		}
+
+		internal static int MaxBoneInfluenceTarget(int current) => Math.Min(current, 4);
 
 	}
 }

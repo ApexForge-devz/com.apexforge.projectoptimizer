@@ -34,8 +34,7 @@ namespace ApexForge.ProjectOptimizer.Tests
             {
                 m_Settings.audioStreamingSeconds = m_OriginalStreamingSeconds;
                 m_Settings.audioFileSizeWarnKb = m_OriginalFileSizeWarnKb;
-                EditorUtility.SetDirty(m_Settings);
-                AssetDatabase.SaveAssets();
+                m_Settings.Save();
             }
             if (AssetDatabase.IsValidFolder(TestFolder)) AssetDatabase.DeleteAsset(TestFolder);
             AssetDatabase.Refresh();
@@ -70,7 +69,7 @@ namespace ApexForge.ProjectOptimizer.Tests
             Assert.AreEqual(0, report.Failed);
             var after = (AudioImporter)AssetImporter.GetAtPath(path);
             Assert.IsTrue(after.forceToMono, "An explicitly approved ReviewFix should set Force To Mono.");
-            Assert.IsTrue(option.Verify(ReviewBatch.ProbeContext(path)), "The option verifier should observe Force To Mono after reimport.");
+            Assert.IsTrue(option.Verify(ReviewActionCatalog.ProbeContext(path)), "The option verifier should observe Force To Mono after reimport.");
         }
 
         [Test]
@@ -134,7 +133,7 @@ namespace ApexForge.ProjectOptimizer.Tests
             Assert.AreEqual(0, report.Failed);
             var after = (AudioImporter)AssetImporter.GetAtPath(path);
             Assert.IsFalse(ReadEffectiveSampleSettings(after).preloadAudioData);
-            Assert.IsTrue(issue.Verify(ReviewBatch.ProbeContext(path)));
+            Assert.IsTrue(issue.Verify(ReviewActionCatalog.ProbeContext(path)));
         }
 
         [Test]
@@ -244,7 +243,7 @@ namespace ApexForge.ProjectOptimizer.Tests
             var after = (AudioImporter)AssetImporter.GetAtPath(path);
             Assert.IsFalse(after.GetOverrideSampleSettings(platform).preloadAudioData, "The selected-target override must be disabled.");
             Assert.IsFalse(after.defaultSampleSettings.preloadAudioData, "The pre-existing default must remain unchanged.");
-            Assert.IsTrue(issue.Verify(ReviewBatch.ProbeContext(path)));
+            Assert.IsTrue(issue.Verify(ReviewActionCatalog.ProbeContext(path)));
         }
 
         AudioImporterSampleSettings ReadEffectiveSampleSettings(AudioImporter importer)

@@ -157,7 +157,7 @@ namespace ApexForge.ProjectOptimizer
             else
             {
                 string persistence = File.ReadAllText(persistencePath);
-                if (persistence.IndexOf("const int k_Version = 11", StringComparison.Ordinal) < 0) errors.Add("Persisted scan snapshot schema does not reflect executable/verifier presence fields.");
+                if (persistence.IndexOf("const int k_Version = 12", StringComparison.Ordinal) < 0) errors.Add("Persisted scan snapshot schema does not reflect executable/verifier presence fields.");
                 if (persistence.IndexOf("public bool HasVerifier", StringComparison.Ordinal) < 0) errors.Add("Persisted fix metadata does not retain verifier presence.");
                 if (persistence.IndexOf("public bool HasApply", StringComparison.Ordinal) < 0) errors.Add("Persisted fix metadata does not retain executable-action presence.");
                 if (persistence.IndexOf("public string RuleCatalogSignature", StringComparison.Ordinal) < 0 || persistence.IndexOf("public string AnalyzerSignature", StringComparison.Ordinal) < 0 || persistence.IndexOf("public string FixContractSignature", StringComparison.Ordinal) < 0) errors.Add("Persisted findings do not retain semantic rule/analyzer/fix signatures.");

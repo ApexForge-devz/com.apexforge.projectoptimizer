@@ -953,13 +953,13 @@ namespace ApexForge.ProjectOptimizer
 
 			switch (request.Issue.RuleId)
 			{
-				case "PRJ064":
-				case "PRJ065":
-				case "PRJ074":
+				case "PRJ060":
+				case "PRJ061":
+				case "PRJ070":
 					yield return "ProjectSettings/EditorSettings.asset";
 					yield break;
-				case "PRJ067":
-				case "PAS1005":
+				case "PRJ063":
+				case "PAS023":
 					yield return "ProjectSettings/EditorBuildSettings.asset";
 					yield break;
 			}
@@ -1166,10 +1166,17 @@ namespace ApexForge.ProjectOptimizer
 			if (works == null || works.Count == 0) return true;
 			report.Errors.Add("ProjectSettings: " + reason);
 
+			var restoreEntries = new List<ManifestEntry>();
+			if (projectManifest != null) restoreEntries.AddRange(projectManifest);
+			if (works != null)
+				for (int i = 0; i < works.Count; i++)
+					if (works[i] != null && works[i].Manifest.Count > 0)
+						restoreEntries.AddRange(works[i].Manifest);
+
 			bool restored = false;
-			if (batch != null && projectManifest != null && projectManifest.Count > 0)
+			if (batch != null && restoreEntries.Count > 0)
 			{
-				var result = batch.Restore(projectManifest);
+				var result = batch.Restore(restoreEntries);
 				report.Errors.AddRange(result.Errors);
 				restored = result.Complete;
 			}

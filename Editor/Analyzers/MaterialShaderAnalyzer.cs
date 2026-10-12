@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -36,6 +37,20 @@ namespace ApexForge.ProjectOptimizer
 		static Dictionary<string, HashSet<string>> s_ShadersUsingMaterialKeyword;
 		static bool s_MaterialUsageDirty = true;
 		readonly HashSet<string> m_AlwaysIncludedShaders = new HashSet<string>(StringComparer.Ordinal);
+		readonly HashSet<string> m_RuntimeSourceTokens = new HashSet<string>(StringComparer.Ordinal);
+		readonly HashSet<string> m_RuntimeControlledKeywords = new HashSet<string>(StringComparer.Ordinal);
+		readonly HashSet<string> m_RuntimeControlledMaterialProperties = new HashSet<string>(StringComparer.Ordinal);
+		readonly HashSet<int> m_MaterialVariantAncestorIds = new HashSet<int>();
+		bool m_MaterialVariantTreeBuilt;
+		bool m_RuntimeSourceIndexBuilt;
+		bool m_RuntimeSourceIndexComplete;
+		bool m_RuntimeHasDynamicKeywordControl;
+		bool m_RuntimeSourceHasDynamicMaterialPropertyUse;
+		bool m_RuntimeSourceHasDynamicTransparencyPropertyUse;
+		bool m_RuntimeSourceUsesMaterialPropertyBlock;
+		bool m_TransparencyAnimationIndexBuilt;
+		bool m_TransparencyAnimationIndexComplete;
+		bool m_TransparencyAnimationControlsMaterialState;
 		bool m_UsingSrp;
 
 		sealed class ShaderCapabilityFacts
@@ -48,6 +63,52 @@ namespace ApexForge.ProjectOptimizer
 		{
 			public string name;
 			public ShaderPropertyType type;
+		}
+
+		/// <summary>
+		/// The small set of Standard-shader semantics that must survive Unity's native pipeline
+		/// converter before MAT002 can be reported as verified. A shader-name check alone is not a
+		/// useful postcondition: conversion can select the right destination shader and still lose
+		/// the material's visible texture/color state.
+		/// </summary>
+		sealed class MaterialConversionSnapshot
+		{
+			public string SourceShaderName;
+			public string TargetPipelineName;
+			public string SourceSignature;
+			public int SourceRawRenderQueue;
+			public bool SourceEnableInstancing;
+			public MaterialGlobalIlluminationFlags SourceGlobalIlluminationFlags;
+			public bool SourceDoubleSidedGI;
+			public Texture MainTexture;
+			public Vector2 MainTextureScale;
+			public Vector2 MainTextureOffset;
+			public Color BaseColor;
+			public Texture NormalTexture;
+			public Vector2 NormalTextureScale;
+			public Vector2 NormalTextureOffset;
+			public float NormalScale;
+			public Texture EmissionTexture;
+			public Vector2 EmissionTextureScale;
+			public Vector2 EmissionTextureOffset;
+			public Color EmissionColor;
+			public Texture MetallicOrSpecularTexture;
+			public Vector2 MetallicOrSpecularTextureScale;
+			public Vector2 MetallicOrSpecularTextureOffset;
+			public float Metallic;
+			public float Smoothness;
+			public Color SpecularColor;
+			public float Cutoff;
+			public bool SpecularWorkflow;
+			public bool HasNormalTexture;
+			public bool HasNormalScale;
+			public bool HasEmissionTexture;
+			public bool HasEmissionColor;
+			public bool HasMetallicOrSpecularTexture;
+			public bool HasMetallic;
+			public bool HasSmoothness;
+			public bool HasSpecularColor;
+			public bool HasCutoff;
 		}
 		readonly Dictionary<int, ShaderCapabilityFacts> m_ShaderCapabilities = new Dictionary<int, ShaderCapabilityFacts>();
 		static readonly Dictionary<int, ShaderPropertyDescriptor[]> s_ShaderProperties = new Dictionary<int, ShaderPropertyDescriptor[]>();
@@ -145,93 +206,104 @@ namespace ApexForge.ProjectOptimizer
 							);
 
 			Rules.Register(id: "MAT002", title: "Built-in pipeline shader in a Scriptable Render Pipeline project", category: AssetCategory.Material,
-							why: "Built-in pipeline shaders are not interchangeable with URP or HDRP shaders. A blind shader swap can change lighting, surface behavior, keywords and material properties.",
-							fix: "Replace the shader deliberately and migrate the material properties and rendering settings required by the target pipeline.",
+							why: "Built-in pipeline shaders are not interchangeable with URP or HDRP shaders. Only supported stock shader families are passed to Unity's selected-material converter; custom or unsupported shaders remain diagnostic-only.",
+							fix: "Run Unity's built-in material conversion command for supported Standard materials and the active URP/HDRP pipeline.",
 							severity: IssueSeverity.Critical,
-							fixKind: FixKind.None,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
+							risk: FixRisk.High,
+							backupRequired: true
 							);
 
 			Rules.Register(id: "MAT003", title: "GPU instancing disabled on an instancing-capable shader", category: AssetCategory.Material,
-							why: "GPU instancing can reduce draw overhead when many suitable renderers share the same mesh and material. It is workload-dependent, and the best path depends on the active render pipeline and batching setup.",
-							fix: "Enable GPU Instancing only when the material is reused by suitable renderers and profiling shows a benefit.",
+							why: "GPU instancing can reduce draw overhead for compatible repeated renderer cohorts, but static material-use counts do not establish a performance benefit.",
+							fix: "Enable GPU Instancing only when fresh target-player profiling for the same build target, render pipeline and compatible mesh/material cohort proves a repeatable benefit. This analyzer has no profile-evidence provider, so it reports the opportunity without offering an automatic mutation.",
 							severity: IssueSeverity.Info,
 							fixKind: FixKind.None,
-							confidence: OptimizationConfidence.Diagnostic,
+							confidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Unspecified,
 							backupRequired: false
 							);
 
 			Rules.Register(id: "MAT004", title: "Duplicate material", category: AssetCategory.Material,
-							why: "Separate material assets with equivalent rendering state add redundant project data and can make material management harder.",
-							fix: "Consolidate genuinely equivalent material assets where all references can safely share one material.",
+							why: "Separate byte-identical material assets with equivalent rendering state can be consolidated only when all serialized references can be remapped safely.",
+							fix: "Collapse a byte-identical duplicate onto a keeper when the project-wide reference graph and local file-ID mapping prove the remap is safe.",
 							severity: IssueSeverity.Warning,
-							fixKind: FixKind.None,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.Proven,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							recommendationConfidence: OptimizationConfidence.Proven,
+							risk: FixRisk.Destructive,
+							backupRequired: true,
+							requiredEvidence: EvidenceRequirement.CrossAssetFresh
 							);
 
 			Rules.Register(id: "MAT005", title: "Orphaned texture references", category: AssetCategory.Material,
-							why: "Materials can retain serialized texture entries for properties that the current shader no longer declares. Those references can unnecessarily keep texture assets reachable.",
-							fix: "Review Fix: remove serialized texture entries that are no longer used by the current shader. Kept as Review rather than Verified because a shader can still read a property through custom code outside the serialized property model that this analyzer cannot see.",
+							why: "Materials can retain serialized texture entries for properties that the current shader no longer declares. Only names proven absent from a complete project source scan are removed automatically.",
+							fix: "Remove only selected orphan texture entries whose property names have no detected project-source use; preserve uncertain entries.",
 							severity: IssueSeverity.Warning,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
+							risk: FixRisk.High,
+							backupRequired: true,
+							requiredEvidence: EvidenceRequirement.ProjectProofComplete
 							);
 
 			Rules.Register(id: "MAT006", title: "Transparent material appears fully opaque", category: AssetCategory.Material,
-							why: "For supported stock shaders, the material appears to have no detected source of transparency while using Transparent surface mode. The serialized material facts are not a complete proof of shader semantics, so changing surface mode must remain an explicit review decision.",
-							fix: "Review whether Transparent mode is actually required before switching this material to Opaque.",
+							why: "For a short allowlist of stock URP surface shaders, an opaque tint, alpha-free base texture and disabled alpha clipping provide enough evidence to switch the surface mode to Opaque.",
+							fix: "Convert a proven opaque stock URP transparent material to Opaque and verify its serialized surface/blend state.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
-							confidence: OptimizationConfidence.Heuristic,
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Medium,
-							backupRequired: false
+							backupRequired: true
 							);
 
 			Rules.Register(id: "MAT007", title: "Redundant material render-queue override", category: AssetCategory.Material,
-							why: "A material render-queue override equal to the shader's current queue stores unnecessary per-material state, but removing the override changes future behaviour if the shader queue later changes.",
-							fix: "Review resetting the material render queue to the shader default when the explicit override is no longer intentional.",
+							why: "A material render-queue override equal to the shader's current queue is redundant now; resetting it restores inheritance of future shader queue changes.",
+							fix: "Reset a render queue override to -1 when the raw override exactly equals the currently resolved shader queue.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.Proven,
+							recommendationConfidence: OptimizationConfidence.Proven,
 							risk: FixRisk.Medium,
-							backupRequired: false
+							backupRequired: true
 							);
 
 			Rules.Register(id: "MAT008", title: "Material has keywords not present in the shader keyword space", category: AssetCategory.Material,
-							why: "A material should only need local shader keywords declared by the shader it uses. When project-wide evidence shows these states are no longer declared or consumed, removing only those stale local states is a deterministic cleanup.",
-							fix: "Remove only the stale local keyword states that are no longer present in the material shader's keyword space and are not referenced by the project source scan.",
+							why: "A material should only need local shader keywords declared by its shader. A complete project proof scan that finds no use outside this material makes removing those invalid local keyword states a deterministic cleanup.",
+							fix: "Remove only proven stale enabled local keywords after a complete project-source scan shows no other references.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
-							risk: FixRisk.Low,
-							backupRequired: false
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
+							risk: FixRisk.High,
+							backupRequired: true,
+							requiredEvidence: EvidenceRequirement.ProjectProofComplete
 							);
 
 			Rules.Register(id: "MAT009", title: "Material is part of a large shared shader-property family", category: AssetCategory.Material,
-							why: "Many materials that share a shader, texture state and keyword state are candidates for Material Variants or a shared base material when their remaining property differences are intentional and compatible with that workflow.",
-							fix: "Consider Material Variants or a shared base material when the content workflow benefits from it. This is a structural optimization, not an automatic conversion.",
+							why: "Materials that share shader, texture and keyword state may be managed as Material Variants, but the parent-child hierarchy is a human content-organization choice.",
+							fix: "Choose a family member as the parent and convert the current material to a Material Variant, preserving its effective serialized property state.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.None,
-							confidence: OptimizationConfidence.Heuristic,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							fixKind: FixKind.Review,
+							confidence: OptimizationConfidence.HighConfidence,
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
+							risk: FixRisk.High,
+							backupRequired: true
 							);
 
 			Rules.Register(id: "MAT010", title: "Material emission GI flags appear inconsistent", category: AssetCategory.Material,
-							why: "Unity uses MaterialGlobalIlluminationFlags to describe how emissive lighting interacts with lightmapping and light probes. A black emission value with emissive GI enabled can leave unnecessary GI bookkeeping.",
-							fix: "Review the material's emission settings and use Unity's MaterialEditor emissive-flag fixup when appropriate.",
+							why: "Unity provides MaterialEditor.FixupEmissiveFlag to synchronize emission state and GI flags. A black emission value that is still flagged as emissive-but-not-black can be synchronized deterministically.",
+							fix: "Run Unity's MaterialEditor emissive-flag fixup and verify the EmissiveIsBlack flag is synchronized.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.None,
-							confidence: OptimizationConfidence.Heuristic,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
+							risk: FixRisk.Medium,
+							backupRequired: true
 							);
 
 			Rules.Register(id: "SHD001", title: "Shader has compile errors", category: AssetCategory.Shader,
@@ -275,9 +347,9 @@ namespace ApexForge.ProjectOptimizer
 							);
 
 			Rules.Register(id: "SHD005", title: "Shader is unsupported on the editor's current platform", category: AssetCategory.Shader,
-							why: "Unity reports shader support for the platform the editor is currently set to build for, and for nothing else. That is often not the platform this scan is profiling: the optimizer's target profile is chosen separately, so a Windows editor session says nothing about whether the shader works on Android. An unsupported shader falls back or fails to render on the platform it was reported for.",
-							fix: "Inspect platform restrictions, required graphics APIs and fallback behaviour. To check a different platform, switch the editor's build target and scan again - this rule cannot answer for a platform the editor is not set to.",
-							severity: IssueSeverity.Warning,
+							why: "Unity reports shader support for the platform the editor is currently set to build for, and for nothing else. This is only an editor-platform diagnostic and says nothing about the optimizer's separate target profile.",
+							fix: "Switch the editor's active build target and rescan to inspect the intended platform; this finding has no generic source fix.",
+							severity: IssueSeverity.Info,
 							fixKind: FixKind.None,
 							confidence: OptimizationConfidence.Diagnostic,
 							risk: FixRisk.Unspecified,
@@ -285,43 +357,51 @@ namespace ApexForge.ProjectOptimizer
 							);
 
 			Rules.Register(id: "SHD006", title: "Shader has a large local keyword space", category: AssetCategory.Shader,
-							why: "Large local keyword spaces increase shader state complexity and can contribute to a large variant space. Unity documents local keywords as the preferred scope when a keyword does not need global control.",
-							fix: "Reduce unnecessary keywords and prefer local declarations when global keyword control is not required.",
+							why: "A large local keyword space is actionable only when individual local declarations are proven unused by materials, shader code and project source.",
+							fix: "Remove only individual local keyword declaration tokens proven unused by the complete project-source scan; preserve every ambiguous declaration.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.None,
-							confidence: OptimizationConfidence.Diagnostic,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
+							risk: FixRisk.High,
+							backupRequired: true,
+							requiredEvidence: EvidenceRequirement.ProjectProofComplete
 							);
 
 			Rules.Register(id: "SHD007", title: "multi_compile feature appears material-driven", category: AssetCategory.Shader,
-							why: "Unity recommends shader_feature when keyword state is determined by materials and does not change from runtime code, because unused shader_feature variants can be stripped.",
-							fix: "Review the highlighted multi_compile declarations; convert them to shader_feature only when runtime/global keyword changes are not required.",
+							why: "Global keyword source that is enabled by materials and has no detected project code control can use shader_feature so unused variants can be stripped.",
+							fix: "Convert only complete, source-proven material-driven multi_compile declarations to shader_feature; preserve ambiguous runtime-controlled keywords.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.None,
-							confidence: OptimizationConfidence.Heuristic,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
+							risk: FixRisk.High,
+							backupRequired: true,
+							requiredEvidence: EvidenceRequirement.ProjectProofComplete
 							);
 
 			Rules.Register(id: "SHD008", title: "Global multi_compile feature may be local", category: AssetCategory.Shader,
-							why: "Global-scope keyword declarations consume project-wide keyword namespace and can be unnecessary when a feature is only used by this shader.",
-							fix: "Consider multi_compile_local when the keyword never needs to be controlled globally.",
+							why: "A global keyword declaration used only by materials on this shader and not controlled by project code can be converted to a local declaration, using shader_feature_local when material state proves the variants.",
+							fix: "Convert proven shader-private global declarations to shader_feature_local without changing the candidate keyword set.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.None,
-							confidence: OptimizationConfidence.Heuristic,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							fixKind: FixKind.Verified,
+							confidence: OptimizationConfidence.HighConfidence,
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
+							risk: FixRisk.High,
+							backupRequired: true,
+							requiredEvidence: EvidenceRequirement.ProjectProofComplete
 							);
 
 			Rules.Register(id: "SHD009", title: "Large variant shader is Always Included", category: AssetCategory.Shader,
-							why: "Always Included Shaders causes Unity to include all possible variants for a listed shader, overriding the normal shader_feature stripping advantage. Unity specifically warns against using this for shaders with many variants.",
-							fix: "Remove the shader from Always Included when safe, or replace the requirement with an appropriately collected Shader Variant Collection.",
+							why: "A large-variant shader can be removed from Always Included only when a complete project asset/source scan finds no material, collection, serialized asset or code references outside the setting entry.",
+							fix: "Remove the shader GUID from Graphics Settings only when the complete-reference preflight proves it is otherwise unused; retain a diagnostic-only finding when any reference remains.",
 							severity: IssueSeverity.Warning,
-							fixKind: FixKind.None,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
+							risk: FixRisk.High,
+							backupRequired: true,
+							requiredEvidence: EvidenceRequirement.ProjectProofComplete
 							);
 
 			Rules.Register(id: "SHD010", title: "Shader has a large keyword/directive footprint (heuristic)", category: AssetCategory.Shader,
@@ -345,13 +425,14 @@ namespace ApexForge.ProjectOptimizer
 							);
 
 			Rules.Register(id: "SHD012", title: "Shader Variant Collection contains many variants", category: AssetCategory.Shader,
-							why: "A Shader Variant Collection is intended to record variants actually needed by a project or play session. Very large collections increase shader preloading data and can slow warmup and loading.",
-							fix: "Review whether the collection still contains variants required by current content and target platforms. Do not remove variants blindly when AssetBundles, Addressables or runtime keyword changes depend on them.",
+							why: "A large Shader Variant Collection can bloat preload data, but deciding whether its warmup coverage remains necessary is a project/runtime policy choice.",
+							fix: "ReviewFix option: clear all recorded variants from this collection, after explicitly confirming the project no longer needs these warmup entries.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.None,
-							confidence: OptimizationConfidence.Diagnostic,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							fixKind: FixKind.Review,
+							confidence: OptimizationConfidence.HighConfidence,
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
+							risk: FixRisk.Destructive,
+							backupRequired: true
 							);
 
 			Rules.Register(id: "SHD013", title: "Shader has a large shader_feature variant space", category: AssetCategory.Shader,
@@ -365,12 +446,13 @@ namespace ApexForge.ProjectOptimizer
 							);
 
 			Rules.Register(id: "SHD014", title: "Shader contains duplicate keyword-set declarations", category: AssetCategory.Shader,
-							why: "Unity's shader keyword declaration rules do not allow duplicate keyword sets. Repeating a set or keyword can lead to compiler errors or unnecessary source complexity.",
-							fix: "Remove duplicate keyword declarations and recompile the shader.",
+							why: "Exact duplicate keyword sets and repeated keyword names can be removed while preserving distinct program/pass scope, provided the shader currently compiles.",
+							fix: "Remove exact duplicate declarations, back up the source, reimport, and verify both declaration uniqueness and successful shader compilation.",
 							severity: IssueSeverity.Warning,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
-							risk: FixRisk.Medium,
+							recommendationConfidence: OptimizationConfidence.HighConfidence,
+							risk: FixRisk.High,
 							backupRequired: true
 							);
 		}
@@ -386,6 +468,20 @@ namespace ApexForge.ProjectOptimizer
 			m_ByFamily.Clear();
 			m_AlwaysIncludedShaders.Clear();
 			m_ShaderCapabilities.Clear();
+			m_RuntimeSourceTokens.Clear();
+			m_RuntimeControlledKeywords.Clear();
+			m_RuntimeControlledMaterialProperties.Clear();
+			m_MaterialVariantAncestorIds.Clear();
+			m_MaterialVariantTreeBuilt = false;
+			m_RuntimeSourceIndexBuilt = false;
+			m_RuntimeSourceIndexComplete = false;
+			m_RuntimeHasDynamicKeywordControl = false;
+			m_RuntimeSourceHasDynamicMaterialPropertyUse = false;
+			m_RuntimeSourceHasDynamicTransparencyPropertyUse = false;
+			m_RuntimeSourceUsesMaterialPropertyBlock = false;
+			m_TransparencyAnimationIndexBuilt = false;
+			m_TransparencyAnimationIndexComplete = false;
+			m_TransparencyAnimationControlsMaterialState = false;
 			m_UsingSrp = GraphicsSettings.currentRenderPipeline != null;
 
 			CollectAlwaysIncludedShaders();
@@ -469,6 +565,8 @@ namespace ApexForge.ProjectOptimizer
 				? ctx.GetCached(assetPath, () => MeasureMaterial(assetPath))
 				: MeasureMaterial(assetPath);
 			if (facts == null) return null;
+			var material = AssetDatabase.LoadAssetAtPath<Material>(assetPath);
+			if (material == null) return null;
 
 			var entry = NewEntry(assetPath, AssetCategory.Material, "Material", ctx);
 			string shaderName = facts.shaderName;
@@ -489,117 +587,122 @@ namespace ApexForge.ProjectOptimizer
 				}
 				else
 				{
-					// MAT002 - wrong pipeline.
-					//
-					// Reported only, and the rule's own text says why: built-in and URP shaders are not
-					// interchangeable. Reassigning the shader and copying _MainTex and _Color across is a
-					// guess at a migration - it drops every other property the material had, and there is
-					// no way to tell from here whether the result is the intended look or a flat grey
-					// approximation of it. The finding is worth making; the edit is not one to make
-					// unattended.
+					// MAT002: use Unity's own converter for explicitly supported stock Standard materials.
+					// All other built-in shader families remain diagnostic-only because their property mapping
+					// cannot be inferred safely from the shader name.
 					using (RuleTiming.Begin("MAT002", entry.Path))
 						if (m_UsingSrp && IsBuiltInShader(shaderName))
 						{
-							entry.AddIssue("MAT002", shaderName, "A shader from the active pipeline", 0, null,
-								"Migrate this deliberately - Edit > Rendering > Materials > Convert handles the stock "
-								+ "shaders, and hand-authored ones need their properties mapped across by someone who "
-								+ "knows what the material is meant to look like.");
+							if (TryGetStandardMaterialConversionMenu(shaderName, out string conversionMenu))
+							{
+								var conversionSnapshot = CaptureMaterialConversionSnapshot(material, conversionMenu);
+								if (conversionSnapshot != null)
+									entry.AddIssue("MAT002", shaderName, "Converted shader for the active pipeline", 0,
+										c => ConvertSelectedStandardMaterial(c, conversionMenu, conversionSnapshot),
+										"Runs Unity's selected-material converter only for supported Standard shader families. The verifier checks the destination pipeline and the main texture/color, normal, emission, cutoff and supported surface-workflow values that have direct mappings.",
+										verify: c => VerifyMaterialConvertedToActivePipeline(c, conversionSnapshot));
+								else
+									MarkIssueNoFix(entry.AddIssue("MAT002", shaderName, "A shader from the active pipeline", 0, null,
+										"The source material uses unsupported surface modes, advanced maps/keywords, or a property configuration that the conservative conversion verifier cannot prove safe."),
+										"The selected-material converter is not offered without a complete source-state snapshot.");
+							}
+							else
+								MarkIssueNoFix(entry.AddIssue("MAT002", shaderName, "A shader from the active pipeline", 0, null,
+									"No matching stock selected-material conversion route exists for this shader/pipeline combination; migrate this shader manually."),
+									"This built-in shader family is outside the converter's supported stock cases.");
 						}
 
-					// MAT003 - instancing support is a workload decision. Do not auto-enable it solely
-					// from the material because SRP Batcher and GPU instancing are different rendering
-					// paths and the better one depends on the renderer workload.
+					// MAT003: static slot counts are diagnostic only; target-player profile evidence is a shared-contract blocker.
 					using (RuleTiming.Begin("MAT003", entry.Path))
 						if (!facts.instancing && facts.instancingSupported && !IsUiShader(shaderName)
 							&& !(m_UsingSrp && facts.srpBatcherCompatible))
 						{
-							entry.AddIssue("MAT003", "Instancing off", "Review for repeated meshes/materials");
+							var usage = ctx.MaterialUsage != null ? ctx.MaterialUsage.For(assetPath) : default(MaterialUsageIndex.Counts);
+							// The approved policy requires target-player profile evidence before enabling instancing.
+							// Scene and prefab slots are independent evidence and must not be added into a misleading total.
+							var issue = entry.AddIssue("MAT003", "Instancing off", "Enable GPU instancing only after profile evidence confirms benefit", 0,
+								null,
+								"Static renderer-slot usage: " + usage.Describe() + ". No target-player profiling evidence is available in the current scan contract, so automatic mutation is blocked.");
+							if (issue != null)
+								MarkIssueNoFix(issue, "MAT003 requires a fresh profile record tied to target, mesh/material cohort and render pipeline; the shared ScanContext has no such evidence provider.");
 						}
 
-					// MAT005 - orphaned texture slots. Review Fix: the shader's serialized property model
-					// says these slots are unused, but a shader can still reach a texture through custom
-					// C# (Material.SetTexture at runtime, a custom editor, a URP/HDRP feature) that never
-					// shows up as a declared property - which this analyzer has no way to rule out.
+					// MAT005: remove only orphan texture entries whose property names have no occurrence
+					// outside this material in a complete project-source proof index.
 					var orphans = facts.orphanTextures;
 					using (RuleTiming.Begin("MAT005", entry.Path))
 						if (orphans.Count > 0)
 						{
-							entry.AddIssue("MAT005", orphans.Count + " orphaned texture slot(s)", "Review Fix: remove them", 0,
-									c => StripOrphanTextureProperties((Material)c.Asset, c),
-									verify: c =>
-									{
-										// Re-read from the path. The Material the fix held is the one it
-										// edited, so asking it would only confirm the edit happened in
-										// memory - the question is whether it reached the file.
-										var saved = AssetDatabase.LoadAssetAtPath<Material>(c.AssetPath);
-										return saved != null && FindOrphanTextureProperties(saved).Count == 0;
-									})
+							var proof = ctx.GetProofIndex();
+							EnsureRuntimeSourceIndex();
+							var safeOrphans = new List<string>();
+							if (proof != null && proof.CoverageComplete && m_RuntimeSourceIndexComplete && !m_RuntimeSourceHasDynamicMaterialPropertyUse)
+								for (int i = 0; i < orphans.Count; i++)
+									if (!proof.ContainsTokenOutsideFile(orphans[i], assetPath)) safeOrphans.Add(orphans[i]);
+							bool proven = safeOrphans.Count > 0 && proof != null && proof.CoverageComplete
+								&& m_RuntimeSourceIndexComplete && !m_RuntimeSourceHasDynamicMaterialPropertyUse;
+							var issue = entry.AddIssue("MAT005", orphans.Count + " orphaned texture slot(s)", "Remove proven-unused orphan texture entries", 0,
+								proven ? (Action<FixContext>)(c => StripOrphanTextureProperties((Material)c.Asset, c, safeOrphans)) : null,
+								proven ? "Complete source proof and runtime-source preflight found no use or dynamic material-property API that could synthesize these selected names; uncertain slots are retained." : "No orphan slot passed complete source/runtime API proof; this instance remains diagnostic-only.",
+								verify: proven ? (Func<FixContext, bool>)(c => VerifyOrphanTexturePropertiesRemoved(c, safeOrphans)) : null)
 								?.Items("Orphaned slots", orphans);
+							if (issue != null && proven)
+								issue.WithEvidence(EvidenceRequirement.ProjectProofComplete, EvidenceState.Fresh, EvidenceContract.ComputeProofEvidenceSignature(proof));
+							else if (issue != null)
+								MarkIssueNoFix(issue, "Complete source proof did not establish a defensible set of orphan slots, or project code uses dynamic material property APIs.");
 						}
 
 					// MAT006 - needless transparency. The detector is constrained to supported stock
 					// shader families and proves an opaque tint plus alpha-free base texture.
 					using (RuleTiming.Begin("MAT006", entry.Path))
-						if (facts.pointlesslyTransparent)
-						{
-							entry.AddIssue("MAT006", "Surface Type: Transparent", "Surface Type: Opaque", 0,
-								c => MakeOpaqueMaterial(c),
-								verify: c => VerifyOpaqueMaterial(c));
-						}
+					if (facts.pointlesslyTransparent)
+					{
+						bool canMakeOpaque = CanSafelyMakeOpaque(ctx);
+						var issue = entry.AddIssue("MAT006", "Surface Type: Transparent", "Surface Type: Opaque", 0,
+							canMakeOpaque ? (Action<FixContext>)MakeOpaqueMaterial : null,
+							canMakeOpaque
+								? "Stock URP material is opaque by its current tint/texture state, complete runtime-source and animation checks found no transparency controls, and the edit backs up and verifies render-state properties."
+								: "The runtime-source, material-property-block, animation or project-proof checks did not establish that transparency is never used at runtime.",
+							verify: canMakeOpaque ? (Func<FixContext, bool>)VerifyOpaqueMaterial : null);
+						if (issue != null && canMakeOpaque)
+							issue.WithEvidence(EvidenceRequirement.ProjectProofComplete, EvidenceState.Fresh,
+								EvidenceContract.ComputeProofEvidenceSignature(ctx.GetProofIndex()));
+						else if (issue != null)
+							MarkIssueNoFix(issue, "MAT006 is diagnostic-only unless full runtime source and animation evidence excludes dynamic transparency control.");
+					}
 
-					// MAT007 - redundant queue override
+					// MAT007: the override is redundant when the raw queue exactly equals the shader queue.
 					using (RuleTiming.Begin("MAT007", entry.Path))
 						if (facts.redundantRenderQueueOverride)
-						{
-							entry.AddIssue("MAT007",
-								"Override " + facts.renderQueue + " (same as shader default)",
-								"Reset to shader queue",
-								0, null,
-								"The explicit override currently matches the shader queue. Removing it also means future shader queue changes will affect this material, so this is a Review Fix.",
-								options: new List<FixOption>
-								{
-									new FixOption
-									{
-										ActionId = "reset-render-queue",
-										Label = "Reset to Shader Queue",
-										ResultDescription = "Removes the explicit material queue override.",
-										Recommended = true,
-										Risk = FixRisk.Medium,
-										Warning = "Future changes to the shader's render queue will then affect this material.",
-										Apply = c =>
-										{
-											var material = c.Asset as Material;
-											if (material == null) throw new InvalidOperationException("Material unavailable.");
-											material.renderQueue = -1;
-											c.NeedsSave = true;
-										},
-										Verify = c =>
-										{
-											var saved = AssetDatabase.LoadAssetAtPath<Material>(c.AssetPath);
-											return saved != null && saved.rawRenderQueue < 0;
-										}
-									}
-								});
-						}
+							entry.AddIssue("MAT007", "Override " + facts.renderQueue + " (same as shader default)",
+								"Inherit the shader's render queue", 0, ResetMaterialRenderQueue,
+								"Preflight rechecks the exact raw override and resolved shader queue before clearing the override.",
+								verify: VerifyMaterialRenderQueueReset);
 
-					// MAT008 - local keyword state that no longer exists on the current shader.
+					// MAT008: stale keyword removal is offered only when the complete source proof is fresh.
 					using (RuleTiming.Begin("MAT008", entry.Path))
 						if (facts.unsupportedKeywords.Count > 0)
 						{
+							var proof = ctx.GetProofIndex();
 							if (NoProjectShaderKeywordUse(ctx, assetPath, facts.unsupportedKeywords))
 							{
-								entry.AddIssue("MAT008", facts.unsupportedKeywords.Count + " unsupported keyword(s)", "Remove stale local keyword state", 0,
+								var issue = entry.AddIssue("MAT008", facts.unsupportedKeywords.Count + " unsupported keyword(s)", "Remove stale local keyword state", 0,
 									c => RemoveUnsupportedMaterialKeywords(c, facts.unsupportedKeywords),
-									"Project-wide shader/material source scan found no static use of these stale keywords. The fix removes only the invalid local state.",
+									"Complete source proof found no static use of these keyword names outside this material.",
 									verify: c => VerifyNoUnsupportedMaterialKeywords(c, facts.unsupportedKeywords))?.Items("Keywords", facts.unsupportedKeywords);
+								if (issue != null) issue.WithEvidence(EvidenceRequirement.ProjectProofComplete, EvidenceState.Fresh, EvidenceContract.ComputeProofEvidenceSignature(proof));
 							}
+							else
+								MarkIssueNoFix(entry.AddIssue("MAT008", facts.unsupportedKeywords.Count + " unsupported keyword(s)", "Remove stale local keyword state"),
+									"The complete source proof is missing/incomplete or found use of these keyword names elsewhere.");
 						}
 
 					using (RuleTiming.Begin("MAT010", entry.Path))
 						if (facts.emissionGiMismatch)
-							entry.AddIssue("MAT010",
-								"Emission appears black while emissive GI is enabled",
-								"Review / synchronize emissive GI flags");
+							entry.AddIssue("MAT010", "Emission appears black while emissive GI is enabled",
+								"Synchronize emissive GI flags", 0, FixMaterialEmissionGiFlags,
+								"Runs Unity's MaterialEditor.FixupEmissiveFlag and verifies the persisted GI flag state.",
+								verify: VerifyMaterialEmissionGiFlags);
 
 					RegisterSignature(facts.signature, entry);
 					RegisterFamily(facts.familySignature, entry);
@@ -626,7 +729,7 @@ namespace ApexForge.ProjectOptimizer
 			return null;
 		}
 
-		ShaderFacts MeasureShader(string assetPath, ScanContext ctx)
+		ShaderFacts MeasureShader(string assetPath)
 		{
 			var shader = LoadShaderAsset(assetPath);
 			if (shader == null) return null;
@@ -670,60 +773,57 @@ namespace ApexForge.ProjectOptimizer
 			}
 
 			if (facts.messageCount == 0) facts.messageCount = info.hasErrors ? 1 : 0;
-
-			// For hand-written .shader assets, estimate source-level variant pressure from multi_compile directives
-			// without forcing shader compilation. This is deliberately only an estimate: includes, shader stages,
-			// platform expansion, pipeline features and stripping can all change the final compiled variant count.
-			if (assetPath.EndsWith(".shader", StringComparison.OrdinalIgnoreCase))
-			{
-				try
-				{
-					var source = ctx != null ? ctx.GetAssetText(assetPath) : File.ReadAllText(assetPath);
-					if (source == null) throw new IOException("Could not read shader source.");
-					AnalyzeShaderPragmas(source,
-						out facts.multiCompileLines,
-						out facts.estimatedMultiCompileVariants,
-						out facts.shaderFeatureLines,
-						out facts.estimatedShaderFeatureVariants,
-						out facts.duplicateKeywordSets,
-						out facts.duplicateKeywordsInSets);
-				}
-				catch
-				{
-					facts.multiCompileLines = 0;
-					facts.estimatedMultiCompileVariants = 0;
-					facts.shaderFeatureLines = 0;
-					facts.estimatedShaderFeatureVariants = 0;
-					facts.duplicateKeywordSets = 0;
-					facts.duplicateKeywordsInSets = 0;
-				}
-			}
-
 			return facts;
 		}
 
 		AssetEntry AnalyzeShader(string assetPath, ScanContext ctx)
 		{
 			var facts = ctx.Cache != null
-				? ctx.GetCached(assetPath, () => MeasureShader(assetPath, ctx))
-				: MeasureShader(assetPath, ctx);
+				? ctx.GetCached(assetPath, () => MeasureShader(assetPath))
+				: MeasureShader(assetPath);
 			if (facts == null) return null;
 
-			// Everything the rest of the project decides is filled in here, every scan, whether the
-			// facts came from the cache or were just measured.
-			ApplyProjectState(assetPath, facts, out var liveKeywords);
+			// Project-wide usage and active-platform answers change independently of the shader asset hash,
+			// so they must be refreshed even when the static shader facts came from the scan cache.
+			ApplyProjectState(assetPath, facts, out HashSet<string> liveKeywords);
 
+			// These source/project-dependent values are recalculated on every scan. A cached facts object may
+			// contain old values, and keyword candidates depend on the current material and source indexes.
+			facts.multiCompileLines = 0;
+			facts.estimatedMultiCompileVariants = 0;
+			facts.shaderFeatureLines = 0;
+			facts.estimatedShaderFeatureVariants = 0;
+			facts.duplicateKeywordSets = 0;
+			facts.duplicateKeywordsInSets = 0;
+			facts.multiCompileMaterialCandidates.Clear();
+			facts.localKeywordCandidates.Clear();
+
+			// Source-level estimates are explicitly approximate; they do not force shader compilation.
+			string shaderSource = null;
 			if (assetPath.EndsWith(".shader", StringComparison.OrdinalIgnoreCase))
 			{
 				try
 				{
-					var source = ctx.GetAssetText(assetPath);
-					if (source == null) throw new IOException("Could not read shader source.");
-					CollectKeywordCandidates(source, liveKeywords, m_ShadersUsingMaterialKeyword,
+					shaderSource = ctx.GetAssetText(assetPath);
+					if (shaderSource == null) throw new IOException("Could not read shader source.");
+					AnalyzeShaderPragmas(shaderSource,
+						out facts.multiCompileLines, out facts.estimatedMultiCompileVariants,
+						out facts.shaderFeatureLines, out facts.estimatedShaderFeatureVariants,
+						out facts.duplicateKeywordSets, out facts.duplicateKeywordsInSets);
+					CollectKeywordCandidates(shaderSource, liveKeywords, m_ShadersUsingMaterialKeyword,
 						facts.shaderName, facts.multiCompileMaterialCandidates, facts.localKeywordCandidates);
 				}
 				catch
 				{
+					shaderSource = null;
+					facts.multiCompileLines = 0;
+					facts.estimatedMultiCompileVariants = 0;
+					facts.shaderFeatureLines = 0;
+					facts.estimatedShaderFeatureVariants = 0;
+					facts.duplicateKeywordSets = 0;
+					facts.duplicateKeywordsInSets = 0;
+					facts.multiCompileMaterialCandidates.Clear();
+					facts.localKeywordCandidates.Clear();
 				}
 			}
 
@@ -780,44 +880,87 @@ namespace ApexForge.ProjectOptimizer
 					entry.AddIssue("SHD003", facts.passCount + " passes", "Review whether every pass is required", 0, null,
 						"A pass count alone does not prove a rendering cost: some passes are required by lighting, shadow, depth, meta or render-pipeline features.");
 
-			using (RuleTiming.Begin("SHD006", entry.Path))
-				if (facts.keywordCount > k_LargeLocalKeywordWarning)
-					entry.AddIssue("SHD006",
-						facts.keywordCount + " local keywords",
-						"Reduce unnecessary keyword features");
-
 			DedupeStrings(facts.multiCompileMaterialCandidates);
 			DedupeStrings(facts.localKeywordCandidates);
+			var proof = ctx.GetProofIndex();
+			bool proofComplete = proof != null && proof.CoverageComplete
+				&& !string.IsNullOrEmpty(EvidenceContract.ComputeProofEvidenceSignature(proof));
+			if (shaderSource != null && proofComplete) EnsureRuntimeSourceIndex();
+			bool canProveSourceUse = shaderSource != null && proofComplete && !facts.hasError
+				&& m_RuntimeSourceIndexBuilt && m_RuntimeSourceIndexComplete;
+
+			using (RuleTiming.Begin("SHD006", entry.Path))
+				if (facts.keywordCount > k_LargeLocalKeywordWarning)
+				{
+					var edits = canProveSourceUse ? BuildUnusedLocalKeywordEdits(shaderSource, assetPath, proof) : new List<ShaderSourceEdit>();
+					bool actionable = edits.Count > 0;
+					var issue = entry.AddIssue("SHD006", facts.keywordCount + " local keywords", "Remove only proven-unused local keyword declaration tokens", 0,
+						actionable ? (Action<FixContext>)(c => ApplyShaderSourceEdits(c, edits)) : null,
+						actionable ? "The complete source proof found these local keyword tokens unused by materials, other project source and shader code." : "No local keyword token met every unused-proof precondition; the issue remains diagnostic-only.",
+						verify: actionable ? (Func<FixContext, bool>)(c => VerifyShaderSourceEditsAndCompilation(c, edits)) : null);
+					if (issue != null && actionable)
+						issue.WithEvidence(EvidenceRequirement.ProjectProofComplete, EvidenceState.Fresh, EvidenceContract.ComputeProofEvidenceSignature(proof));
+					else if (issue != null)
+						MarkIssueNoFix(issue, "Keyword-space count alone is not a mutation target; no safely removable local declaration was proven.");
+					if (issue != null && edits.Count > 0) issue.Items("Safe local keyword edits", DescribeShaderEdits(edits));
+				}
 
 			using (RuleTiming.Begin("SHD007", entry.Path))
 				if (facts.multiCompileMaterialCandidates.Count > 0)
 				{
-					entry.AddIssue("SHD007",
+					var edits = canProveSourceUse ? BuildShaderFeatureConversionEdits(shaderSource, facts.shaderName, liveKeywords, localize: false) : new List<ShaderSourceEdit>();
+					bool actionable = edits.Count > 0;
+					var issue = entry.AddIssue("SHD007",
 						facts.multiCompileMaterialCandidates.Count + " multi_compile feature(s) have material-used keywords",
-						"Review shader_feature conversion",
-						0,
-						null,
-						"A runtime script may still need multi_compile, so this is intentionally advisory.")
-						?.Items("Candidates", facts.multiCompileMaterialCandidates);
+						"Convert only source-proven material-driven declarations to shader_feature", 0,
+						actionable ? (Action<FixContext>)(c => ApplyShaderSourceEdits(c, edits)) : null,
+						actionable ? "Only exact multi_compile declarations with material keyword use and no detected project-code keyword control are converted." : "No candidate passed the complete project-source/runtime keyword-control preflight; this instance is diagnostic-only.",
+						verify: actionable ? (Func<FixContext, bool>)(c => VerifyShaderSourceEditsAndCompilation(c, edits)) : null);
+					if (issue != null && actionable)
+						issue.WithEvidence(EvidenceRequirement.ProjectProofComplete, EvidenceState.Fresh, EvidenceContract.ComputeProofEvidenceSignature(proof));
+					else if (issue != null)
+						MarkIssueNoFix(issue, "Material use by itself does not prove runtime keyword control is absent; no directive passed all guards.");
+					issue?.Items("Candidates", facts.multiCompileMaterialCandidates);
+					if (issue != null && edits.Count > 0) issue.Items("Safe directive edits", DescribeShaderEdits(edits));
 				}
 
 			using (RuleTiming.Begin("SHD008", entry.Path))
 				if (facts.localKeywordCandidates.Count > 0)
 				{
-					entry.AddIssue("SHD008",
+					var edits = canProveSourceUse ? BuildShaderFeatureConversionEdits(shaderSource, facts.shaderName, liveKeywords, localize: true) : new List<ShaderSourceEdit>();
+					bool actionable = edits.Count > 0;
+					var issue = entry.AddIssue("SHD008",
 						facts.localKeywordCandidates.Count + " global multi_compile feature(s) appear shader-local",
-						"Review multi_compile_local conversion",
-						0,
-						null,
-						"This is a static usage heuristic; global Shader.EnableKeyword or CommandBuffer keyword changes may still require global scope.")
-						?.Items("Candidates", facts.localKeywordCandidates);
+						"Convert proven shader-private declarations to shader_feature_local", 0,
+						actionable ? (Action<FixContext>)(c => ApplyShaderSourceEdits(c, edits)) : null,
+						actionable ? "Every option is confined to materials using this shader, and project code contains no detected keyword control." : "Shader-locality is heuristic unless every option and runtime control passes the source preflight; this instance is diagnostic-only.",
+						verify: actionable ? (Func<FixContext, bool>)(c => VerifyShaderSourceEditsAndCompilation(c, edits)) : null);
+					if (issue != null && actionable)
+						issue.WithEvidence(EvidenceRequirement.ProjectProofComplete, EvidenceState.Fresh, EvidenceContract.ComputeProofEvidenceSignature(proof));
+					else if (issue != null)
+						MarkIssueNoFix(issue, "No global declaration was proven shader-private and free of project-code keyword controls.");
+					issue?.Items("Candidates", facts.localKeywordCandidates);
+					if (issue != null && edits.Count > 0) issue.Items("Safe directive edits", DescribeShaderEdits(edits));
 				}
 
 			using (RuleTiming.Begin("SHD009", entry.Path))
 				if (facts.alwaysIncluded && facts.estimatedMultiCompileVariants > k_LargeVariantWarning)
-					entry.AddIssue("SHD009",
+				{
+					string guid = AssetDatabase.AssetPathToGUID(assetPath);
+					bool canRemove = proofComplete && facts.materialCount == 0 && !string.IsNullOrEmpty(guid)
+						&& !HasProjectReferenceOutsideAlwaysIncluded(guid, facts.shaderName, assetPath);
+					var issue = entry.AddIssue("SHD009",
 						"Always Included + ~" + facts.estimatedMultiCompileVariants + " multi_compile combinations",
-						"Use targeted inclusion / variant collection");
+						"Remove from Always Included only when otherwise unused", 0,
+						canRemove ? (Action<FixContext>)(c => RemoveShaderFromAlwaysIncluded(c, guid, facts.shaderName)) : null,
+						canRemove ? "Complete project source/asset scan found no reference outside the Always Included list." : "The shader may be referenced, material use is nonzero, or complete source proof is unavailable; no setting is changed.",
+						verify: canRemove ? (Func<FixContext, bool>)(c => VerifyShaderRemovedFromAlwaysIncluded(c, guid)) : null);
+					if (issue != null && canRemove)
+						issue.WithEvidence(EvidenceRequirement.ProjectProofComplete, EvidenceState.Fresh, EvidenceContract.ComputeProofEvidenceSignature(proof));
+					else if (issue != null)
+						MarkIssueNoFix(issue, "Always Included cannot be pruned from potential variant count alone.");
+				}
+
 
 			int keywordDirectiveFootprint = facts.keywordCount + facts.multiCompileLines;
 			bool footprintExceeded;
@@ -855,13 +998,18 @@ namespace ApexForge.ProjectOptimizer
 			using (RuleTiming.Begin("SHD014", entry.Path))
 				if (facts.duplicateKeywordSets > 0 || facts.duplicateKeywordsInSets > 0)
 				{
-					entry.AddIssue("SHD014",
+					var issue = entry.AddIssue("SHD014",
 						facts.duplicateKeywordSets + " duplicate set(s), "
 						+ facts.duplicateKeywordsInSets + " duplicate keyword name(s)",
 						"Remove exact duplicate shader keyword declarations",
-						0, c => CleanDuplicateShaderKeywords(c),
-						"The fix removes duplicate keyword-set declarations only within the same shader program and removes repeated keyword names from individual sets. It preserves declarations in other passes, captures a backup, and re-imports the edited shader.",
-						verify: c => VerifyNoDuplicateShaderKeywords(c));
+						facts.hasError ? 0 : 0,
+						facts.hasError ? null : (Action<FixContext>)CleanDuplicateShaderKeywords,
+						facts.hasError
+							? "Duplicate declarations are reported, but the source currently has compile errors; changing keyword declarations automatically is blocked until the shader compiles."
+							: "The fix removes duplicate keyword-set declarations only within the same shader program, backs up source, reimports, and verifies declaration uniqueness plus successful compilation.",
+						verify: facts.hasError ? (Func<FixContext, bool>)null : c => VerifyNoDuplicateShaderKeywords(c) && VerifyShaderCompiles(c));
+					if (issue != null && facts.hasError)
+						MarkIssueNoFix(issue, "Fixing duplicate declarations while the shader has compiler errors is not safely verifiable.");
 				}
 
 			entry.Finalise();
@@ -909,18 +1057,20 @@ namespace ApexForge.ProjectOptimizer
 			m_MaterialKeywordsByShader.TryGetValue(facts.shaderName, out materialKeywords);
 			facts.enabledMaterialKeywordCount = materialKeywords?.Count ?? 0;
 
-			// Support is read live rather than cached: it is a property of the editor's current
-			// build target, not of the shader asset.
+			// Support and SRP Batcher compatibility are read live rather than cached: both can change
+			// when the active render pipeline or editor build target changes without editing the shader.
 			try
 			{
-				var shader = AssetDatabase.LoadAssetAtPath<Shader>(assetPath);
+				var shader = LoadShaderAsset(assetPath);
 				facts.supportedInEditor = shader == null || ShaderUtil.GetShaderInfo(shader).supported;
+				facts.srpBatcherCompatibilityCode = shader != null ? GetSrpBatcherCompatibilityCode(shader) : 0;
 			}
 			catch
 			{
 				// Unknown is treated as supported: reporting an unsupported shader on the strength of
 				// a failed query would be inventing the finding.
 				facts.supportedInEditor = true;
+				facts.srpBatcherCompatibilityCode = 0;
 			}
 		}
 
@@ -950,10 +1100,22 @@ namespace ApexForge.ProjectOptimizer
 				{
 					entry.AddIssue("SHD012",
 						collection.variantCount.ToString("N0") + " variants across " + collection.shaderCount + " shader(s)",
-						"Review collected variants",
-						0,
-						null,
-						"Large collections are not automatically wrong. Review whether recorded variants still correspond to current scenes, AssetBundles, Addressables and runtime keyword usage.");
+						"Review collected variants", 0, null,
+						"The available action clears the collection; select it only after confirming the recorded variants are not needed for runtime warmup, Addressables, AssetBundles or runtime keyword switching.",
+						options: new List<FixOption>
+						{
+							new FixOption
+							{
+								ActionId = "shd012-clear-variants",
+								Label = "Clear all recorded variants",
+								ResultDescription = "Clears the ShaderVariantCollection; the collection contains no recorded variants.",
+								Recommended = false,
+								Risk = FixRisk.Destructive,
+								Warning = "This removes every variant entry and can reduce runtime shader warmup coverage.",
+								Apply = ClearShaderVariantCollection,
+								Verify = VerifyShaderVariantCollectionCleared
+							}
+						});
 				}
 
 			entry.Finalise();
@@ -985,23 +1147,49 @@ namespace ApexForge.ProjectOptimizer
 				var group = pair.Value;
 				if (group == null || group.Count < 2) continue;
 
-				var keeper = group[0];
+				// Deterministic keeper selection makes the proposed remap reproducible.
+				var ordered = new List<AssetEntry>(group);
+				ordered.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(a?.Path, b?.Path));
+				var keeper = ordered[0];
 				if (keeper == null) continue;
-				for (int i = 1; i < group.Count; i++)
-				{
-					var entry = group[i];
+				bool allAssetsIdentical = true;
+				for (int i = 1; i < ordered.Count; i++)
+					if (ordered[i] == null || !AssetsAreByteIdenticalIncludingMeta(keeper.Path, ordered[i].Path)) { allAssetsIdentical = false; break; }
 
-					var others = new List<string>();
-					for (int j = 0; j < group.Count; j++)
-						if (j != i && j != 0) others.Add(group[j].Path);
+				var references = ctx != null ? ctx.References : null;
+				bool referenceEvidenceFresh = references != null && references.IsCurrentProjectWide && references.IsComplete;
+				string referenceEvidence = referenceEvidenceFresh ? EvidenceContract.ComputeCrossAssetEvidenceSignature(references) : string.Empty;
+				bool canUseCrossAssetEvidence = !string.IsNullOrEmpty(referenceEvidence);
+
+				for (int i = 1; i < ordered.Count; i++)
+				{
+					var entry = ordered[i];
+					if (entry == null) continue;
+					var plan = canUseCrossAssetEvidence && allAssetsIdentical
+						? DuplicateRemapper.Prepare(entry.Path, keeper.Path, references)
+						: null;
+					bool actionable = plan != null && plan.Viable;
+					string detail = allAssetsIdentical
+						? (actionable
+							? "Byte-identical material asset, matching metadata except GUID, current complete project-wide reference graph and viable local-file-ID map. The remapper backs up every changed referrer and the duplicate before rewriting/deleting."
+							: "The byte-identical duplicate cannot be remapped safely with the current reference/serialization evidence: " + (plan != null ? plan.Reason : "project-wide evidence is unavailable") + ". This instance remains diagnostic-only.")
+						: "Materials share equivalent measured state but are not all byte-identical with equivalent metadata. This finding remains separate and diagnostic-only; it is not correlated away into an exact-duplicate result.";
 
 					using (RuleTiming.Begin("MAT004", entry.Path))
-						entry.AddIssue("MAT004", group.Count + " identical materials", "1 shared material",
-								0, null,
-								"The duplicate asset may be removable after all references are safely remapped. The analyzer does not claim the full file size as recoverable savings because serialized overhead and reference-remap effects must be verified.",
-								SavingsBasis.Unknown)
-							?.Good("Share this one instead", keeper.Path, keeper.Path)
-							.Items("Also identical", others, DetailKind.Bad, arePaths: true);
+					{
+						var issue = entry.AddIssue("MAT004", ordered.Count + " equivalent materials", "Use " + keeper.Path, 0,
+							actionable ? (Action<FixContext>)(c => CollapseByteIdenticalMaterial(c, entry.Path, keeper.Path, references)) : null,
+							detail, SavingsBasis.Unknown,
+							verify: actionable ? (Func<FixContext, bool>)(c => VerifyDuplicateMaterialRemoved(c.AssetPath)) : null);
+						if (issue != null && actionable)
+							issue.WithEvidence(EvidenceRequirement.CrossAssetFresh, EvidenceState.Fresh, referenceEvidence);
+						else if (issue != null)
+							MarkIssueNoFix(issue, "This material group does not satisfy the byte-identity, metadata-equivalence and complete-reference preconditions for automated remapping.");
+						issue?.Good("Share this one instead", keeper.Path, keeper.Path);
+						var others = new List<string>();
+						for (int j = 1; j < ordered.Count; j++) if (j != i && ordered[j] != null) others.Add(ordered[j].Path);
+						issue?.Items("Also equivalent", others, DetailKind.Bad, arePaths: true);
+					}
 					entry.Finalise();
 					yield return null;
 				}
@@ -1009,21 +1197,39 @@ namespace ApexForge.ProjectOptimizer
 
 			foreach (var pair in m_ByFamily)
 			{
-				var group = pair.Value;
-				if (group == null || group.Count < 3) continue;
+				var family = pair.Value;
+				if (family == null || family.Count < 3) continue;
 
-				// Exact duplicates already have MAT004. Only report the family structure where
-				// there are multiple distinct materials sharing the same shader/texture/keyword base.
+				// MAT004 owns exact material duplicates. MAT009 should measure a family of distinct
+				// effective material states, not reach its threshold because the same material was copied.
+				var group = new List<AssetEntry>();
+				var distinctSignatures = new HashSet<string>(StringComparer.Ordinal);
+				for (int i = 0; i < family.Count; i++)
+				{
+					var candidate = family[i];
+					if (candidate == null) continue;
+					var material = AssetDatabase.LoadAssetAtPath<Material>(candidate.Path);
+					string signature = BuildSignature(material);
+					if (!string.IsNullOrEmpty(signature) && distinctSignatures.Add(signature)) group.Add(candidate);
+				}
+				if (group.Count < 3) continue;
+				group.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(a?.Path, b?.Path));
+
 				foreach (var entry in group)
 				{
 					using (RuleTiming.Begin("MAT009", entry.Path))
-						entry.AddIssue("MAT009",
-							group.Count + " materials share the same shader/texture/keyword family",
-							"Consider Material Variants / shared base material",
-							0,
-							null,
-							"This is a structural suggestion. Different material values are intentionally allowed and no automatic merge is attempted.")
-							?.Items("Family members", CollectPaths(group), DetailKind.Bad, arePaths: true);
+					{
+						var options = BuildMaterialVariantParentOptions(group, entry);
+						var issue = entry.AddIssue("MAT009",
+							group.Count + " distinct materials share the same shader/texture/keyword family",
+							"Choose a sibling material as parent / base",
+							0, null,
+							"Choose an explicit family member as parent. Each option previews property differences, converts this material to a Material Variant, and verifies its resulting parent relation and effective serialized signature.",
+							options: options);
+						issue?.Items("Family members", CollectPaths(group), DetailKind.Bad, arePaths: true);
+						if (issue != null && (options == null || options.Count == 0))
+							MarkIssueNoFix(issue, "No valid sibling parent could be offered; do not present a non-actionable ReviewFix.");
+					}
 					entry.Finalise();
 					yield return null;
 				}
@@ -1153,6 +1359,8 @@ namespace ApexForge.ProjectOptimizer
 
 			MaterialGlobalIlluminationFlags flags = material.globalIlluminationFlags;
 			if ((flags & MaterialGlobalIlluminationFlags.AnyEmissive) == 0)
+				return false;
+			if ((flags & MaterialGlobalIlluminationFlags.EmissiveIsBlack) != 0)
 				return false;
 
 			if (!TryGetEmissionColor(material, out Color emission))
@@ -1717,29 +1925,46 @@ namespace ApexForge.ProjectOptimizer
 			return orphans;
 		}
 
-		static void StripOrphanTextureProperties(Material material, FixContext c)
+		static void StripOrphanTextureProperties(Material material, FixContext c, IList<string> selectedNames)
 		{
-			if (material == null)
-				throw new InvalidOperationException("Material could not be loaded for orphan-property cleanup.");
+			if (material == null) throw new InvalidOperationException("Material could not be loaded for orphan-property cleanup.");
+			if (selectedNames == null || selectedNames.Count == 0) throw new InvalidOperationException("No proven orphan texture names were selected.");
+			var selected = new HashSet<string>(selectedNames, StringComparer.Ordinal);
 			var so = new SerializedObject(material);
 			var texEnvs = so.FindProperty("m_SavedProperties.m_TexEnvs");
-			if (texEnvs == null || !texEnvs.isArray) return;
-
+			if (texEnvs == null || !texEnvs.isArray) throw new InvalidOperationException("Serialized texture entries are unavailable.");
 			bool changed = false;
 			for (int i = texEnvs.arraySize - 1; i >= 0; i--)
 			{
 				var element = texEnvs.GetArrayElementAtIndex(i);
 				var name = element.FindPropertyRelative("first")?.stringValue;
-				if (string.IsNullOrEmpty(name) || material.HasProperty(name)) continue;
+				if (string.IsNullOrEmpty(name) || !selected.Contains(name)) continue;
+				if (material.HasProperty(name)) throw new InvalidOperationException("Texture property is no longer orphaned: " + name);
+				var texture = element.FindPropertyRelative("second.m_Texture");
+				if (texture == null || texture.objectReferenceValue == null) throw new InvalidOperationException("Orphan texture entry changed after analysis: " + name);
 				texEnvs.DeleteArrayElementAtIndex(i);
 				changed = true;
 			}
+			if (!changed) throw new InvalidOperationException("No selected orphan texture entries remained to remove.");
+			so.ApplyModifiedPropertiesWithoutUndo();
+			EditorUtility.SetDirty(material);
+			c.NeedsSave = true;
+		}
 
-			if (changed)
+		static bool VerifyOrphanTexturePropertiesRemoved(FixContext c, IList<string> selectedNames)
+		{
+			var saved = AssetDatabase.LoadAssetAtPath<Material>(c.AssetPath);
+			if (saved == null || selectedNames == null) return false;
+			var selected = new HashSet<string>(selectedNames, StringComparer.Ordinal);
+			var so = new SerializedObject(saved);
+			var texEnvs = so.FindProperty("m_SavedProperties.m_TexEnvs");
+			if (texEnvs == null || !texEnvs.isArray) return false;
+			for (int i = 0; i < texEnvs.arraySize; i++)
 			{
-				so.ApplyModifiedPropertiesWithoutUndo();
-				c.NeedsSave = true;
+				var name = texEnvs.GetArrayElementAtIndex(i).FindPropertyRelative("first")?.stringValue;
+				if (!string.IsNullOrEmpty(name) && selected.Contains(name)) return false;
 			}
+			return true;
 		}
 
 		/// <summary>
@@ -1757,6 +1982,7 @@ namespace ApexForge.ProjectOptimizer
 			if (material == null) throw new InvalidOperationException("Material unavailable.");
 			if (!IsPointlesslyTransparent(material))
 				throw new InvalidOperationException("Material is no longer in the proven transparent-but-opaque state.");
+			c.RequireBackup(c.AssetPath);
 
 			material.SetFloat("_Surface", 0f);
 			SetMaterialFloatIfPresent(material, "_Blend", 0f);
@@ -1780,6 +2006,10 @@ namespace ApexForge.ProjectOptimizer
 			if (material.IsKeywordEnabled("_SURFACE_TYPE_TRANSPARENT")) return false;
 			if (material.IsKeywordEnabled("_ALPHAPREMULTIPLY_ON")) return false;
 			if (material.IsKeywordEnabled("_ALPHAMODULATE_ON")) return false;
+			if (material.HasProperty("_Blend") && Mathf.RoundToInt(material.GetFloat("_Blend")) != 0) return false;
+			if (material.HasProperty("_SrcBlend") && Mathf.RoundToInt(material.GetFloat("_SrcBlend")) != 1) return false;
+			if (material.HasProperty("_DstBlend") && Mathf.RoundToInt(material.GetFloat("_DstBlend")) != 0) return false;
+			if (material.HasProperty("_ZWrite") && Mathf.RoundToInt(material.GetFloat("_ZWrite")) != 1) return false;
 			return true;
 		}
 
@@ -1793,13 +2023,16 @@ namespace ApexForge.ProjectOptimizer
 			var shader = material.shader;
 			if (shader == null) return false;
 
-			bool stockShader = shader.name.StartsWith("Universal Render Pipeline/", StringComparison.Ordinal)
-							   || shader.name.StartsWith("HDRP/", StringComparison.Ordinal)
-							   || shader.name.StartsWith("Standard", StringComparison.Ordinal);
+			bool stockShader = shader.name == "Universal Render Pipeline/Lit"
+							   || shader.name == "Universal Render Pipeline/Simple Lit"
+							   || shader.name == "Universal Render Pipeline/Unlit";
 			if (!stockShader) return false;
 
 			if (!material.HasProperty("_Surface")) return false;
 			if (Mathf.RoundToInt(material.GetFloat("_Surface")) != 1) return false;
+			if (material.HasProperty("_AlphaClip") && material.GetFloat("_AlphaClip") > 0.5f) return false;
+			if (material.IsKeywordEnabled("_ALPHATEST_ON") || material.IsKeywordEnabled("_ALPHAPREMULTIPLY_ON")
+				|| material.IsKeywordEnabled("_ALPHAMODULATE_ON")) return false;
 
 			// The tint has to exist and be fully opaque.
 			bool haveTint = false;
@@ -1920,39 +2153,99 @@ namespace ApexForge.ProjectOptimizer
 			sb.Append(value.x.ToString("R", CultureInfo.InvariantCulture)).Append(',');
 			sb.Append(value.y.ToString("R", CultureInfo.InvariantCulture));
 		}
-		static bool NoProjectShaderKeywordUse(ScanContext ctx, string assetPath, List<string> keywords)
+		bool NoProjectShaderKeywordUse(ScanContext ctx, string assetPath, List<string> keywords)
 		{
 			if (ctx == null || !ctx.Settings.projectProofPass || keywords == null || keywords.Count == 0) return false;
 			var index = ctx.GetProofIndex();
-			if (!index.IsBuilt || index.BuildFailed) return false;
+			if (index == null || !index.CoverageComplete) return false;
+			EnsureRuntimeSourceIndex();
+			// Any runtime keyword-control code can synthesize the stale name dynamically. The current
+			// project contract does not track keyword-name dataflow, so do not remove serialized state.
+			if (!m_RuntimeSourceIndexComplete || m_RuntimeHasDynamicKeywordControl) return false;
 			for (int i = 0; i < keywords.Count; i++)
-				if (index.ContainsTokenOutsideFile(keywords[i], assetPath)) return false;
+				if (index.ContainsTokenOutsideFile(keywords[i], assetPath) || m_RuntimeSourceTokens.Contains(keywords[i])
+					|| m_RuntimeControlledKeywords.Contains(keywords[i])) return false;
 			return true;
 		}
 		static void RemoveUnsupportedMaterialKeywords(FixContext c, List<string> keywords)
 		{
-			var mat = c.Asset as Material; if (mat == null) throw new InvalidOperationException("Material unavailable.");
+			var mat = c.Asset as Material;
+			if (mat == null) throw new InvalidOperationException("Material unavailable.");
 			var stale = new HashSet<string>(keywords ?? new List<string>(), StringComparer.Ordinal);
-			var enabled = mat.enabledKeywords;
-			for (int i = 0; i < enabled.Length; i++)
-				if (stale.Contains(enabled[i].name))
-					mat.SetKeyword(enabled[i], false);
+			if (stale.Count == 0) throw new InvalidOperationException("No stale keyword names were selected.");
+			c.RequireBackup(c.AssetPath);
+
+			// SetKeyword(LocalKeyword, false) is ineffective for names that are no longer present in the
+			// shader's keyword space. Remove such names from serialized legacy keyword state instead.
+			bool changed = false;
+			var serialized = new SerializedObject(mat);
+			string[] arrayNames = { "m_ValidKeywords", "m_InvalidKeywords" };
+			for (int a = 0; a < arrayNames.Length; a++)
+			{
+				var array = serialized.FindProperty(arrayNames[a]);
+				if (array == null || !array.isArray) continue;
+				for (int i = array.arraySize - 1; i >= 0; i--)
+				{
+					var element = array.GetArrayElementAtIndex(i);
+					string value = element != null && element.propertyType == SerializedPropertyType.String ? element.stringValue : null;
+					if (string.IsNullOrEmpty(value) || !stale.Contains(value)) continue;
+					array.DeleteArrayElementAtIndex(i);
+					changed = true;
+				}
+			}
+			if (serialized.hasModifiedProperties)
+			{
+				serialized.ApplyModifiedPropertiesWithoutUndo();
+				changed = true;
+			}
+
+#pragma warning disable 618
+			string[] existing = mat.shaderKeywords ?? Array.Empty<string>();
+			var kept = new List<string>(existing.Length);
+			for (int i = 0; i < existing.Length; i++)
+			{
+				if (stale.Contains(existing[i])) { changed = true; continue; }
+				kept.Add(existing[i]);
+			}
+			if (kept.Count != existing.Length) mat.shaderKeywords = kept.ToArray();
+#pragma warning restore 618
+			if (!changed) throw new InvalidOperationException("Unity did not expose the selected stale keyword names in mutable material keyword state; no verified mutation was made.");
+			EditorUtility.SetDirty(mat);
 			c.NeedsSave = true;
 		}
+
 		static bool VerifyNoUnsupportedMaterialKeywords(FixContext c, List<string> keywords)
 		{
 			var mat = AssetDatabase.LoadAssetAtPath<Material>(c.AssetPath);
 			if (mat == null) return false;
-			var enabled = mat.enabledKeywords;
 			var stale = new HashSet<string>(keywords ?? new List<string>(), StringComparer.Ordinal);
+			var enabled = mat.enabledKeywords;
 			for (int i = 0; i < enabled.Length; i++)
 				if (stale.Contains(enabled[i].name)) return false;
+#pragma warning disable 618
+			var legacy = mat.shaderKeywords ?? Array.Empty<string>();
+#pragma warning restore 618
+			for (int i = 0; i < legacy.Length; i++) if (stale.Contains(legacy[i])) return false;
+			var serialized = new SerializedObject(mat);
+			string[] arrayNames = { "m_ValidKeywords", "m_InvalidKeywords" };
+			for (int a = 0; a < arrayNames.Length; a++)
+			{
+				var array = serialized.FindProperty(arrayNames[a]);
+				if (array == null || !array.isArray) continue;
+				for (int i = 0; i < array.arraySize; i++)
+				{
+					var element = array.GetArrayElementAtIndex(i);
+					if (element != null && element.propertyType == SerializedPropertyType.String && stale.Contains(element.stringValue)) return false;
+				}
+			}
 			return true;
 		}
 
 		static void CleanDuplicateShaderKeywords(FixContext c)
 		{
-			string text = System.IO.File.ReadAllText(c.AssetPath);
+			if (!VerifyShaderCompiles(c)) throw new InvalidOperationException("Shader compilation errors appeared after analysis; refusing keyword rewrite.");
+			string shaderFullPath = AssetPathUtility.ToAbsolutePath(c.AssetPath);
+			string text = System.IO.File.ReadAllText(shaderFullPath);
 			string normalized = text.Replace("\r\n", "\n").Replace('\r', '\n');
 			var lines = normalized.Split('\n');
 			var pragmas = ParseShaderKeywordPragmas(text);
@@ -1994,9 +2287,10 @@ namespace ApexForge.ProjectOptimizer
 			c.RequireBackup(c.AssetPath);
 			string finalText = output.ToString();
 			if (text.IndexOf("\r\n", StringComparison.Ordinal) >= 0) finalText = finalText.Replace("\n", "\r\n");
-			System.IO.File.WriteAllText(c.AssetPath, finalText, new UTF8Encoding(false));
-			AssetDatabase.ImportAsset(c.AssetPath, ImportAssetOptions.ForceUpdate);
+			System.IO.File.WriteAllText(shaderFullPath, finalText, new UTF8Encoding(false));
+			AssetDatabase.ImportAsset(c.AssetPath, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
 			c.NeedsReimport = true;
+			if (!VerifyShaderCompiles(c)) throw new InvalidOperationException("Duplicate-keyword cleanup caused shader compilation errors.");
 		}
 
 		static string RewriteShaderKeywordPragmaLine(string line, ShaderKeywordPragma pragma)
@@ -2023,7 +2317,7 @@ namespace ApexForge.ProjectOptimizer
 		static bool VerifyNoDuplicateShaderKeywords(FixContext c)
 		{
 			string text;
-			try { text = System.IO.File.ReadAllText(c.AssetPath); } catch { return false; }
+			try { text = System.IO.File.ReadAllText(AssetPathUtility.ToAbsolutePath(c.AssetPath)); } catch { return false; }
 			var pragmas = ParseShaderKeywordPragmas(text);
 			var seenSetsByScope = new Dictionary<int, HashSet<string>>();
 			for (int i = 0; i < pragmas.Count; i++)
@@ -2040,5 +2334,1041 @@ namespace ApexForge.ProjectOptimizer
 			}
 			return true;
 		}
+
+		// --- approved FixKind audit actions and their preflights/verifiers --------------
+
+		static void MarkIssueNoFix(OptimizationIssue issue, string reason)
+		{
+			if (issue == null) return;
+			issue.FixKind = FixKind.None;
+			issue.Fix = null;
+			issue.Verify = null;
+			if (issue.Options != null) issue.Options.Clear();
+			if (!string.IsNullOrEmpty(reason)) issue.Note(reason, "NoFix safety gate");
+		}
+
+		static bool IsSupportedStandardMaterial(string shaderName)
+		{
+			return shaderName == "Standard" || shaderName == "Standard (Specular setup)";
+		}
+
+		static bool TryGetStandardMaterialConversionMenu(string shaderName, out string menuPath)
+		{
+			menuPath = null;
+			if (!IsSupportedStandardMaterial(shaderName)) return false;
+			var pipeline = GraphicsSettings.currentRenderPipeline;
+			if (pipeline == null) return false;
+			string typeName = pipeline.GetType().Name;
+			if (typeName.IndexOf("UniversalRenderPipelineAsset", StringComparison.Ordinal) >= 0)
+				menuPath = "Edit/Rendering/Materials/Convert Selected Built-in Materials to URP";
+			else if (typeName.IndexOf("HDRenderPipelineAsset", StringComparison.Ordinal) >= 0)
+				menuPath = "Edit/Rendering/Materials/Convert Selected Built-in Materials to HDRP";
+			return !string.IsNullOrEmpty(menuPath);
+		}
+
+		static bool IsConservativeStandardMaterialConversionCandidate(Material material, bool hdrp)
+		{
+			if (material == null || material.shader == null) return false;
+			// The default Standard surface mode is opaque. Cutout/fade/transparent conversion requires
+			// additional blend/tag semantics that are not fully represented in this snapshot.
+			if (material.HasProperty("_Mode") && Mathf.RoundToInt(material.GetFloat("_Mode")) != 0) return false;
+			string[] unsupportedKeywords =
+			{
+				"_ALPHATEST_ON", "_ALPHABLEND_ON", "_ALPHAPREMULTIPLY_ON", "_PARALLAXMAP",
+				"_OCCLUSIONMAP", "_DETAIL_MULX2", "_DETAIL_SCALED", "_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A"
+			};
+			for (int i = 0; i < unsupportedKeywords.Length; i++)
+				if (material.IsKeywordEnabled(unsupportedKeywords[i])) return false;
+			string[] unsupportedMaps = { "_OcclusionMap", "_ParallaxMap", "_DetailAlbedoMap", "_DetailNormalMap" };
+			for (int i = 0; i < unsupportedMaps.Length; i++)
+				if (material.HasProperty(unsupportedMaps[i]) && material.GetTexture(unsupportedMaps[i]) != null) return false;
+			if (material.HasProperty("_SmoothnessTextureChannel") && material.GetFloat("_SmoothnessTextureChannel") > 0.5f) return false;
+			if (material.HasProperty("_SpecularHighlights") && material.GetFloat("_SpecularHighlights") < 0.5f) return false;
+			if (material.HasProperty("_GlossyReflections") && material.GetFloat("_GlossyReflections") < 0.5f) return false;
+			// HDRP packs metallic/smoothness/specular data into channel maps. Until the content of
+			// the converted pack can be verified, those source map cases are not AutoFix candidates.
+			if (hdrp)
+			{
+				string mapProperty = material.shader.name == "Standard (Specular setup)" ? "_SpecGlossMap" : "_MetallicGlossMap";
+				if (material.HasProperty(mapProperty) && material.GetTexture(mapProperty) != null) return false;
+			}
+			return true;
+		}
+
+		static MaterialConversionSnapshot CaptureMaterialConversionSnapshot(Material material, string expectedMenu)
+		{
+			if (material == null || material.shader == null || !IsSupportedStandardMaterial(material.shader.name)) return null;
+			bool hdrp = !string.IsNullOrEmpty(expectedMenu)
+				&& expectedMenu.IndexOf("HDRP", StringComparison.OrdinalIgnoreCase) >= 0;
+			if (!IsConservativeStandardMaterialConversionCandidate(material, hdrp)
+				|| !material.HasProperty("_MainTex") || !material.HasProperty("_Color")) return null;
+
+			var snapshot = new MaterialConversionSnapshot
+			{
+				SourceShaderName = material.shader.name,
+				TargetPipelineName = hdrp ? "HDRP" : "URP",
+				SourceSignature = BuildSignature(material),
+				SourceRawRenderQueue = material.rawRenderQueue,
+				SourceEnableInstancing = material.enableInstancing,
+				SourceGlobalIlluminationFlags = material.globalIlluminationFlags,
+				SourceDoubleSidedGI = material.doubleSidedGI,
+				MainTexture = material.GetTexture("_MainTex"),
+				MainTextureScale = material.GetTextureScale("_MainTex"),
+				MainTextureOffset = material.GetTextureOffset("_MainTex"),
+				BaseColor = material.GetColor("_Color"),
+				SpecularWorkflow = material.shader.name == "Standard (Specular setup)"
+			};
+
+			if (material.HasProperty("_BumpMap"))
+			{
+				snapshot.HasNormalTexture = true;
+				snapshot.NormalTexture = material.GetTexture("_BumpMap");
+				snapshot.NormalTextureScale = material.GetTextureScale("_BumpMap");
+				snapshot.NormalTextureOffset = material.GetTextureOffset("_BumpMap");
+			}
+			if (material.HasProperty("_BumpScale"))
+			{
+				snapshot.HasNormalScale = true;
+				snapshot.NormalScale = material.GetFloat("_BumpScale");
+			}
+			if (material.HasProperty("_EmissionMap"))
+			{
+				snapshot.HasEmissionTexture = true;
+				snapshot.EmissionTexture = material.GetTexture("_EmissionMap");
+				snapshot.EmissionTextureScale = material.GetTextureScale("_EmissionMap");
+				snapshot.EmissionTextureOffset = material.GetTextureOffset("_EmissionMap");
+			}
+			if (material.HasProperty("_EmissionColor"))
+			{
+				snapshot.HasEmissionColor = true;
+				snapshot.EmissionColor = material.GetColor("_EmissionColor");
+			}
+			if (material.HasProperty(snapshot.SpecularWorkflow ? "_SpecGlossMap" : "_MetallicGlossMap"))
+			{
+				snapshot.HasMetallicOrSpecularTexture = true;
+				string textureProperty = snapshot.SpecularWorkflow ? "_SpecGlossMap" : "_MetallicGlossMap";
+				snapshot.MetallicOrSpecularTexture = material.GetTexture(textureProperty);
+				snapshot.MetallicOrSpecularTextureScale = material.GetTextureScale(textureProperty);
+				snapshot.MetallicOrSpecularTextureOffset = material.GetTextureOffset(textureProperty);
+			}
+			if (material.HasProperty("_Metallic"))
+			{
+				snapshot.HasMetallic = true;
+				snapshot.Metallic = material.GetFloat("_Metallic");
+			}
+			if (material.HasProperty("_Glossiness"))
+			{
+				snapshot.HasSmoothness = true;
+				snapshot.Smoothness = material.GetFloat("_Glossiness");
+			}
+			if (material.HasProperty("_SpecColor"))
+			{
+				snapshot.HasSpecularColor = true;
+				snapshot.SpecularColor = material.GetColor("_SpecColor");
+			}
+			if (material.HasProperty("_Cutoff"))
+			{
+				snapshot.HasCutoff = true;
+				snapshot.Cutoff = material.GetFloat("_Cutoff");
+			}
+
+			// HDRP's Mask Map packs multiple scalar channels. The current verifier cannot prove
+			// that a non-empty Standard metallic/specular map retained the same channel semantics,
+			// so make that case diagnostic-only rather than treating any non-null Mask Map as proof.
+			if (hdrp && snapshot.HasMetallicOrSpecularTexture && snapshot.MetallicOrSpecularTexture != null)
+				return null;
+			return string.IsNullOrEmpty(snapshot.SourceSignature) ? null : snapshot;
+		}
+
+		static void ConvertSelectedStandardMaterial(FixContext c, string expectedMenu, MaterialConversionSnapshot snapshot)
+		{
+			var material = c.Asset as Material ?? AssetDatabase.LoadAssetAtPath<Material>(c.AssetPath);
+			if (material == null || material.shader == null || snapshot == null) throw new InvalidOperationException("Material, shader or conversion snapshot is unavailable.");
+			if (!TryGetStandardMaterialConversionMenu(material.shader.name, out string menu) || menu != expectedMenu)
+				throw new InvalidOperationException("The shader family or active render pipeline changed after analysis.");
+			if (!string.Equals(material.shader.name, snapshot.SourceShaderName, StringComparison.Ordinal)
+				|| !string.Equals(BuildSignature(material), snapshot.SourceSignature, StringComparison.Ordinal))
+				throw new InvalidOperationException("Material properties changed after conversion analysis; rescan before applying the fix.");
+			c.RequireBackup(c.AssetPath);
+			var previousSelection = Selection.objects;
+			try
+			{
+				Selection.objects = new UnityEngine.Object[] { material };
+				if (!EditorApplication.ExecuteMenuItem(expectedMenu))
+					throw new InvalidOperationException("Unity's selected-material converter menu item is not available: " + expectedMenu);
+			}
+			finally { Selection.objects = previousSelection; }
+			AssetDatabase.SaveAssets();
+			AssetDatabase.ImportAsset(c.AssetPath, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+			c.NeedsReimport = true;
+		}
+
+		static bool VerifyMaterialConvertedToActivePipeline(FixContext c, MaterialConversionSnapshot snapshot)
+		{
+			var material = AssetDatabase.LoadAssetAtPath<Material>(c.AssetPath);
+			if (material == null || material.shader == null || snapshot == null || IsBuiltInShader(material.shader.name)) return false;
+			var pipeline = GraphicsSettings.currentRenderPipeline;
+			if (pipeline == null) return false;
+			string typeName = pipeline.GetType().Name;
+			bool hdrp = typeName.IndexOf("HDRenderPipelineAsset", StringComparison.Ordinal) >= 0;
+			bool urp = typeName.IndexOf("UniversalRenderPipelineAsset", StringComparison.Ordinal) >= 0;
+			if ((!hdrp && !urp) || !string.Equals(snapshot.TargetPipelineName, hdrp ? "HDRP" : "URP", StringComparison.Ordinal)) return false;
+			if (hdrp ? !material.shader.name.StartsWith("HDRP/", StringComparison.Ordinal)
+				: !material.shader.name.StartsWith("Universal Render Pipeline/", StringComparison.Ordinal)) return false;
+			if (material.rawRenderQueue != snapshot.SourceRawRenderQueue
+				|| material.enableInstancing != snapshot.SourceEnableInstancing
+				|| material.globalIlluminationFlags != snapshot.SourceGlobalIlluminationFlags
+				|| material.doubleSidedGI != snapshot.SourceDoubleSidedGI) return false;
+
+			// Base texture and tint are required semantics for every supported source shader.
+			string baseMapName = hdrp ? "_BaseColorMap" : "_BaseMap";
+			if (!MatchesTexture(material, baseMapName, snapshot.MainTexture, snapshot.MainTextureScale, snapshot.MainTextureOffset)) return false;
+			if (!MatchesColor(material, "_BaseColor", snapshot.BaseColor)) return false;
+
+			if (snapshot.HasNormalTexture
+				&& !MatchesTexture(material, hdrp ? "_NormalMap" : "_BumpMap", snapshot.NormalTexture,
+					snapshot.NormalTextureScale, snapshot.NormalTextureOffset)) return false;
+			if (snapshot.HasNormalScale && !MatchesFloat(material, hdrp ? "_NormalScale" : "_BumpScale", snapshot.NormalScale)) return false;
+			if (snapshot.HasEmissionTexture
+				&& !MatchesTexture(material, hdrp ? "_EmissiveColorMap" : "_EmissionMap", snapshot.EmissionTexture,
+					snapshot.EmissionTextureScale, snapshot.EmissionTextureOffset)) return false;
+			if (snapshot.HasEmissionColor && !MatchesColor(material, hdrp ? "_EmissiveColor" : "_EmissionColor", snapshot.EmissionColor)) return false;
+
+			if (snapshot.HasSmoothness && !MatchesFloat(material, "_Smoothness", snapshot.Smoothness)) return false;
+			if (snapshot.HasCutoff)
+			{
+				string cutoffName = hdrp ? "_AlphaCutoff" : "_Cutoff";
+				if (material.HasProperty(cutoffName) && !MatchesFloat(material, cutoffName, snapshot.Cutoff)) return false;
+				if (!material.HasProperty(cutoffName) && Mathf.Abs(snapshot.Cutoff - 0.5f) > 0.0001f) return false;
+			}
+
+			if (snapshot.SpecularWorkflow)
+			{
+				if (snapshot.HasSpecularColor && !MatchesColor(material, hdrp ? "_SpecularColor" : "_SpecColor", snapshot.SpecularColor)) return false;
+				if (snapshot.HasMetallicOrSpecularTexture && snapshot.MetallicOrSpecularTexture != null)
+				{
+					string specMap = hdrp ? "_SpecularColorMap" : "_SpecGlossMap";
+					if (!MatchesTexture(material, specMap, snapshot.MetallicOrSpecularTexture,
+						snapshot.MetallicOrSpecularTextureScale, snapshot.MetallicOrSpecularTextureOffset))
+						return false;
+				}
+			}
+			else
+			{
+				if (snapshot.HasMetallic && !MatchesFloat(material, "_Metallic", snapshot.Metallic)) return false;
+				if (snapshot.HasMetallicOrSpecularTexture && snapshot.MetallicOrSpecularTexture != null)
+				{
+					if (hdrp)
+					{
+						// Non-empty HDRP packed-map cases are rejected during capture because this direct
+						// verifier cannot prove equivalent channel packing.
+						return false;
+					}
+					else if (!MatchesTexture(material, "_MetallicGlossMap", snapshot.MetallicOrSpecularTexture,
+						snapshot.MetallicOrSpecularTextureScale, snapshot.MetallicOrSpecularTextureOffset)) return false;
+				}
+			}
+			return true;
+		}
+
+		static bool MatchesTexture(Material material, string property, Texture expected, Vector2 expectedScale, Vector2 expectedOffset)
+		{
+			if (material == null || !material.HasProperty(property)) return false;
+			return material.GetTexture(property) == expected
+				&& Vector2.Distance(material.GetTextureScale(property), expectedScale) < 0.0001f
+				&& Vector2.Distance(material.GetTextureOffset(property), expectedOffset) < 0.0001f;
+		}
+
+		static bool MatchesColor(Material material, string property, Color expected)
+		{
+			if (material == null || !material.HasProperty(property)) return false;
+			Color actual = material.GetColor(property);
+			return Mathf.Abs(actual.r - expected.r) < 0.0001f
+				&& Mathf.Abs(actual.g - expected.g) < 0.0001f
+				&& Mathf.Abs(actual.b - expected.b) < 0.0001f
+				&& Mathf.Abs(actual.a - expected.a) < 0.0001f;
+		}
+
+		static bool MatchesFloat(Material material, string property, float expected)
+		{
+			return material != null && material.HasProperty(property)
+				&& Mathf.Abs(material.GetFloat(property) - expected) < 0.0001f;
+		}
+
+		static void EnableGpuInstancing(FixContext c)
+		{
+			var material = c.Asset as Material ?? AssetDatabase.LoadAssetAtPath<Material>(c.AssetPath);
+			if (material == null || material.shader == null) throw new InvalidOperationException("Material or shader is unavailable.");
+			if (!SupportsGpuInstancing(material.shader) || IsUiShader(material.shader.name))
+				throw new InvalidOperationException("This shader does not satisfy the instancing safety gate.");
+			if (GraphicsSettings.currentRenderPipeline != null && GetSrpBatcherCompatibilityCode(material.shader) == 0)
+				throw new InvalidOperationException("The shader is SRP Batcher compatible; the instancing recommendation is no longer applicable.");
+			if (material.enableInstancing) return;
+			c.RequireBackup(c.AssetPath);
+			material.enableInstancing = true;
+			EditorUtility.SetDirty(material);
+			c.NeedsSave = true;
+		}
+
+		static bool VerifyGpuInstancing(FixContext c)
+		{
+			var saved = AssetDatabase.LoadAssetAtPath<Material>(c.AssetPath);
+			return saved != null && saved.shader != null && saved.enableInstancing
+				&& SupportsGpuInstancing(saved.shader) && !IsUiShader(saved.shader.name)
+				&& !(GraphicsSettings.currentRenderPipeline != null && GetSrpBatcherCompatibilityCode(saved.shader) == 0);
+		}
+
+		static void ResetMaterialRenderQueue(FixContext c)
+		{
+			var material = c.Asset as Material ?? AssetDatabase.LoadAssetAtPath<Material>(c.AssetPath);
+			if (material == null || material.shader == null) throw new InvalidOperationException("Material or shader is unavailable.");
+			if (material.rawRenderQueue < 0 || material.rawRenderQueue != material.shader.renderQueue)
+				throw new InvalidOperationException("The raw material queue no longer exactly equals the shader default.");
+			c.RequireBackup(c.AssetPath);
+			material.renderQueue = -1;
+			EditorUtility.SetDirty(material);
+			c.NeedsSave = true;
+		}
+
+		static bool VerifyMaterialRenderQueueReset(FixContext c)
+		{
+			var saved = AssetDatabase.LoadAssetAtPath<Material>(c.AssetPath);
+			return saved != null && saved.shader != null && saved.rawRenderQueue < 0;
+		}
+
+		static void FixMaterialEmissionGiFlags(FixContext c)
+		{
+			var material = c.Asset as Material ?? AssetDatabase.LoadAssetAtPath<Material>(c.AssetPath);
+			if (material == null || !HasEmissionGIMismatch(material))
+				throw new InvalidOperationException("The material no longer has the specific black-emission / emissive-GI mismatch.");
+			c.RequireBackup(c.AssetPath);
+			MaterialEditor.FixupEmissiveFlag(material);
+			EditorUtility.SetDirty(material);
+			c.NeedsSave = true;
+		}
+
+		static bool VerifyMaterialEmissionGiFlags(FixContext c)
+		{
+			var saved = AssetDatabase.LoadAssetAtPath<Material>(c.AssetPath);
+			return saved != null && !HasEmissionGIMismatch(saved);
+		}
+
+		static void ClearShaderVariantCollection(FixContext c)
+		{
+			var collection = c.Asset as ShaderVariantCollection ?? AssetDatabase.LoadAssetAtPath<ShaderVariantCollection>(c.AssetPath);
+			if (collection == null || collection.variantCount <= 0)
+				throw new InvalidOperationException("Shader Variant Collection no longer has variants to clear.");
+			c.RequireBackup(c.AssetPath);
+			collection.Clear();
+			EditorUtility.SetDirty(collection);
+			c.NeedsSave = true;
+		}
+
+		static bool VerifyShaderVariantCollectionCleared(FixContext c)
+		{
+			var saved = AssetDatabase.LoadAssetAtPath<ShaderVariantCollection>(c.AssetPath);
+			return saved != null && saved.variantCount == 0;
+		}
+
+		static bool FilesAreByteIdentical(string firstPath, string secondPath)
+		{
+			try
+			{
+				string first = AssetPathUtility.ToAbsolutePath(firstPath);
+				string second = AssetPathUtility.ToAbsolutePath(secondPath);
+				var a = new FileInfo(first); var b = new FileInfo(second);
+				if (!a.Exists || !b.Exists || a.Length != b.Length) return false;
+				using (var streamA = File.OpenRead(first))
+			using (var streamB = File.OpenRead(second))
+			{
+				byte[] bufferA = new byte[81920]; byte[] bufferB = new byte[81920];
+				while (true)
+				{
+					int readA = streamA.Read(bufferA, 0, bufferA.Length);
+					int readB = streamB.Read(bufferB, 0, bufferB.Length);
+					if (readA != readB) return false;
+					if (readA == 0) return true;
+					for (int i = 0; i < readA; i++) if (bufferA[i] != bufferB[i]) return false;
+				}
+			}
+			}
+			catch { return false; }
+		}
+
+		static bool AssetsAreByteIdenticalIncludingMeta(string firstPath, string secondPath)
+		{
+			if (!FilesAreByteIdentical(firstPath, secondPath)) return false;
+			try
+			{
+				string firstMeta = AssetPathUtility.ToAbsolutePath(firstPath) + ".meta";
+				string secondMeta = AssetPathUtility.ToAbsolutePath(secondPath) + ".meta";
+				if (!File.Exists(firstMeta) || !File.Exists(secondMeta)) return false;
+				return string.Equals(NormalizeMetaGuid(File.ReadAllText(firstMeta)), NormalizeMetaGuid(File.ReadAllText(secondMeta)), StringComparison.Ordinal);
+			}
+			catch { return false; }
+		}
+
+		static string NormalizeMetaGuid(string metaText)
+		{
+			if (metaText == null) return null;
+			return Regex.Replace(metaText.Replace("\r\n", "\n").Replace('\r', '\n'), @"(?m)^(\s*guid:\s*)[0-9a-fA-F]{32}(\s*)$", "$1<GUID>$2");
+		}
+
+		static void CollapseByteIdenticalMaterial(FixContext c, string duplicatePath, string keeperPath, ReferenceIndex references)
+		{
+			if (references == null || !references.IsCurrentProjectWide || !references.IsComplete)
+				throw new InvalidOperationException("The project-wide reference graph is stale or incomplete.");
+			if (!AssetsAreByteIdenticalIncludingMeta(duplicatePath, keeperPath))
+				throw new InvalidOperationException("Duplicate and keeper files are no longer byte-identical.");
+			var plan = DuplicateRemapper.Prepare(duplicatePath, keeperPath, references);
+			if (plan == null || !plan.Viable) throw new InvalidOperationException(plan != null ? plan.Reason : "No remap plan was produced.");
+			var result = DuplicateRemapper.Apply(plan, c.TryBackupExtra);
+			if (result == null || !result.Succeeded)
+				throw new InvalidOperationException("Duplicate remap did not complete successfully: " + (result != null ? result.Summary : "no result"));
+			c.DeletedAsset = true;
+			c.NeedsReimport = true;
+		}
+
+		static bool VerifyDuplicateMaterialRemoved(string duplicatePath)
+		{
+			try
+			{
+				string full = AssetPathUtility.ToAbsolutePath(duplicatePath);
+				return !File.Exists(full) && !File.Exists(full + ".meta");
+			}
+			catch { return false; }
+		}
+
+		List<FixOption> BuildMaterialVariantParentOptions(List<AssetEntry> family, AssetEntry childEntry)
+		{
+			var options = new List<FixOption>();
+			if (family == null || childEntry == null) return options;
+			var child = AssetDatabase.LoadAssetAtPath<Material>(childEntry.Path);
+			if (child == null || child.shader == null) return options;
+			string childFamily = BuildFamilySignature(child);
+			string childSignature = BuildSignature(child);
+			if (string.IsNullOrEmpty(childFamily) || string.IsNullOrEmpty(childSignature)) return options;
+			// Do not create a hierarchy edge if other variants inherit from this child already.
+			// The action repeats this check against fresh project state before mutation.
+			if (HasMaterialVariantDescendants(child)) return options;
+			for (int i = 0; i < family.Count; i++)
+			{
+				var candidate = family[i];
+				if (candidate == null || string.Equals(candidate.Path, childEntry.Path, StringComparison.OrdinalIgnoreCase)) continue;
+				var parent = AssetDatabase.LoadAssetAtPath<Material>(candidate.Path);
+				if (parent == null || parent == child || parent.shader != child.shader || child.parent == parent) continue;
+				if (parent.IsChildOf(child)) continue;
+				if (!string.Equals(BuildFamilySignature(parent), childFamily, StringComparison.Ordinal)) continue;
+				string parentPath = candidate.Path;
+				string parentGuid = AssetDatabase.AssetPathToGUID(parentPath);
+				options.Add(new FixOption
+				{
+					ActionId = "mat009-parent-" + (string.IsNullOrEmpty(parentGuid) ? SanitizeActionId(parentPath) : parentGuid),
+					Label = "Use " + parent.name + " as parent",
+					ResultDescription = DescribeMaterialVariantDiff(child, parent),
+					Recommended = false,
+					Risk = FixRisk.High,
+					Warning = "Changes the material inheritance hierarchy; effective serialized material state is checked after conversion.",
+					Apply = c => ReparentMaterialVariant(c, parentPath, childFamily, childSignature),
+					Verify = c => VerifyMaterialVariantParent(c, parentPath, childSignature)
+				});
+			}
+			return options;
+		}
+
+		static string DescribeMaterialVariantDiff(Material child, Material parent)
+		{
+			if (child == null || parent == null || child.shader == null || child.shader != parent.shader)
+				return "Convert this material to a Material Variant; compatibility preview is unavailable.";
+			var changes = new List<string>();
+			try
+			{
+				var properties = GetShaderProperties(child.shader);
+				for (int i = 0; i < properties.Length; i++)
+				{
+					string name = properties[i].name;
+					var type = properties[i].type;
+					string left = GetMaterialPropertyValueText(child, name, type);
+					string right = GetMaterialPropertyValueText(parent, name, type);
+					if (!string.Equals(left, right, StringComparison.Ordinal))
+						changes.Add(name + ": child=" + left + ", parent=" + right);
+				}
+			}
+			catch { return "Convert " + child.name + " to a Material Variant of " + parent.name + "; property diff preview failed, so postcondition verification remains mandatory."; }
+			if (changes.Count == 0) return child.name + " becomes a Material Variant of " + parent.name + "; no exposed shader-property differences were detected.";
+			const int maxPreview = 8;
+			var shown = changes.GetRange(0, Math.Min(changes.Count, maxPreview));
+			string preview = string.Join("; ", shown.ToArray());
+			if (changes.Count > maxPreview) preview += "; and " + (changes.Count - maxPreview) + " additional property difference(s)";
+			return child.name + " becomes a Material Variant of " + parent.name + ". Expected child overrides: " + preview;
+		}
+
+		static string GetMaterialPropertyValueText(Material material, string name, ShaderPropertyType type)
+		{
+			switch (type)
+			{
+				case ShaderPropertyType.Color:
+					Color color = material.GetColor(name);
+					return string.Format(CultureInfo.InvariantCulture, "({0:R},{1:R},{2:R},{3:R})", color.r, color.g, color.b, color.a);
+				case ShaderPropertyType.Vector:
+					Vector4 vector = material.GetVector(name);
+					return string.Format(CultureInfo.InvariantCulture, "({0:R},{1:R},{2:R},{3:R})", vector.x, vector.y, vector.z, vector.w);
+				case ShaderPropertyType.Float:
+				case ShaderPropertyType.Range:
+					return material.GetFloat(name).ToString("R", CultureInfo.InvariantCulture);
+				case ShaderPropertyType.Int:
+					return material.GetInteger(name).ToString(CultureInfo.InvariantCulture);
+				case ShaderPropertyType.Texture:
+					var texture = material.GetTexture(name);
+					return (texture != null ? AssetDatabase.GetAssetPath(texture) : "-")
+						+ " scale=" + material.GetTextureScale(name) + " offset=" + material.GetTextureOffset(name);
+				default: return "<unsupported>";
+			}
+		}
+
+		bool HasMaterialVariantDescendants(Material material, bool refresh = false)
+		{
+			if (material == null) return true;
+			try
+			{
+				if (refresh || !m_MaterialVariantTreeBuilt)
+				{
+					m_MaterialVariantAncestorIds.Clear();
+					string[] guids = AssetDatabase.FindAssets("t:Material");
+					for (int i = 0; i < guids.Length; i++)
+					{
+						string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+						if (string.IsNullOrEmpty(path)) continue;
+						var candidate = AssetDatabase.LoadAssetAtPath<Material>(path);
+						if (candidate == null || candidate == material) continue;
+						var visited = new HashSet<int>();
+						var parent = candidate.parent;
+						int depth = 0;
+						while (parent != null && depth++ < 256 && visited.Add(parent.GetInstanceID()))
+						{
+							m_MaterialVariantAncestorIds.Add(parent.GetInstanceID());
+							parent = parent.parent;
+						}
+					}
+					m_MaterialVariantTreeBuilt = true;
+				}
+				return m_MaterialVariantAncestorIds.Contains(material.GetInstanceID());
+			}
+			catch { m_MaterialVariantTreeBuilt = false; return true; }
+		}
+
+		void ReparentMaterialVariant(FixContext c, string parentPath, string expectedFamily, string expectedSignature)
+		{
+			var child = c.Asset as Material ?? AssetDatabase.LoadAssetAtPath<Material>(c.AssetPath);
+			var parent = AssetDatabase.LoadAssetAtPath<Material>(parentPath);
+			if (child == null || parent == null || child == parent || child.shader == null || parent.shader != child.shader)
+				throw new InvalidOperationException("Child or candidate parent is unavailable/incompatible.");
+			if (HasMaterialVariantDescendants(child, refresh: true))
+				throw new InvalidOperationException("Reparenting a material with existing descendants could alter inherited values; the option is blocked.");
+			if (!string.Equals(BuildFamilySignature(child), expectedFamily, StringComparison.Ordinal)
+				|| !string.Equals(BuildSignature(child), expectedSignature, StringComparison.Ordinal)
+				|| !string.Equals(BuildFamilySignature(parent), expectedFamily, StringComparison.Ordinal))
+				throw new InvalidOperationException("Material-family or effective-property evidence changed after analysis.");
+			if (parent.IsChildOf(child)) throw new InvalidOperationException("The selected parent would create a Material Variant cycle.");
+			if (child.parent == parent) throw new InvalidOperationException("The selected material is already this material's parent.");
+			c.RequireBackup(c.AssetPath);
+			child.parent = parent;
+			EditorUtility.SetDirty(child);
+			c.NeedsSave = true;
+		}
+
+		static bool VerifyMaterialVariantParent(FixContext c, string parentPath, string expectedSignature)
+		{
+			var saved = AssetDatabase.LoadAssetAtPath<Material>(c.AssetPath);
+			var parent = AssetDatabase.LoadAssetAtPath<Material>(parentPath);
+			return saved != null && parent != null && saved.parent == parent
+				&& string.Equals(BuildSignature(saved), expectedSignature, StringComparison.Ordinal);
+		}
+
+		static string SanitizeActionId(string value)
+		{
+			if (string.IsNullOrEmpty(value)) return "candidate";
+			var sb = new StringBuilder(value.Length);
+			for (int i = 0; i < value.Length; i++) sb.Append(char.IsLetterOrDigit(value[i]) ? char.ToLowerInvariant(value[i]) : '-');
+			return sb.ToString().Trim('-');
+		}
+
+		sealed class ShaderSourceEdit
+		{
+			public int LineIndex;
+			public string ExpectedLine;
+			public string ReplacementLine;
+			public string Summary;
+		}
+
+		static string ExtractFirstArgument(string arguments)
+		{
+			if (string.IsNullOrWhiteSpace(arguments)) return string.Empty;
+			string value = arguments.Trim();
+			int comma = value.IndexOf(',');
+			if (comma >= 0) value = value.Substring(0, comma).Trim();
+			return value;
+		}
+
+		static bool TryGetStringLiteral(string expression, out string value)
+		{
+			value = null;
+			if (string.IsNullOrEmpty(expression)) return false;
+			string trimmed = expression.Trim();
+			if (trimmed.Length < 2 || trimmed[0] != '"' || trimmed[trimmed.Length - 1] != '"') return false;
+			value = trimmed.Substring(1, trimmed.Length - 2);
+			return value.Length > 0;
+		}
+
+		void EnsureRuntimeSourceIndex()
+		{
+			if (m_RuntimeSourceIndexBuilt) return;
+			m_RuntimeSourceIndexBuilt = true;
+			m_RuntimeSourceIndexComplete = true;
+			m_RuntimeHasDynamicKeywordControl = false;
+			m_RuntimeSourceHasDynamicMaterialPropertyUse = false;
+			m_RuntimeSourceHasDynamicTransparencyPropertyUse = false;
+			m_RuntimeSourceUsesMaterialPropertyBlock = false;
+			string[] paths;
+			try { paths = AssetDatabase.GetAllAssetPaths(); }
+			catch { m_RuntimeSourceIndexComplete = false; return; }
+			for (int i = 0; i < paths.Length; i++)
+			{
+				string path = paths[i];
+				if (!path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+					|| path.IndexOf("/Editor/", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+				try
+				{
+					string fullPath = AssetPathUtility.ToAbsolutePath(path);
+					if (!File.Exists(fullPath)) { m_RuntimeSourceIndexComplete = false; continue; }
+					string text = File.ReadAllText(fullPath);
+					if (Regex.IsMatch(text, @"\b(?:MaterialPropertyBlock|SetPropertyBlock|GetPropertyBlock)\b", RegexOptions.CultureInvariant))
+						m_RuntimeSourceUsesMaterialPropertyBlock = true;
+
+					var keywordCalls = Regex.Matches(text, @"\b(?:EnableKeyword|DisableKeyword|EnableShaderKeyword|DisableShaderKeyword|SetKeyword)\s*\(([^)]*)\)", RegexOptions.CultureInvariant);
+					for (int k = 0; k < keywordCalls.Count; k++)
+					{
+						string firstArgument = ExtractFirstArgument(keywordCalls[k].Groups[1].Value);
+						if (TryGetStringLiteral(firstArgument, out string literalKeyword)) m_RuntimeControlledKeywords.Add(literalKeyword);
+						else if (!string.IsNullOrEmpty(firstArgument)) m_RuntimeHasDynamicKeywordControl = true;
+					}
+					var globalKeywordCalls = Regex.Matches(text, @"\bGlobalKeyword\s*\(([^)]*)\)|\bGlobalKeyword\s*\.\s*(?:GetOrCreate|Create)\s*\(([^)]*)\)", RegexOptions.CultureInvariant);
+					for (int k = 0; k < globalKeywordCalls.Count; k++)
+					{
+						string args = !string.IsNullOrEmpty(globalKeywordCalls[k].Groups[1].Value) ? globalKeywordCalls[k].Groups[1].Value : globalKeywordCalls[k].Groups[2].Value;
+						string firstArgument = ExtractFirstArgument(args);
+						if (TryGetStringLiteral(firstArgument, out string literalKeyword)) m_RuntimeControlledKeywords.Add(literalKeyword);
+						else if (!string.IsNullOrEmpty(firstArgument)) m_RuntimeHasDynamicKeywordControl = true;
+					}
+					var propertyCalls = Regex.Matches(text,
+						@"\b(?:SetTexture|GetTexture|SetTextureScale|GetTextureScale|SetTextureOffset|GetTextureOffset|SetFloat|GetFloat|SetColor|GetColor|SetVector|GetVector|SetInt|GetInt|SetInteger|GetInteger|SetMatrix|GetMatrix|SetBuffer|PropertyToID)\s*\(([^)]*)\)",
+						RegexOptions.CultureInvariant);
+					for (int k = 0; k < propertyCalls.Count; k++)
+					{
+						string firstArgument = ExtractFirstArgument(propertyCalls[k].Groups[1].Value);
+						if (!TryGetStringLiteral(firstArgument, out string literalProperty))
+						{
+							if (!string.IsNullOrEmpty(firstArgument))
+							{
+								string call = propertyCalls[k].Value;
+								if (Regex.IsMatch(call, @"^\s*(?:SetTexture|GetTexture|SetTextureScale|GetTextureScale|SetTextureOffset|GetTextureOffset|PropertyToID)\b", RegexOptions.CultureInvariant))
+									m_RuntimeSourceHasDynamicMaterialPropertyUse = true;
+								m_RuntimeSourceHasDynamicTransparencyPropertyUse = true;
+							}
+							continue;
+						}
+						if (IsTransparencyRelatedMaterialProperty(literalProperty)) m_RuntimeControlledMaterialProperties.Add(literalProperty);
+					}
+					foreach (Match match in Regex.Matches(text, @"\b[A-Za-z_][A-Za-z0-9_]*\b", RegexOptions.CultureInvariant))
+						m_RuntimeSourceTokens.Add(match.Value);
+				}
+				catch { m_RuntimeSourceIndexComplete = false; }
+			}
+		}
+
+		static bool IsTransparencyRelatedMaterialProperty(string propertyName)
+		{
+			if (string.IsNullOrEmpty(propertyName)) return false;
+			string[] properties =
+			{
+				"_Surface", "_AlphaClip", "_BaseColor", "_Color", "_BaseMap", "_MainTex",
+				"_Blend", "_SrcBlend", "_DstBlend", "_SrcBlendAlpha", "_DstBlendAlpha", "_ZWrite"
+			};
+			for (int i = 0; i < properties.Length; i++)
+				if (string.Equals(propertyName, properties[i], StringComparison.Ordinal)) return true;
+			return false;
+		}
+
+		static bool IsTransparencyRelatedAnimationBinding(string propertyName)
+		{
+			if (string.IsNullOrEmpty(propertyName)) return false;
+			// Material swaps can change surface mode without animating a shader property.
+			if (propertyName.IndexOf("m_Materials", StringComparison.OrdinalIgnoreCase) >= 0
+				|| string.Equals(propertyName, "m_Material", StringComparison.OrdinalIgnoreCase)) return true;
+			string[] properties =
+			{
+				"_Surface", "_AlphaClip", "_BaseColor", "_Color", "_BaseMap", "_MainTex",
+				"_Blend", "_SrcBlend", "_DstBlend", "_SrcBlendAlpha", "_DstBlendAlpha", "_ZWrite"
+			};
+			for (int i = 0; i < properties.Length; i++)
+				if (propertyName.IndexOf(properties[i], StringComparison.OrdinalIgnoreCase) >= 0) return true;
+			return false;
+		}
+
+		void EnsureTransparencyAnimationIndex()
+		{
+			if (m_TransparencyAnimationIndexBuilt) return;
+			m_TransparencyAnimationIndexBuilt = true;
+			m_TransparencyAnimationIndexComplete = true;
+			m_TransparencyAnimationControlsMaterialState = false;
+			string[] paths;
+			try { paths = AssetDatabase.GetAllAssetPaths(); }
+			catch { m_TransparencyAnimationIndexComplete = false; return; }
+			for (int i = 0; i < paths.Length; i++)
+			{
+				string path = paths[i];
+				string extension = Path.GetExtension(path);
+				if (!string.Equals(extension, ".anim", StringComparison.OrdinalIgnoreCase)
+					&& !string.Equals(extension, ".fbx", StringComparison.OrdinalIgnoreCase)) continue;
+				try
+				{
+					var assets = AssetDatabase.LoadAllAssetsAtPath(path);
+					if (assets == null) { m_TransparencyAnimationIndexComplete = false; continue; }
+					for (int a = 0; a < assets.Length; a++)
+					{
+						var clip = assets[a] as AnimationClip;
+						if (clip == null) continue;
+						var floatBindings = AnimationUtility.GetCurveBindings(clip);
+						for (int b = 0; b < floatBindings.Length; b++)
+							if (IsTransparencyRelatedAnimationBinding(floatBindings[b].propertyName))
+								 m_TransparencyAnimationControlsMaterialState = true;
+						var objectBindings = AnimationUtility.GetObjectReferenceCurveBindings(clip);
+						for (int b = 0; b < objectBindings.Length; b++)
+							if (IsTransparencyRelatedAnimationBinding(objectBindings[b].propertyName))
+								 m_TransparencyAnimationControlsMaterialState = true;
+					}
+				}
+				catch { m_TransparencyAnimationIndexComplete = false; }
+			}
+		}
+
+		bool CanSafelyMakeOpaque(ScanContext ctx)
+		{
+			if (ctx == null || ctx.Settings == null || !ctx.Settings.projectProofPass) return false;
+			var proof = ctx.GetProofIndex();
+			if (proof == null || !proof.CoverageComplete) return false;
+			EnsureRuntimeSourceIndex();
+			if (!m_RuntimeSourceIndexComplete || m_RuntimeSourceHasDynamicTransparencyPropertyUse
+				|| m_RuntimeSourceHasDynamicMaterialPropertyUse || m_RuntimeSourceUsesMaterialPropertyBlock) return false;
+			foreach (string property in m_RuntimeControlledMaterialProperties)
+				if (IsTransparencyRelatedMaterialProperty(property)) return false;
+			EnsureTransparencyAnimationIndex();
+			return m_TransparencyAnimationIndexComplete && !m_TransparencyAnimationControlsMaterialState;
+		}
+
+		bool IsKeywordUsedOutsideShaderCode(string keyword, string shaderSource, int skippedLineIndex, string shaderPath, ProjectProofIndex proof)
+		{
+			if (string.IsNullOrEmpty(keyword)) return true;
+			if (m_RuntimeSourceTokens.Contains(keyword)) return true;
+			if (proof == null || !proof.CoverageComplete || proof.ContainsTokenOutsideFile(keyword, shaderPath)) return true;
+			string normalized = shaderSource.Replace("\r\n", "\n").Replace('\r', '\n');
+			var lines = normalized.Split('\n');
+			string pattern = @"\b" + Regex.Escape(keyword) + @"\b";
+			for (int i = 0; i < lines.Length; i++)
+				if (i != skippedLineIndex && Regex.IsMatch(lines[i], pattern, RegexOptions.CultureInvariant)) return true;
+			return false;
+		}
+
+		List<ShaderSourceEdit> BuildUnusedLocalKeywordEdits(string source, string shaderPath, ProjectProofIndex proof)
+		{
+			var edits = new List<ShaderSourceEdit>();
+			if (string.IsNullOrEmpty(source) || proof == null || !proof.CoverageComplete
+				|| !m_RuntimeSourceIndexBuilt || !m_RuntimeSourceIndexComplete) return edits;
+			string normalized = source.Replace("\r\n", "\n").Replace('\r', '\n');
+			var lines = normalized.Split('\n');
+			var pragmas = ParseShaderKeywordPragmas(source);
+			foreach (var pragma in pragmas)
+			{
+				if (!(pragma.Directive.StartsWith("multi_compile_local", StringComparison.Ordinal)
+					|| pragma.Directive.StartsWith("shader_feature_local", StringComparison.Ordinal))) continue;
+				if (pragma.LineIndex < 0 || pragma.LineIndex >= lines.Length) continue;
+				var removable = new HashSet<string>(StringComparer.Ordinal);
+				for (int t = 0; t < pragma.Tokens.Count; t++)
+				{
+					string token = pragma.Tokens[t];
+					if (token == "_" || token == "__") continue;
+					if (IsKeywordUsedOutsideShaderCode(token, source, pragma.LineIndex, shaderPath, proof)) continue;
+					removable.Add(token);
+				}
+				if (removable.Count == 0) continue;
+				string rewritten = RewriteShaderKeywordPragmaRemovingTokens(lines[pragma.LineIndex], pragma, removable);
+				if (!string.Equals(rewritten, lines[pragma.LineIndex], StringComparison.Ordinal))
+					edits.Add(new ShaderSourceEdit { LineIndex = pragma.LineIndex, ExpectedLine = lines[pragma.LineIndex], ReplacementLine = rewritten, Summary = "Remove unused token(s): " + string.Join(", ", new List<string>(removable).ToArray()) });
+			}
+			return edits;
+		}
+
+		List<ShaderSourceEdit> BuildShaderFeatureConversionEdits(string source, string shaderName, HashSet<string> materialKeywords, bool localize)
+		{
+			var edits = new List<ShaderSourceEdit>();
+			if (string.IsNullOrEmpty(source) || !m_RuntimeSourceIndexBuilt || !m_RuntimeSourceIndexComplete || m_RuntimeHasDynamicKeywordControl) return edits;
+			string normalized = source.Replace("\r\n", "\n").Replace('\r', '\n');
+			var lines = normalized.Split('\n');
+			var pragmas = ParseShaderKeywordPragmas(source);
+			foreach (var pragma in pragmas)
+			{
+				// Restrict to canonical global multi_compile declarations. Stage-specific directives have
+				// different semantics and are left alone until their corresponding feature directive is proven.
+				if (!string.Equals(pragma.Directive, "multi_compile", StringComparison.Ordinal)) continue;
+				if (pragma.LineIndex < 0 || pragma.LineIndex >= lines.Length) continue;
+				bool hasMaterialKeyword = false;
+				bool allKeywordsShaderLocal = true;
+				bool hasRuntimeUse = false;
+				bool hasRealKeyword = false;
+				for (int t = 0; t < pragma.Tokens.Count; t++)
+				{
+					string token = pragma.Tokens[t];
+					if (token == "_" || token == "__") continue;
+					hasRealKeyword = true;
+					if (materialKeywords != null && materialKeywords.Contains(token)) hasMaterialKeyword = true;
+					if (m_RuntimeControlledKeywords.Contains(token)) { hasRuntimeUse = true; allKeywordsShaderLocal = false; continue; }
+					if (!m_ShadersUsingMaterialKeyword.TryGetValue(token, out var users) || users.Count != 1 || !users.Contains(shaderName))
+						allKeywordsShaderLocal = false;
+				}
+				if (!hasRealKeyword || !hasMaterialKeyword || hasRuntimeUse) continue;
+				if (localize != allKeywordsShaderLocal) continue;
+				string replacementDirective = localize ? "shader_feature_local" : "shader_feature";
+				string rewritten = ReplaceShaderPragmaDirective(lines[pragma.LineIndex], replacementDirective);
+				if (!string.Equals(rewritten, lines[pragma.LineIndex], StringComparison.Ordinal))
+					edits.Add(new ShaderSourceEdit { LineIndex = pragma.LineIndex, ExpectedLine = lines[pragma.LineIndex], ReplacementLine = rewritten, Summary = "Convert to #pragma " + replacementDirective });
+			}
+			return edits;
+		}
+
+		static string RewriteShaderKeywordPragmaRemovingTokens(string line, ShaderKeywordPragma pragma, HashSet<string> removals)
+		{
+			int pragmaIndex = line.IndexOf("#pragma", StringComparison.OrdinalIgnoreCase);
+			if (pragmaIndex < 0) return line;
+			int directiveIndex = pragmaIndex + "#pragma".Length;
+			while (directiveIndex < line.Length && char.IsWhiteSpace(line[directiveIndex])) directiveIndex++;
+			int argsIndex = directiveIndex;
+			while (argsIndex < line.Length && !char.IsWhiteSpace(line[argsIndex])) argsIndex++;
+			int argsStart = argsIndex;
+			while (argsStart < line.Length && char.IsWhiteSpace(line[argsStart])) argsStart++;
+			int commentIndex = line.IndexOf("//", argsStart, StringComparison.Ordinal);
+			string comment = commentIndex >= 0 ? line.Substring(commentIndex) : string.Empty;
+			string prefix = line.Substring(0, argsStart);
+			var kept = new List<string>();
+			for (int i = 0; i < pragma.Tokens.Count; i++)
+				if (!removals.Contains(pragma.Tokens[i])) kept.Add(pragma.Tokens[i]);
+			if (kept.Count == 0) kept.Add("_");
+			return prefix + string.Join(" ", kept.ToArray()) + (string.IsNullOrEmpty(comment) ? string.Empty : " " + comment);
+		}
+
+		static string ReplaceShaderPragmaDirective(string line, string replacementDirective)
+		{
+			int pragmaIndex = line.IndexOf("#pragma", StringComparison.OrdinalIgnoreCase);
+			if (pragmaIndex < 0) return line;
+			int directiveIndex = pragmaIndex + "#pragma".Length;
+			while (directiveIndex < line.Length && char.IsWhiteSpace(line[directiveIndex])) directiveIndex++;
+			int end = directiveIndex;
+			while (end < line.Length && !char.IsWhiteSpace(line[end])) end++;
+			if (end == directiveIndex) return line;
+			return line.Substring(0, directiveIndex) + replacementDirective + line.Substring(end);
+		}
+
+		static List<string> DescribeShaderEdits(List<ShaderSourceEdit> edits)
+		{
+			var descriptions = new List<string>();
+			if (edits == null) return descriptions;
+			for (int i = 0; i < edits.Count; i++) descriptions.Add("Line " + (edits[i].LineIndex + 1) + ": " + edits[i].Summary);
+			return descriptions;
+		}
+
+		static void ApplyShaderSourceEdits(FixContext c, IList<ShaderSourceEdit> edits)
+		{
+			if (edits == null || edits.Count == 0) throw new InvalidOperationException("No safe shader source edits were captured.");
+			if (!VerifyShaderCompiles(c)) throw new InvalidOperationException("The shader currently has compile errors; source edits are blocked.");
+			string fullPath = AssetPathUtility.ToAbsolutePath(c.AssetPath);
+			byte[] originalBytes = File.ReadAllBytes(fullPath);
+			bool hadUtf8Bom = originalBytes.Length >= 3 && originalBytes[0] == 0xEF && originalBytes[1] == 0xBB && originalBytes[2] == 0xBF;
+			bool hadCrLf = Array.IndexOf(originalBytes, (byte)'\r') >= 0 && Array.IndexOf(originalBytes, (byte)'\n') >= 0;
+			bool hadLoneCr = !hadCrLf && Array.IndexOf(originalBytes, (byte)'\r') >= 0;
+			string original = File.ReadAllText(fullPath);
+			string normalized = original.Replace("\r\n", "\n").Replace('\r', '\n');
+			var lines = normalized.Split('\n');
+			var byIndex = new Dictionary<int, ShaderSourceEdit>();
+			for (int i = 0; i < edits.Count; i++)
+			{
+				var edit = edits[i];
+				if (edit == null || edit.LineIndex < 0 || edit.LineIndex >= lines.Length || !string.Equals(lines[edit.LineIndex], edit.ExpectedLine, StringComparison.Ordinal))
+					throw new InvalidOperationException("Shader source changed after analysis; no edits were written.");
+				if (byIndex.ContainsKey(edit.LineIndex)) throw new InvalidOperationException("Conflicting edits target the same shader source line.");
+				byIndex.Add(edit.LineIndex, edit);
+			}
+			c.RequireBackup(c.AssetPath);
+			for (int i = 0; i < lines.Length; i++)
+				if (byIndex.TryGetValue(i, out var edit)) lines[i] = edit.ReplacementLine;
+			string newline = hadCrLf ? "\r\n" : hadLoneCr ? "\r" : "\n";
+			string output = string.Join("\n", lines).Replace("\n", newline);
+			byte[] outputBody = new UTF8Encoding(false).GetBytes(output);
+			if (hadUtf8Bom)
+			{
+				var withBom = new byte[outputBody.Length + 3];
+				withBom[0] = 0xEF; withBom[1] = 0xBB; withBom[2] = 0xBF;
+				Buffer.BlockCopy(outputBody, 0, withBom, 3, outputBody.Length);
+				outputBody = withBom;
+			}
+			File.WriteAllBytes(fullPath, outputBody);
+			AssetDatabase.ImportAsset(c.AssetPath, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+			c.NeedsReimport = true;
+		}
+
+		static bool VerifyShaderSourceEditsAndCompilation(FixContext c, IList<ShaderSourceEdit> edits)
+		{
+			try
+			{
+				string normalized = File.ReadAllText(AssetPathUtility.ToAbsolutePath(c.AssetPath)).Replace("\r\n", "\n").Replace('\r', '\n');
+				var lines = normalized.Split('\n');
+				if (edits == null || edits.Count == 0) return false;
+				for (int i = 0; i < edits.Count; i++)
+				{
+					var edit = edits[i];
+					if (edit.LineIndex < 0 || edit.LineIndex >= lines.Length || !string.Equals(lines[edit.LineIndex], edit.ReplacementLine, StringComparison.Ordinal)) return false;
+				}
+				return VerifyShaderCompiles(c);
+			}
+			catch { return false; }
+		}
+
+		static bool VerifyShaderCompiles(FixContext c)
+		{
+			try
+			{
+				var shader = AssetDatabase.LoadAssetAtPath<Shader>(c.AssetPath);
+				return shader != null && !ShaderUtil.GetShaderInfo(shader).hasErrors;
+			}
+			catch { return false; }
+		}
+
+		bool HasProjectReferenceOutsideAlwaysIncluded(string guid, string shaderName, string shaderPath)
+		{
+			try
+			{
+				var paths = new List<string>(AssetDatabase.GetAllAssetPaths());
+				const string graphicsPath = "ProjectSettings/GraphicsSettings.asset";
+				if (!paths.Contains(graphicsPath)) paths.Add(graphicsPath);
+				for (int i = 0; i < paths.Count; i++)
+				{
+					string path = paths[i];
+					if (string.Equals(path, shaderPath, StringComparison.OrdinalIgnoreCase)) continue;
+					string ext = Path.GetExtension(path).ToLowerInvariant();
+					if (!(ext == ".mat" || ext == ".prefab" || ext == ".unity" || ext == ".asset" || ext == ".shader"
+						|| ext == ".shadergraph" || ext == ".shadervariants" || ext == ".cs" || ext == ".hlsl" || ext == ".cginc"
+						|| ext == ".compute" || ext == ".json" || ext == ".xml" || ext == ".txt" || string.Equals(path, graphicsPath, StringComparison.Ordinal))) continue;
+					string full = AssetPathUtility.ToAbsolutePath(path);
+					if (!File.Exists(full)) continue;
+					string text;
+					try { text = File.ReadAllText(full); }
+					catch { return true; }
+					if (string.Equals(path, graphicsPath, StringComparison.Ordinal)) text = RemoveAlwaysIncludedGuidLine(text, guid);
+					if ((!string.IsNullOrEmpty(guid) && text.IndexOf(guid, StringComparison.OrdinalIgnoreCase) >= 0)
+						|| (!string.IsNullOrEmpty(shaderName) && text.IndexOf(shaderName, StringComparison.Ordinal) >= 0)) return true;
+				}
+				return false;
+			}
+			catch { return true; }
+		}
+
+		static string RemoveAlwaysIncludedGuidLine(string settingsText, string guid)
+		{
+			if (string.IsNullOrEmpty(settingsText) || string.IsNullOrEmpty(guid)) return settingsText;
+			string normalized = settingsText.Replace("\r\n", "\n").Replace('\r', '\n');
+			var lines = normalized.Split('\n');
+			int section = -1;
+			for (int i = 0; i < lines.Length; i++) if (lines[i].Trim() == "m_AlwaysIncludedShaders:") { section = i; break; }
+			if (section < 0) return settingsText;
+			int end = lines.Length;
+			for (int i = section + 1; i < lines.Length; i++)
+				if (lines[i].Length > 0 && !char.IsWhiteSpace(lines[i][0]) && Regex.IsMatch(lines[i], @"^[A-Za-z_][A-Za-z0-9_]*:\s*", RegexOptions.CultureInvariant)) { end = i; break; }
+			var kept = new List<string>(lines.Length);
+			for (int i = 0; i < lines.Length; i++)
+			{
+				bool remove = i > section && i < end && lines[i].IndexOf(guid, StringComparison.OrdinalIgnoreCase) >= 0;
+				if (!remove) kept.Add(lines[i]);
+			}
+			string result = string.Join("\n", kept.ToArray());
+			return settingsText.IndexOf("\r\n", StringComparison.Ordinal) >= 0 ? result.Replace("\n", "\r\n") : result;
+		}
+
+		static bool IsShaderInAlwaysIncluded(string settingsText, string guid)
+		{
+			if (string.IsNullOrEmpty(settingsText) || string.IsNullOrEmpty(guid)) return false;
+			string normalized = settingsText.Replace("\r\n", "\n").Replace('\r', '\n');
+			var lines = normalized.Split('\n');
+			int section = -1;
+			for (int i = 0; i < lines.Length; i++) if (lines[i].Trim() == "m_AlwaysIncludedShaders:") { section = i; break; }
+			if (section < 0) return false;
+			for (int i = section + 1; i < lines.Length; i++)
+			{
+				if (lines[i].Length > 0 && !char.IsWhiteSpace(lines[i][0]) && Regex.IsMatch(lines[i], @"^[A-Za-z_][A-Za-z0-9_]*:\s*", RegexOptions.CultureInvariant)) break;
+				if (lines[i].IndexOf(guid, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+			}
+			return false;
+		}
+
+		static void RemoveShaderFromAlwaysIncluded(FixContext c, string guid, string shaderName)
+		{
+			const string settingsPath = "ProjectSettings/GraphicsSettings.asset";
+			string full = AssetPathUtility.ToAbsolutePath(settingsPath);
+			if (!File.Exists(full)) throw new InvalidOperationException("GraphicsSettings.asset is unavailable.");
+			string text = File.ReadAllText(full);
+			if (!IsShaderInAlwaysIncluded(text, guid)) throw new InvalidOperationException("Shader GUID is no longer in Always Included.");
+			if (HasAnyProjectReferenceOtherThanAlwaysIncluded(guid, shaderName, c.AssetPath, settingsPath))
+				throw new InvalidOperationException("A project asset/source reference was found outside Always Included.");
+			string revised = RemoveAlwaysIncludedGuidLine(text, guid);
+			if (string.Equals(revised, text, StringComparison.Ordinal)) throw new InvalidOperationException("Could not isolate the Always Included entry.");
+			if (c.TryBackupExtra == null || !c.TryBackupExtra(settingsPath)) throw new InvalidOperationException("Could not back up GraphicsSettings.asset.");
+			File.WriteAllText(full, revised, new UTF8Encoding(false));
+			c.NeedsReimport = true;
+		}
+
+		static bool HasAnyProjectReferenceOtherThanAlwaysIncluded(string guid, string shaderName, string shaderPath, string graphicsSettingsPath)
+		{
+			try
+			{
+				var paths = new List<string>(AssetDatabase.GetAllAssetPaths());
+				if (!paths.Contains(graphicsSettingsPath)) paths.Add(graphicsSettingsPath);
+				for (int i = 0; i < paths.Count; i++)
+				{
+					string path = paths[i];
+					if (string.Equals(path, shaderPath, StringComparison.OrdinalIgnoreCase)) continue;
+					string ext = Path.GetExtension(path).ToLowerInvariant();
+					if (!(ext == ".mat" || ext == ".prefab" || ext == ".unity" || ext == ".asset" || ext == ".shader"
+						|| ext == ".shadergraph" || ext == ".shadervariants" || ext == ".cs" || ext == ".hlsl" || ext == ".cginc"
+						|| ext == ".compute" || ext == ".json" || ext == ".xml" || ext == ".txt" || string.Equals(path, graphicsSettingsPath, StringComparison.Ordinal))) continue;
+					string full = AssetPathUtility.ToAbsolutePath(path);
+					if (!File.Exists(full)) continue;
+					string contents;
+					try { contents = File.ReadAllText(full); } catch { return true; }
+					if (string.Equals(path, graphicsSettingsPath, StringComparison.Ordinal)) contents = RemoveAlwaysIncludedGuidLine(contents, guid);
+					if ((!string.IsNullOrEmpty(guid) && contents.IndexOf(guid, StringComparison.OrdinalIgnoreCase) >= 0)
+						|| (!string.IsNullOrEmpty(shaderName) && contents.IndexOf(shaderName, StringComparison.Ordinal) >= 0)) return true;
+				}
+				return false;
+			}
+			catch { return true; }
+		}
+
+		static bool VerifyShaderRemovedFromAlwaysIncluded(FixContext c, string guid)
+		{
+			try
+			{
+				string full = AssetPathUtility.ToAbsolutePath("ProjectSettings/GraphicsSettings.asset");
+				return File.Exists(full) && !IsShaderInAlwaysIncluded(File.ReadAllText(full), guid);
+			}
+			catch { return false; }
+		}
+
 	}
 }

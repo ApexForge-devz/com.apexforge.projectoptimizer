@@ -19,3 +19,8 @@ Add the package through Unity Package Manager as a local package, Git package, o
 Package Manager offers an optional **Script Analysis Example** sample. It is intentionally small and contains a diagnostic script pattern for demonstration.
 
 See the [rule audit and overlap decisions](Documentation/Engineering/RuleAudit/README.md) for current rule behavior and verification boundaries, and the [Editor test instructions](Tests/Editor/README.md) for running package tests.
+
+Rule catalog migrations and the current ID mapping are documented in `Documentation/Engineering/RuleAudit/ProjectOptimizer_Rule_ID_Migration.csv`.
+
+
+**Rule IDs:** All canonical rule IDs use exactly three numeric suffix digits. PAS runs `PAS001`–`PAS028`, PAA runs `PAA001`–`PAA005`, and PAP runs `PAP001`–`PAP002`. Saved settings and baselines are migrated according to their recorded rule-ID schema version.

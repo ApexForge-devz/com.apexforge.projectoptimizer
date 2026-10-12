@@ -12,7 +12,6 @@ namespace ApexForge.ProjectOptimizer.Tests
     /// These tests deliberately call analyzer-owned helpers through reflection so no production
     /// helper needs to become public solely for a test assembly.
     /// </summary>
-    [NonParallelizable]
     public sealed class FixKindAuditSession06Tests
     {
         const BindingFlags StaticNonPublic = BindingFlags.Static | BindingFlags.NonPublic;

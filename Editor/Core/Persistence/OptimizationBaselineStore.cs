@@ -23,7 +23,8 @@ namespace ApexForge.ProjectOptimizer
 	[Serializable]
 	public sealed class OptimizationBaseline
 	{
-		public int Version = 2;
+		public int Version = 3;
+		public int RuleIdSchemaVersion;
 		public string ToolSchema;
 		public string UnityVersion;
 		public long TimestampTicks;
@@ -82,7 +83,8 @@ namespace ApexForge.ProjectOptimizer
 	/// </summary>
 	public static class OptimizationBaselineStore
 	{
-		const int k_Version = 2;
+		const int k_PreviousVersion = 2;
+		const int k_Version = 3;
 		static readonly string k_Path = ProjectOptimizerConstants.OptimizationBaselinePath;
 
 		public static bool Exists => File.Exists(k_Path);
@@ -94,7 +96,15 @@ namespace ApexForge.ProjectOptimizer
 			{
 				if (!File.Exists(k_Path)) return null;
 				var baseline = JsonUtility.FromJson<OptimizationBaseline>(File.ReadAllText(k_Path));
-				return baseline != null && baseline.Version == k_Version ? baseline : null;
+				if (baseline == null || (baseline.Version != k_PreviousVersion && baseline.Version != k_Version)) return null;
+
+				if (baseline.Version != k_Version || baseline.RuleIdSchemaVersion < RuleIdMigration.CurrentSchemaVersion)
+				{
+					RuleIdMigration.MigrateBaseline(baseline);
+					if (!Save(baseline))
+						Debug.LogWarning(ProjectOptimizerConstants.LogPrefix + " Migrated baseline IDs in memory, but could not persist the migrated baseline.");
+				}
+				return baseline;
 			}
 			catch (Exception e)
 			{
@@ -110,6 +120,7 @@ namespace ApexForge.ProjectOptimizer
 			var baseline = new OptimizationBaseline
 			{
 				Version = k_Version,
+				RuleIdSchemaVersion = RuleIdMigration.CurrentSchemaVersion,
 				ToolSchema = OptimizerVersion.Schema.ToString(CultureInfo.InvariantCulture),
 				UnityVersion = Application.unityVersion,
 				TimestampTicks = result.ScanTime.Ticks,
@@ -162,6 +173,8 @@ namespace ApexForge.ProjectOptimizer
 		public static bool Save(OptimizationBaseline baseline)
 		{
 			if (baseline == null || !baseline.Complete) return false;
+			baseline.Version = k_Version;
+			baseline.RuleIdSchemaVersion = RuleIdMigration.CurrentSchemaVersion;
 			try
 			{
 				if (!CacheFileUtility.EnsureCacheFolder()) return false;

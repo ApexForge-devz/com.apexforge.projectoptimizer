@@ -209,7 +209,7 @@ namespace ApexForge.ProjectOptimizer.Tests
                 FrameSamples = 1
             };
             Assert.AreEqual(EvidenceState.InsufficientSamples, RuntimeEvidenceStore.EvaluateState(snapshot, out _));
-            string source = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Editor/Core/Profiling/RuntimeEvidenceStore.cs"));
+            string source = ReadPackageSource("Editor/Core/Profiling/RuntimeEvidenceStore.cs");
             StringAssert.Contains("summary.result", source);
             StringAssert.Contains("summary.evidenceQuality", source);
             StringAssert.Contains("CaptureCharacteristics", source);
@@ -231,15 +231,13 @@ namespace ApexForge.ProjectOptimizer.Tests
         {
             var expected = new Dictionary<string, string>
             {
-                { "PRJ077", "PRJ014" },
-                { "PRJ078", "PRJ015" },
-                { "PRJ081", "PRJ063" },
-                { "PAS0031", "PRJ031" },
-                { "PAS1007", "PRJ008" },
-                { "VID007", "VID001" }
+                { "PRJ077", "PRJ013" },
+                { "PRJ078", "PRJ014" },
+                { "PRJ081", "PRJ059" },
+                { "PAS0031", "PRJ030" }
             };
 
-            foreach (string preservedRule in new[] { "PAS0006", "PAS0021", "VID006" })
+            foreach (string preservedRule in new[] { "PAS004", "PAS011", "VID006" })
                 Assert.IsNotNull(FindRule(preservedRule), preservedRule + " is unrelated to this cleanup and must remain registered.");
 
             foreach (var pair in expected)
@@ -250,6 +248,14 @@ namespace ApexForge.ProjectOptimizer.Tests
                 Assert.AreEqual(pair.Value, RuleCatalog.Get(pair.Key)?.Id);
                 Assert.IsFalse(RuleCatalog.All.Any(rule => rule.Id == pair.Key), pair.Key + " must not appear as a duplicate active rule");
             }
+
+            // These two former aliases are reused as active IDs; schema migration disambiguates old data.
+            Assert.IsNotNull(FindRule("PAS027"), "Current PAS027 is the mobile URP MSAA rule.");
+            Assert.IsFalse(RuleCatalog.IsAlias("PAS027"));
+            Assert.IsNotNull(FindRule("VID007"), "Current VID007 is the WebGL VideoClip compatibility rule.");
+            Assert.IsFalse(RuleCatalog.IsAlias("VID007"));
+            Assert.AreEqual("PRJ008", RuleIdMigration.MapFromPreviousSchema("PAS1007"));
+            Assert.AreEqual("VID001", RuleIdMigration.MapFromPreviousSchema("VID007"));
         }
 
         [Test]
@@ -269,44 +275,43 @@ namespace ApexForge.ProjectOptimizer.Tests
             typeof(OptimizerSettings).GetMethod("RebuildRuntimeIndexes", BindingFlags.Instance | BindingFlags.NonPublic)
                 .Invoke(settings, null);
 
-            Assert.IsFalse(settings.IsRuleEnabled("PRJ014"), "Old PRJ077 disablement must apply to canonical PRJ014.");
+            Assert.IsFalse(settings.IsRuleEnabled("PRJ013"), "Old PRJ077 disablement must apply to canonical PRJ013.");
             Assert.IsFalse(settings.IsRuleEnabled("PRJ077"), "The retired ID itself must resolve the same enabled state.");
-            settings.SetRuleEnabled("PRJ014", true);
-            Assert.IsTrue(settings.IsRuleEnabled("PRJ014"));
+            settings.SetRuleEnabled("PRJ013", true);
+            Assert.IsTrue(settings.IsRuleEnabled("PRJ013"));
             Assert.IsFalse(settings.disabledRules.Contains("PRJ077"), "Re-enabling canonical rule should remove its historical alias setting.");
 
-            Assert.AreEqual(IssueSeverity.Critical, settings.SeverityFor(FindRule("PRJ015")), "Legacy PRJ078 severity override must apply to PRJ015.");
-            settings.SetSeverityOverride("PRJ015", IssueSeverity.Warning);
-            Assert.AreEqual(IssueSeverity.Warning, settings.SeverityFor(FindRule("PRJ015")));
+            Assert.AreEqual(IssueSeverity.Critical, settings.SeverityFor(FindRule("PRJ014")), "Legacy PRJ078 severity override must apply to PRJ014.");
+            settings.SetSeverityOverride("PRJ014", IssueSeverity.Warning);
+            Assert.AreEqual(IssueSeverity.Warning, settings.SeverityFor(FindRule("PRJ014")));
             Assert.IsFalse(settings.severityOverrideIds.Contains("PRJ078"), "New severity writes should be canonical.");
 
-            Assert.IsTrue(settings.IsSuppressed("PRJ063", "Assets/LegacySuppression.asset"));
-            Assert.AreEqual("legacy suppression", settings.SuppressionReason("PRJ063", "Assets/LegacySuppression.asset"));
-            Assert.IsTrue(settings.Unsuppress("PRJ063", "Assets/LegacySuppression.asset"));
-            Assert.IsFalse(settings.IsSuppressed("PRJ063", "Assets/LegacySuppression.asset"));
+            Assert.IsTrue(settings.IsSuppressed("PRJ059", "Assets/LegacySuppression.asset"));
+            Assert.AreEqual("legacy suppression", settings.SuppressionReason("PRJ059", "Assets/LegacySuppression.asset"));
+            Assert.IsTrue(settings.Unsuppress("PRJ059", "Assets/LegacySuppression.asset"));
+            Assert.IsFalse(settings.IsSuppressed("PRJ059", "Assets/LegacySuppression.asset"));
             Assert.IsTrue(settings.Suppress("PRJ077", "Assets/NewCanonicalSuppression.asset", "canonical write"));
-            Assert.AreEqual("PRJ014", settings.suppressions[settings.suppressions.Count - 1].RuleId,
+            Assert.AreEqual("PRJ013", settings.suppressions[settings.suppressions.Count - 1].RuleId,
                 "New suppressions requested through a legacy ID must be persisted against the canonical rule.");
         }
 
         [Test]
         public void RuleCatalogSignatureIncludesLegacyAliasMappings()
         {
-            var canonical = new List<RuleDef> { FindRule("PRJ014") };
+            var canonical = new List<RuleDef> { FindRule("PRJ013") };
             string withAlias = EvidenceContract.ComputeRuleCatalogSignature(canonical,
-                new Dictionary<string, string> { { "PRJ077", "PRJ014" } });
+                new Dictionary<string, string> { { "PRJ077", "PRJ013" } });
             string withoutAlias = EvidenceContract.ComputeRuleCatalogSignature(canonical,
-                new Dictionary<string, string> { { "PRJ078", "PRJ014" } });
+                new Dictionary<string, string> { { "PRJ078", "PRJ013" } });
             Assert.AreNotEqual(withAlias, withoutAlias, "Changing legacy-ID resolution must stale historical scan snapshots.");
         }
 
         [Test]
         public void WorkloadDependentRulesRemainReviewOnlyUnlessUserPreferenceTargetsAnotherPolicy()
         {
-            // PRJ014/PRJ015 have authoritative Verified target-state preferences inherited from
-            // PRJ077/PRJ078. They remain Review in current source until those safe automatic paths
-            // have the required production detector/evidence and verifier contracts.
-            string[] reviewOnly = { "PRJ063", "PRE004", "MDL013", "ANI001", "UNU003", "AUD008", "AUD010", "PRJ068" };
+            // PRJ013/PRJ014 follow the approved collision/sensor policies; PRJ064 is Verified because
+            // its detector is gated to an effective Dedicated Server context and verifies the owner it changes.
+            string[] reviewOnly = { "PRJ059", "MDL013", "ANI001", "UNU003" };
             foreach (string id in reviewOnly)
             {
                 var rule = FindRule(id);
@@ -316,12 +321,25 @@ namespace ApexForge.ProjectOptimizer.Tests
         }
 
         [Test]
+        public void ApprovedSessionRulesAreRegisteredWithVerifiedFixKind()
+        {
+            // Sessions 03 and 08 approved these rules for automatic fixes and supplied guarded action paths.
+            string[] verifiedIds = { "PRE004", "AUD008", "AUD010" };
+            foreach (string id in verifiedIds)
+            {
+                var rule = FindRule(id);
+                Assert.IsNotNull(rule, id + " must remain registered.");
+                Assert.AreEqual(FixKind.Verified, rule.FixKind, id + " must use the approved Verified catalog policy.");
+            }
+        }
+
+        [Test]
         public void MipmapStreamingFixTargetsAndVerifiesTheReportedQualityLevels()
         {
-            string supplement = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Editor/Analyzers/ProjectAuditorSupplementAnalyzer.cs"));
-            string settings = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Editor/Analyzers/ProjectSettingsAnalyzer.cs"));
-            string bootstrap = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Editor/Core/Analysis/RuleBootstrap.cs"));
-            string helper = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Editor/Core/Fixes/MipmapStreamingFixUtility.cs"));
+            string supplement = ReadPackageSource("Editor/Analyzers/ProjectAuditorSupplementAnalyzer.cs");
+            string settings = ReadPackageSource("Editor/Analyzers/ProjectSettingsAnalyzer.cs");
+            string bootstrap = ReadPackageSource("Editor/Core/Analysis/RuleBootstrap.cs");
+            string helper = ReadPackageSource("Editor/Core/Fixes/MipmapStreamingFixUtility.cs");
 
             StringAssert.Contains("MipmapStreamingFixUtility.EnableForTargetLevels(targetPlatform, expectedIndices, expectedNames)", settings,
                 "The canonical PRJ008 action must target the quality levels captured by the finding.");
@@ -333,9 +351,9 @@ namespace ApexForge.ProjectOptimizer.Tests
             StringAssert.Contains("string.Equals(currentName, expectedNames[i], StringComparison.Ordinal)", helper);
             StringAssert.Contains("ApplyModifiedProperties()", helper);
             StringAssert.Contains("EditorUtility.SetDirty(qualityObject)", helper);
-            StringAssert.Contains("RuleCatalog.RegisterAlias(\"PAS1007\", \"PRJ008\")", bootstrap);
-            StringAssert.DoesNotContain("Rules.Register(id: \"PAS1007\"", supplement);
-            StringAssert.DoesNotContain("AddIssue(\"PAS1007\"", supplement);
+            StringAssert.DoesNotContain("RuleCatalog.RegisterAlias(\"PAS027\"", bootstrap);
+            StringAssert.DoesNotContain("Rules.Register(id: \"PAS027\"", supplement);
+            StringAssert.DoesNotContain("AddIssue(\"PAS027\"", supplement);
             StringAssert.DoesNotContain("AnalyzeMipmapStreaming", supplement);
             StringAssert.DoesNotContain("QualitySettings.streamingMipmapsActive = true", settings,
                 "Deferred fixes must not write whichever Quality Level happens to be active at fix time.");
@@ -344,18 +362,19 @@ namespace ApexForge.ProjectOptimizer.Tests
         [Test]
         public void PhaseTwoOverlappingFindingsAreConsolidatedWithoutRemovingSpecificCoverage()
         {
-            string video = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Editor/Analyzers/VideoAnalyzer.cs"));
-            string shader = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Editor/Analyzers/MaterialShaderAnalyzer.cs"));
-            string animation = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Editor/Analyzers/AnimationAnalyzer.cs"));
-            string sharedModel = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Editor/Core/Analysis/ModelAnalysisShared.cs"));
-            string projectSettings = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Editor/Analyzers/ProjectSettingsAnalyzer.cs"));
-            string prefab = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Editor/Analyzers/PrefabSceneAnalyzer.cs"));
-            string audio = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Editor/Analyzers/AudioAnalyzer.cs"));
-            string texture = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Editor/Analyzers/TextureAnalyzer.cs"));
-            string supplement = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Editor/Analyzers/ProjectAuditorSupplementAnalyzer.cs"));
+            string video = ReadPackageSource("Editor/Analyzers/VideoAnalyzer.cs");
+            string shader = ReadPackageSource("Editor/Analyzers/MaterialShaderAnalyzer.cs");
+            string animation = ReadPackageSource("Editor/Analyzers/AnimationAnalyzer.cs");
+            string sharedModel = ReadPackageSource("Editor/Core/Analysis/ModelAnalysisShared.cs");
+            string projectSettings = ReadPackageSource("Editor/Analyzers/ProjectSettingsAnalyzer.cs");
+            string prefab = ReadPackageSource("Editor/Analyzers/PrefabSceneAnalyzer.cs");
+            string audio = ReadPackageSource("Editor/Analyzers/AudioAnalyzer.cs");
+            string texture = ReadPackageSource("Editor/Analyzers/TextureAnalyzer.cs");
+            string supplement = ReadPackageSource("Editor/Analyzers/ProjectAuditorSupplementAnalyzer.cs");
 
-            StringAssert.DoesNotContain("Rules.Register(id: \"VID007\"", video);
-            StringAssert.DoesNotContain("AddIssue(\"VID007\"", video);
+            StringAssert.Contains("Rules.Register(id: \"VID007\", title: \"VideoClip is unsupported on WebGL\"", video);
+            StringAssert.Contains("entry.AddIssue(\"VID007\"", video);
+            StringAssert.Contains("ActionId = \"VID001_SpatialQuality_\"", video);
             StringAssert.Contains("resolutionIssue.Options.Add(option)", video);
             StringAssert.DoesNotContain("entry.AddIssue(\"SHD011\"", shader);
             StringAssert.Contains("mdl015OwnsSkinnedModelOverlap", animation);
@@ -379,13 +398,13 @@ namespace ApexForge.ProjectOptimizer.Tests
         [Test]
         public void PhaseThreeGroupedInsightsPreserveSeparateMetricsAndRulePolicy()
         {
-            string analysis = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Editor/Core/Analysis/Analysis.cs"));
-            string build = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Editor/Analyzers/ProjectAuditorSupplementAnalyzer.cs"));
-            string fonts = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Editor/Analyzers/FontAnalyzer.cs"));
-            string tmp = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Editor/Analyzers/TextMeshProAnalyzer.cs"));
-            string shader = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Editor/Analyzers/MaterialShaderAnalyzer.cs"));
-            string duplicate = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Editor/Analyzers/DuplicateAnalyzer.cs"));
-            string animation = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Editor/Analyzers/AnimationAnalyzer.cs"));
+            string analysis = ReadPackageSource("Editor/Core/Analysis/Analysis.cs");
+            string build = ReadPackageSource("Editor/Analyzers/ProjectAuditorSupplementAnalyzer.cs");
+            string fonts = ReadPackageSource("Editor/Analyzers/FontAnalyzer.cs");
+            string tmp = ReadPackageSource("Editor/Analyzers/TextMeshProAnalyzer.cs");
+            string shader = ReadPackageSource("Editor/Analyzers/MaterialShaderAnalyzer.cs");
+            string duplicate = ReadPackageSource("Editor/Analyzers/DuplicateAnalyzer.cs");
+            string animation = ReadPackageSource("Editor/Analyzers/AnimationAnalyzer.cs");
 
             StringAssert.Contains("GroupedFindingPolicy.AddGroupedIssue(entry, metrics", build);
             StringAssert.Contains("new GroupedFindingMetric(\"BLD001\"", build);
@@ -434,7 +453,7 @@ namespace ApexForge.ProjectOptimizer.Tests
         [Test]
         public void MDL013UsesExactMappingVerifierContract()
         {
-            string source = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Editor/Analyzers/ModelAnalyzer.cs"));
+            string source = ReadPackageSource("Editor/Analyzers/ModelAnalyzer.cs");
             StringAssert.Contains("SourceAssetIdentifier", source);
             StringAssert.Contains("GetExternalObjectMap", source);
             StringAssert.Contains("VerifyMaterialMappingExact", source);
@@ -482,6 +501,15 @@ namespace ApexForge.ProjectOptimizer.Tests
         {
             foreach (var rule in RuleCatalog.All) if (rule != null && string.Equals(rule.Id, id, StringComparison.OrdinalIgnoreCase)) return rule;
             return null;
+        }
+
+        static string ReadPackageSource(string relativePath)
+        {
+            string root = ProjectOptimizerConstants.PackageRoot;
+            Assert.IsFalse(string.IsNullOrEmpty(root), "The ProjectOptimizer package root could not be resolved.");
+            string path = Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar));
+            Assert.IsTrue(File.Exists(path), "Package source file is missing: " + path);
+            return File.ReadAllText(path);
         }
 
         static string ReadOptional(string path) => File.Exists(path) ? File.ReadAllText(path) : null;

@@ -1,4 +1,37 @@
+## 2026-10-11 — Approved high-potential AutoFixes (1.1.7)
+- Promoted PRJ009, PRJ030, PRJ032, PRJ050, and PRJ064 to Verified with direct actions, stale-state preflight and deterministic postcondition checks.
+- PRJ030 now explicitly orders Android APIs as Vulkan, OpenGLES3 fallback, then other unique configured APIs; it detects duplicates/non-canonical order, turns off automatic API selection and verifies the resulting order.
+- PRJ032 changes Android Blit Type from Always to Auto only when automatic API selection or a configured non-Vulkan API means the setting can apply; the action rechecks the scanned API configuration and refuses stale/no-op mutations.
+- PRJ050 now documents and mutates URP's exact `m_UseFastSRGBLinearConversion` property, with backup and read-back verification; this is distinct from Android SRGB Write Mode.
+- SCR006 defaults to Verified only for the common safe rewrite: an exactly empty, unannotated private OnGUI callback in a single unambiguous MonoBehaviour class. Unsupported instances are downgraded to None and have no action/verifier.
+- SCR016 and SCR025 were explicitly excluded and their analyzer behavior remains unchanged.
+- Added regression tests for catalog contracts, exact Quality Level mutation/selection restoration and stale-state rejection, action/verifier wiring, API-order preservation/deduplication, PRJ032 applicability/stale-state preflight, PRJ064 profile-owner backup/rollback, and SCR006 rewrite/downgrade safety. Updated the master FixKind audit CSVs and source references.
+- Extended FixEngine atomic rollback so ProjectSettings-phase failures also restore additional assets captured through `FixContext.RequireBackup`, protecting profile-local Dedicated Server settings.
+- Static checks passed; Unity compilation, EditMode execution, and Android build/device validation remain pending.
+
+## 2026-10-11 — Merge approved FixKind analyzer sessions (1.1.6)
+- Integrated analyzer-owned source changes and session-specific regression tests from sessions 01 and 03–11; Session 02 was intentionally skipped and its 30 rules remain unreviewed.
+- Merged all three rule audit CSVs by canonical rule ID, reconciled current FixKind values against active C# registrations, and added a complete merged FixKind assessment and source-reconciliation table.
+- Resolved the OG029 overlap-label collision by preserving the texture group at OG029 and assigning OG033 to the distinct Project Settings relationship; expanded OG028 to reflect its updated membership.
+- Reconciled the shared regression assertions for PRE004, AUD008 and AUD010, which are now Verified in their session-owned analyzer registrations.
+- Retained shared-infrastructure proposals that require broader integration under the Rule Audit Session_Merge notes instead of applying unowned changes blindly.
+- Source/static package consistency checks passed. Unity compilation and the full EditMode suite remain required in the Unity Editor.
+
+## 2026-10-11 — Flatten PAS/PAA/PAP rule IDs (1.1.5)
+- Flattened PAS, PAA and PAP into one contiguous sequence per prefix; all canonical rule IDs now use exactly three numeric suffix digits.
+- PAS runs `PAS001`–`PAS028`; PAA runs `PAA001`–`PAA005`; PAP runs `PAP001`–`PAP002`.
+- Added schema 1 → 2 migration so saved settings/baselines distinguish the active `PAS027` URP MSAA rule from schema-0 `PAS1007`, which migrates to `PRJ008`.
+- Extended the migration ledger with source/target schema versions, updated audit rows and overlap references, and strengthened contiguous-numbering/migration regression tests.
+- Unity compilation and EditMode verification remain pending for this package revision.
+
 # Change Log
+
+## 2026-10-11 — Canonical rule ID normalization (1.1.4)
+- Earlier version compacted numbering within the then-separate PAS and PAA ranges; version 1.1.5 removes those separate ranges.
+- Added an explicit migration ledger for 328 prior catalog IDs plus 21 unassigned numbers reclaimed by compaction; 322 canonical RuleDefs now use compact IDs and four non-conflicting runtime aliases remain.
+- Added one-time migrations for saved rule preferences and baselines. Unknown old values that collide with reclaimed numbering holes are discarded instead of being applied to a different rule. Old scan snapshots are invalidated and require a fresh scan.
+- Schema 0 historically reused `PAS1007` and `VID007` as aliases to `PRJ008` and `VID001`; schema 1 assigns `PAS1007` to URP MSAA and `VID007` to WebGL compatibility. Version-aware migration preserves that distinction.
+- Updated the master audit CSVs, overlap matrix, source references and regression tests. Unity compilation and EditMode test execution remain separate verification checkpoints.
 
 ## 2026-10-10 — Rule catalog and finding deduplication
 - Removed obsolete source placeholders for retired registrations and shortened comments to retain only active compatibility behavior.

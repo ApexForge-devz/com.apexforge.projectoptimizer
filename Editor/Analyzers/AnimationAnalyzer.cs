@@ -1,4 +1,3 @@
-using System.Reflection;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -21,9 +20,9 @@ namespace ApexForge.ProjectOptimizer
 		{
 			Rules.Register(id: "ANI001", title: "Model animation compression is not optimal", category: AssetCategory.Animation,
 							why: "Generic and Humanoid model imports should use Optimal animation compression, while Legacy imports should use Keyframe Reduction and Compression. Using a supported compressed mode reduces redundant keyframes and animation data size; Optimal also allows Unity to choose a compact runtime representation where supported.",
-							fix: "Set animation compression to Optimal for Generic or Humanoid imports, and Keyframe Reduction and Compression for Legacy imports. Review unusually precision-sensitive clips separately and adjust compression settings only when necessary.",
+							fix: "Automatically set Generic/Humanoid animation compression to Optimal and Legacy compression to Keyframe Reduction and Compression. The importer setting is verified after reimport.",
 							severity: IssueSeverity.Warning,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Low,
 							backupRequired: true
@@ -31,9 +30,9 @@ namespace ApexForge.ProjectOptimizer
 
 			Rules.Register(id: "ANI002", title: "Constant scale curves kept on import", category: AssetCategory.Animation,
 							why: "Model import can generate scale curves that remain identical to the object's initial scale. Unity can remove those unnecessary curves; this is specifically intended to reduce redundant animation data created by FBX transform conversion.",
-							fix: "Enable Remove Constant Scale Curves on the model's Animation tab.",
+							fix: "Enable Remove Constant Scale Curves when constant imported scale curves are observed, and verify the importer setting after reimport.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Unspecified,
 							backupRequired: false
@@ -41,9 +40,9 @@ namespace ApexForge.ProjectOptimizer
 
 			Rules.Register(id: "ANI003", title: "Animation resampling is disabled for rotation curves", category: AssetCategory.Animation,
 							why: "Unity normally resamples imported rotations to quaternions. Keeping the original curves is mainly for cases where the resampled result has interpolation or fidelity problems, so disabling resampling should be a deliberate choice rather than a default optimization.",
-							fix: "Enable Resample Curves and compare the animation against the authored source; keep it disabled only when the original rotation interpolation is actually required.",
+							fix: "Enable Resample Curves when Euler rotation curves are observed and verify the importer setting after reimport; revert assets whose resulting rotation quality is unacceptable.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Medium,
 							backupRequired: true
@@ -73,10 +72,10 @@ namespace ApexForge.ProjectOptimizer
 							why: "A genuinely flat float curve does not need dozens of identical keys. When all segments are provably constant, the curve can be represented by its first and last values without changing the sampled result.",
 							fix: "Collapse provably constant float curves to two flat keyframes.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Medium,
-							backupRequired: false
+							backupRequired: true
 							);
 
 			Rules.Register(id: "ANI007", title: "Complex Legacy animation clip", category: AssetCategory.Animation,
@@ -101,29 +100,29 @@ namespace ApexForge.ProjectOptimizer
 
 			Rules.Register(id: "ANI009", title: "Keys that do not change the animation", category: AssetCategory.Animation,
 							why: "Some authored or exported keys are redundant: removing the key can leave the curve within the configured error tolerance. This rule tests the original curve against a candidate curve over the affected span, including the removed key's exact time.",
-							fix: "The fix removes only keys that remain within the configured tolerance and preserves the curve's wrap modes. The reducer verifies the rebuilt curve stays within the configured error tolerance.",
+							fix: "The automatic reducer removes only keys that remain within the configured tolerance, preserves curve wrap modes, backs up the clip, and verifies the rebuilt key count after saving.",
 							severity: IssueSeverity.Warning,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.HighConfidence,
 							risk: FixRisk.Medium,
-							backupRequired: false
+							backupRequired: true
 							);
 
 			Rules.Register(id: "ANI010", title: "Model GameObjects are not optimized for animation", category: AssetCategory.Animation,
 							why: "Optimize Game Objects can flatten transform-only parts of an imported character hierarchy, reducing Animator CPU work. It can also break scripts or systems that expect those transforms to exist as GameObjects.",
-							fix: "Enable Optimize Game Objects for suitable Generic/Humanoid imports only after identifying and exposing every transform path required by scripts, constraints, attachments or other runtime systems.",
+							fix: "Enable Optimize Game Objects for eligible Generic/Humanoid imports; expose required transform paths or revert the setting on exceptional assets.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.Heuristic,
-							risk: FixRisk.Unspecified,
-							backupRequired: false
+							risk: FixRisk.Medium,
+							backupRequired: true
 							);
 
 			Rules.Register(id: "ANI011", title: "Humanoid animation oversampling is high", category: AssetCategory.Animation,
 							why: "Humanoid retargeting already resamples animation during import. Oversampling at 4x or 8x can substantially increase the number of sampled keys and the resulting animation data size; Unity documents 4x/8x as options for very fast motions and explicitly cautions that 8x can produce a large output file.",
-							fix: "Use X1 by default. Keep X2/X4 only where interpolation quality requires it, and reserve X8 for genuinely fast humanoid motion that benefits from the higher sampling rate.",
+							fix: "Set Humanoid Oversampling to X1 by default; restore higher sampling on any asset where motion quality requires it.",
 							severity: IssueSeverity.Warning,
-							fixKind: FixKind.Review,
+							fixKind: FixKind.Verified,
 							confidence: OptimizationConfidence.Heuristic,
 							risk: FixRisk.Unspecified,
 							backupRequired: false
@@ -447,7 +446,9 @@ namespace ApexForge.ProjectOptimizer
 
 		static void CollapseSafeConstantCurves(AnimationClip target, FixContext context)
 		{
-			if (target == null) return;
+			if (target == null) throw new InvalidOperationException("AnimationClip could not be loaded for constant-curve reduction.");
+			context.EnsureWritable();
+			context.RequireBackup(context.AssetPath);
 			var bindings = GetSafeConstantCurveBindings(target);
 			var batchBindings = new List<EditorCurveBinding>(bindings.Count);
 			var batchCurves = new List<AnimationCurve>(bindings.Count);
@@ -565,17 +566,9 @@ namespace ApexForge.ProjectOptimizer
 					if (needsCompression)
 					{
 						entry.AddIssue("ANI001", facts.animationCompression.ToString(), recommended.ToString(), 0,
-							c =>
-							{
-								var target = (ModelImporter)c.Importer;
-								target.animationCompression = recommended;
-								c.NeedsReimport = true;
-							},
-							verify: c =>
-							{
-								var mi = AssetImporter.GetAtPath(c.AssetPath) as ModelImporter;
-								return mi != null && mi.animationCompression == recommended;
-							});
+							c => ApplyModelImporterChange(c, mi => mi.animationCompression = recommended),
+							"Use the deterministic compression target for this importer animation type; verify the setting after reimport.",
+							verify: c => VerifyModelImporterSetting(c, mi => mi.animationCompression == recommended, requireClips: true));
 					}
 			}
 
@@ -586,10 +579,10 @@ namespace ApexForge.ProjectOptimizer
 				if (!facts.removeConstantScaleCurves && constantScaleCurves > 0)
 				{
 					entry.AddIssue("ANI002", "Off / " + constantScaleCurves + " constant scale curve(s)", "On", 0,
-						c => { ((ModelImporter)c.Importer).removeConstantScaleCurves = true; c.NeedsReimport = true; },
+						c => ApplyModelImporterChange(c, mi => mi.removeConstantScaleCurves = true),
 						"Unity documents that this option removes constant animation curves whose values match the object's initial scale. "
 						+ "This finding is emitted only when constant scale curves were actually observed in the imported clips.",
-						verify: c => (AssetImporter.GetAtPath(c.AssetPath) as ModelImporter)?.removeConstantScaleCurves == true)
+						verify: VerifyConstantScaleCurvesRemoved)
 						.Note("Import-stage path: this changes importer output on reimport. ANI006 edits constant curves already present on standalone clips; compare the post-import result before estimating savings so overlapping curve reduction is not counted twice.", "Related rules");
 				}
 
@@ -599,14 +592,8 @@ namespace ApexForge.ProjectOptimizer
 					&& facts.animationType != ModelImporterAnimationType.Human)
 				{
 					entry.AddIssue("ANI003", "Off with Euler rotation curves", "On", 0,
-						c =>
-						{
-							var mi = c.Importer as ModelImporter;
-							if (mi == null) throw new InvalidOperationException("ModelImporter unavailable.");
-							mi.resampleCurves = true;
-							c.NeedsReimport = true;
-						},
-						verify: c => (AssetImporter.GetAtPath(c.AssetPath) as ModelImporter)?.resampleCurves == true);
+						c => ApplyModelImporterChange(c, mi => mi.resampleCurves = true),
+						verify: c => VerifyModelImporterSetting(c, mi => mi.resampleCurves, requireClips: true));
 				}
 
 			using (RuleTiming.Begin("ANI005", entry.Path))
@@ -642,45 +629,24 @@ namespace ApexForge.ProjectOptimizer
 			using (RuleTiming.Begin("ANI010", entry.Path))
 				if (!mdl015OwnsSkinnedModelOverlap
 					&& !facts.optimizeGameObjects
-					&& (facts.animationType == ModelImporterAnimationType.Generic
-						|| facts.animationType == ModelImporterAnimationType.Human)
+					&& (facts.animationType == ModelImporterAnimationType.Generic || facts.animationType == ModelImporterAnimationType.Human)
 					&& facts.transformPathCount > 16
 					&& curveCount > Mathf.Max(16, ctx.Settings.animationCurveWarn / 2))
-				{
-					entry.AddIssue("ANI010", "Off / " + facts.transformPathCount + " transforms / " + curveCount + " curves",
-						"Consider On after dependency review", 0, null,
-						"Optimize Game Objects removes transform-only GameObjects and flattens the remaining hierarchy for better CPU performance. "
-						+ "The finding is limited to character imports with a non-trivial hierarchy and animation workload; it remains advisory because "
-						+ "scripts, constraints, attachments and other runtime systems may require specific transform paths.",
-						options: new List<FixOption> { new FixOption {
-							Label = "Optimize Game Objects",
-							Recommended = true,
-							Risk = FixRisk.Medium,
-							Warning = "This is a Review Fix. Inspect the target state before applying it.",
-							Apply = c => ImporterFixUtility.Model(c, mi => mi.optimizeGameObjects = true)
-						} }
-					);
-				}
+					entry.AddIssue("ANI010", "Off / " + facts.transformPathCount + " transforms / " + curveCount + " curves", "On", 0,
+						c => ApplyModelImporterChange(c, mi => mi.optimizeGameObjects = true),
+						"Enable Optimize Game Objects for non-trivial animated hierarchies. MDL015 retains ownership of skinned-model overlap; if a runtime consumer needs a stripped transform, expose it or revert this importer setting.",
+						verify: c => VerifyModelImporterSetting(c, mi => mi.optimizeGameObjects, requireClips: true));
 
 			using (RuleTiming.Begin("ANI011", entry.Path))
 				if (facts.animationType == ModelImporterAnimationType.Human
-					&& facts.humanoidOversampling != ModelImporterHumanoidOversampling.X1)
+					&& (facts.humanoidOversampling == ModelImporterHumanoidOversampling.X4
+						|| facts.humanoidOversampling == ModelImporterHumanoidOversampling.X8))
 				{
 					entry.Set("humanoidOversampling", facts.humanoidOversampling.ToString());
-					if (facts.humanoidOversampling == ModelImporterHumanoidOversampling.X4
-						|| facts.humanoidOversampling == ModelImporterHumanoidOversampling.X8)
-					{
-						entry.AddIssue("ANI011", facts.humanoidOversampling.ToString(), "X1 unless higher sampling is required", 0, null,
-							"Humanoid retargeting already resamples animation during import. Unity documents X4 and X8 as options for very fast motion and warns that X8 can lead to a large output file.",
-						options: new List<FixOption> { new FixOption {
-							Label = "Reduce Humanoid Oversampling",
-							Recommended = true,
-							Risk = FixRisk.Medium,
-							Warning = "This is a Review Fix. Inspect the target state before applying it.",
-							Apply = c => ImporterFixUtility.Model(c, mi => ReflectionUtility.SetMember(mi, "humanoidOversampling", 1))
-						} }
-					);
-					}
+					entry.AddIssue("ANI011", facts.humanoidOversampling.ToString(), "X1", 0,
+						c => ApplyModelImporterChange(c, mi => SetHumanoidOversamplingX1(mi)),
+						"Set high Humanoid oversampling to X1 by default. Verify the imported setting; restore higher sampling on an asset where motion quality requires it.",
+						verify: c => VerifyModelImporterSetting(c, mi => IsHumanoidOversamplingX1(mi), requireClips: true));
 				}
 
 			entry.Finalise();
@@ -2304,7 +2270,8 @@ namespace ApexForge.ProjectOptimizer
 
 		static void ReduceClip(AnimationClip clip, float tolerancePercent, FixContext context)
 		{
-			if (clip == null || tolerancePercent <= 0f) return;
+			if (clip == null) throw new InvalidOperationException("AnimationClip could not be loaded for key reduction.");
+			if (tolerancePercent <= 0f) throw new InvalidOperationException("A positive, configured key-reduction tolerance is required.");
 
 			if (!TryGetCachedReduction(clip, tolerancePercent, out CachedClipReduction cache))
 			{
@@ -2316,7 +2283,8 @@ namespace ApexForge.ProjectOptimizer
 				CacheReduction(clip, cache);
 			}
 
-			if (cache == null || cache.Curves == null || cache.Curves.Count == 0) return;
+			if (cache == null || cache.Curves == null || cache.Curves.Count == 0)
+				throw new InvalidOperationException("No eligible curves remained after refreshing key-reduction evidence.");
 
 			EditorCurveBinding[] current = AnimationUtility.GetCurveBindings(clip);
 			var map = new Dictionary<string, EditorCurveBinding>(current.Length, StringComparer.Ordinal);
@@ -2332,7 +2300,9 @@ namespace ApexForge.ProjectOptimizer
 				setCurves.Add(CopyCurve(item.Reduced));
 			}
 
-			if (setBindings.Count == 0) return;
+			if (setBindings.Count == 0) throw new InvalidOperationException("No eligible curve reduction remained after refreshing the evidence.");
+			context.EnsureWritable();
+			context.RequireBackup(context.AssetPath);
 			ApplyCurveBatch(clip, setBindings, setCurves);
 			context.NeedsSave = true;
 		}
@@ -2430,5 +2400,69 @@ namespace ApexForge.ProjectOptimizer
 				AnimationUtility.SetEditorCurve(clip, bindings[i], curves[i]);
 #endif
 		}
+		static void ApplyModelImporterChange(FixContext context, Action<ModelImporter> mutation)
+		{
+			if (context == null) throw new ArgumentNullException(nameof(context));
+			if (mutation == null) throw new ArgumentNullException(nameof(mutation));
+			context.EnsureWritable();
+			var importer = context.Importer as ModelImporter;
+			if (importer == null) throw new InvalidOperationException("Expected a ModelImporter for " + context.AssetPath + ".");
+			mutation(importer);
+			context.NeedsReimport = true;
+		}
+
+		static bool VerifyModelImporterSetting(FixContext context, Func<ModelImporter, bool> predicate, bool requireMeshes = false, bool requireClips = false)
+		{
+			if (context == null || predicate == null || string.IsNullOrEmpty(context.AssetPath)) return false;
+			var importer = AssetImporter.GetAtPath(context.AssetPath) as ModelImporter;
+			if (importer == null || !predicate(importer) || AssetDatabase.LoadAssetAtPath<GameObject>(context.AssetPath) == null) return false;
+			var imported = AssetDatabase.LoadAllAssetsAtPath(context.AssetPath);
+			bool foundMesh = false, foundClip = false;
+			for (int i = 0; i < imported.Length; i++)
+			{
+				if (imported[i] is Mesh) foundMesh = true;
+				if (imported[i] is AnimationClip clip && !clip.name.StartsWith("__preview__", StringComparison.OrdinalIgnoreCase)) foundClip = true;
+			}
+			return (!requireMeshes || foundMesh) && (!requireClips || foundClip);
+		}
+
+		static bool VerifySkinnedModelImporterSetting(FixContext context, Func<ModelImporter, bool> predicate)
+		{
+			if (!VerifyModelImporterSetting(context, predicate, requireMeshes: true)) return false;
+			var root = AssetDatabase.LoadAssetAtPath<GameObject>(context.AssetPath);
+			var renderers = root != null ? root.GetComponentsInChildren<SkinnedMeshRenderer>(true) : Array.Empty<SkinnedMeshRenderer>();
+			for (int i = 0; i < renderers.Length; i++) if (renderers[i] != null && renderers[i].sharedMesh != null) return true;
+			return false;
+		}
+
+		static bool VerifyConstantScaleCurvesRemoved(FixContext context)
+		{
+			if (!VerifyModelImporterSetting(context, mi => mi.removeConstantScaleCurves, requireClips: true)) return false;
+			var imported = AssetDatabase.LoadAllAssetsAtPath(context.AssetPath);
+			for (int i = 0; i < imported.Length; i++)
+			{
+				var clip = imported[i] as AnimationClip;
+				if (clip == null || clip.name.StartsWith("__preview__", StringComparison.OrdinalIgnoreCase)) continue;
+				foreach (var binding in AnimationUtility.GetCurveBindings(clip))
+				{
+					if (!binding.propertyName.StartsWith("m_LocalScale", StringComparison.Ordinal)) continue;
+					var curve = AnimationUtility.GetEditorCurve(clip, binding);
+					if (curve != null && IsConstant(curve, out float value) && MatchesImportedInitialScale(context.AssetPath, binding, value)) return false;
+				}
+			}
+			return true;
+		}
+
+		static void SetHumanoidOversamplingX1(ModelImporter importer)
+		{
+			if (importer == null) throw new ArgumentNullException(nameof(importer));
+			importer.humanoidOversampling = ModelImporterHumanoidOversampling.X1;
+		}
+
+		static bool IsHumanoidOversamplingX1(ModelImporter importer)
+		{
+			return importer != null && importer.humanoidOversampling == ModelImporterHumanoidOversampling.X1;
+		}
+
 	}
 }

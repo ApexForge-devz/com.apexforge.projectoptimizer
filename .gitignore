@@ -1,0 +1,34 @@
+# OS metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local .NET build output, if generated inside this package repository
+[Bb]in/
+[Oo]bj/
+
+# Unity-generated project output, only if created at this repository root
+/Temp/
+/Logs/
+/UserSettings/
+/MemoryCaptures/
+/Recordings/
+/Build/
+/Builds/
+
+# Test and coverage output
+/TestResults/
+/TestResult.xml
+*.trx
+/coverage/
+*.coverage
+*.coveragexml
+
+# Local logs and merge leftovers
+*.log
+*.orig
+*.rej
+*.bak
+*.swp
+*.tmp
+*.stacktrace

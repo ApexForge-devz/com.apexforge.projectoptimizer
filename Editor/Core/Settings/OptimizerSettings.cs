@@ -389,6 +389,9 @@ namespace ApexForge.ProjectOptimizer
 
 		public int largeFileWarnKb = 10240;
 
+		// 0 denotes settings written before canonical rule IDs were compacted.
+		public int ruleIdSchemaVersion;
+
 		// --- rule overrides ---------------------------------------------
 		public List<string> disabledRules = new List<string>();
 		public List<string> severityOverrideIds = new List<string>();
@@ -663,8 +666,10 @@ namespace ApexForge.ProjectOptimizer
 					var loaded = JsonUtility.FromJson<OptimizerSettings>(json);
 					if (loaded != null)
 					{
-						loaded.RebuildRuntimeIndexes();
 						Revision = Math.Max(0, loaded.revision);
+						bool migratedRuleIds = RuleIdMigration.MigrateSettings(loaded);
+						loaded.RebuildRuntimeIndexes();
+						if (migratedRuleIds) loaded.Save();
 						return loaded;
 					}
 				}
@@ -673,13 +678,14 @@ namespace ApexForge.ProjectOptimizer
 			{
 				Debug.LogWarning(ProjectOptimizerConstants.LogPrefix + $" Could not read settings: {e.Message}");
 			}
-			var defaults = new OptimizerSettings();
+			var defaults = new OptimizerSettings { ruleIdSchemaVersion = RuleIdMigration.CurrentSchemaVersion };
 			defaults.RebuildRuntimeIndexes();
 			return defaults;
 		}
 
 		public void Save()
 		{
+			ruleIdSchemaVersion = RuleIdMigration.CurrentSchemaVersion;
 			int nextRevision = Revision + 1;
 			revision = nextRevision;
 			try
