@@ -309,9 +309,9 @@ namespace ApexForge.ProjectOptimizer.Tests
         [Test]
         public void WorkloadDependentRulesRemainReviewOnlyUnlessUserPreferenceTargetsAnotherPolicy()
         {
-            // PRJ013/PRJ014 follow the approved collision/sensor policies; PRJ064 is Verified because
-            // its detector is gated to an effective Dedicated Server context and verifies the owner it changes.
-            string[] reviewOnly = { "PRJ059", "MDL013", "ANI001", "UNU003" };
+            // These remain Review-only because they can change asset/runtime compatibility or fidelity.
+            // PRJ064 is Verified because its detector is gated to an effective Dedicated Server context.
+            string[] reviewOnly = { "PRJ059", "MDL013", "MDL008", "ANI010", "ANI011", "ANI001", "UNU003" };
             foreach (string id in reviewOnly)
             {
                 var rule = FindRule(id);
@@ -330,6 +330,16 @@ namespace ApexForge.ProjectOptimizer.Tests
                 var rule = FindRule(id);
                 Assert.IsNotNull(rule, id + " must remain registered.");
                 Assert.AreEqual(FixKind.Verified, rule.FixKind, id + " must use the approved Verified catalog policy.");
+            }
+
+            // Heuristic recommendations must not be registered as Verified; the catalog confidence
+            // floor is a production safety invariant, not a test suppression to work around.
+            foreach (string id in new[] { "MDL008", "ANI010", "ANI011" })
+            {
+                var rule = FindRule(id);
+                Assert.IsNotNull(rule, id);
+                Assert.AreEqual(FixKind.Review, rule.FixKind, id + " must keep a review gate for runtime-content or fidelity uncertainty.");
+                Assert.GreaterOrEqual(rule.Confidence, RuleCatalog.MinimumForReviewFix, id + " must meet the Review confidence floor.");
             }
         }
 
