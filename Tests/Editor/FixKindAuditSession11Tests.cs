@@ -342,7 +342,7 @@ namespace ApexForge.ProjectOptimizer.Tests
             string spritePath = "Assets/" + spriteFileName;
             AssetDatabase.DeleteAsset(spritePath);
             byte[] png;
-            var texture = new Texture2D(16, 16, TextureFormat.RGBA32, false, true);
+            var texture = new Texture2D(16, 16, TextureFormat.ARGB32, false, true);
             try
             {
                 var pixels = new Color32[16 * 16];

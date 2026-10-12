@@ -2010,7 +2010,7 @@ namespace ApexForge.ProjectOptimizer
             }
             if (!seenHeader || !seenData || !seenEnd || offset != bytes.Length) return false;
             hasAlpha = colorType == 6;
-            decoded = new Texture2D(2, 2, TextureFormat.RGBA32, false, false);
+            decoded = new Texture2D(2, 2, TextureFormat.ARGB32, false, false);
             if (!ImageConversion.LoadImage(decoded, bytes, false) || decoded.width <= 0 || decoded.height <= 0)
             {
                 if (decoded != null) UnityEngine.Object.DestroyImmediate(decoded);

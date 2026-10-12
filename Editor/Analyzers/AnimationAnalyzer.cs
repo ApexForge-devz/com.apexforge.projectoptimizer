@@ -19,12 +19,13 @@ namespace ApexForge.ProjectOptimizer
 		static AnimationAnalyzer()
 		{
 			Rules.Register(id: "ANI001", title: "Model animation compression is not optimal", category: AssetCategory.Animation,
-							why: "Generic and Humanoid model imports should use Optimal animation compression, while Legacy imports should use Keyframe Reduction and Compression. Using a supported compressed mode reduces redundant keyframes and animation data size; Optimal also allows Unity to choose a compact runtime representation where supported.",
-							fix: "Automatically set Generic/Humanoid animation compression to Optimal and Legacy compression to Keyframe Reduction and Compression. The importer setting is verified after reimport.",
+							why: "Generic and Humanoid model imports should use Optimal animation compression, while Legacy imports should use Keyframe Reduction and Compression. The compression mode can change animation fidelity, so the recommendation stays review-gated.",
+							fix: "Review Optimal compression for Generic/Humanoid imports and Keyframe Reduction and Compression for Legacy imports. Compare the resulting motion before accepting the change.",
 							severity: IssueSeverity.Warning,
-							fixKind: FixKind.Verified,
+							fixKind: FixKind.Review,
 							confidence: OptimizationConfidence.HighConfidence,
-							risk: FixRisk.Low,
+							recommendationConfidence: OptimizationConfidence.Heuristic,
+							risk: FixRisk.Medium,
 							backupRequired: true
 							);
 

@@ -392,7 +392,9 @@ namespace ApexForge.ProjectOptimizer.Tests
             StringAssert.Contains("mdl015OwnsSkinnedModelOverlap", animation);
             StringAssert.Contains("GetComponentsInChildren<SkinnedMeshRenderer>(true)", sharedModel);
             StringAssert.Contains("activeBuildTarget != PlatformUtility.ToBuildTarget(settings.targetPlatform)", projectSettings);
-            StringAssert.Contains("bool developmentIntent = EditorUserBuildSettings.activeBuildTarget == PlatformUtility.ToBuildTarget(settings.targetPlatform)", projectSettings);
+            // PAS023 intentionally inspects the active target only when the selected scan target differs.
+            StringAssert.Contains("var activeNamedTarget = NamedBuildTarget.FromBuildTargetGroup(BuildPipeline.GetBuildTargetGroup(activeBuildTarget))", projectSettings);
+            StringAssert.Contains("PlayerSettings.GetIl2CppCompilerConfiguration(activeNamedTarget)", projectSettings);
             StringAssert.Contains("FilterGenericCcdBodies(facts, settings, entry.Path)", prefab);
             StringAssert.Contains("SetCollisionMode(c, isScene, CollisionDetectionMode.Discrete, continuousBodyPaths)", prefab);
             StringAssert.Contains("CountBodiesNotMode(c.AssetPath, isScene, CollisionDetectionMode.Discrete, continuousBodyPaths)", prefab);

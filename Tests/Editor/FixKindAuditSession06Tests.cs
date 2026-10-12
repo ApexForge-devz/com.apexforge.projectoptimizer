@@ -337,7 +337,7 @@ namespace ApexForge.ProjectOptimizer.Tests
             if (pixels != null)
                 for (int i = 0; i < pixels.Length; i++)
                     if (pixels[i].a != 255) { hasNonOpaquePixel = true; break; }
-            var texture = new Texture2D(width, height, hasNonOpaquePixel ? TextureFormat.RGBA32 : TextureFormat.RGB24, false, true);
+            var texture = new Texture2D(width, height, hasNonOpaquePixel ? TextureFormat.ARGB32 : TextureFormat.RGB24, false, true);
             try
             {
                 texture.SetPixels32(pixels);

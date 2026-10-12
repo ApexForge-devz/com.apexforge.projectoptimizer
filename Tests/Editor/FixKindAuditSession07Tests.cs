@@ -19,7 +19,7 @@ namespace ApexForge.ProjectOptimizer.Tests
             _ = new AnimationAnalyzer();
         }
 
-        [TestCase("ANI001", FixKind.Verified)]
+        [TestCase("ANI001", FixKind.Review)]
         [TestCase("ANI002", FixKind.Verified)]
         [TestCase("ANI003", FixKind.Verified)]
         [TestCase("ANI004", FixKind.None)]
