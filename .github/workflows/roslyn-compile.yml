@@ -1,0 +1,88 @@
+name: Unity Roslyn Compile Check
+
+on:
+  pull_request:
+    paths:
+      - "Editor/**"
+      - "Runtime/**"
+      - "Tests/Editor/**"
+      - "package.json"
+      - "**/*.asmdef"
+      - ".github/workflows/roslyn-compile.yml"
+  push:
+    branches: [main]
+    paths:
+      - "Editor/**"
+      - "Runtime/**"
+      - "Tests/Editor/**"
+      - "package.json"
+      - "**/*.asmdef"
+      - ".github/workflows/roslyn-compile.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: roslyn-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile:
+    name: ProjectOptimizer Roslyn (6000.0.75f1 candidate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout ProjectOptimizer source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Compile Editor and EditMode test assemblies
+        uses: ApexForge-devz/unity-tool-ci/.github/actions/roslyn-compile@912dfcc5f492a6a990ad3975a8072461001c7113
+        with:
+          profile: projectoptimizer
+          allow-candidate: true
+          unity-version: 6000.0.75f1
+          project-path: .
+          platforms: win osx linux
+
+      - name: Inject a deliberate C# type error
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          cat > Tests/Editor/UnityToolCIIntentionalCompileError.cs <<'CS'
+          internal static class UnityToolCIIntentionalCompileError
+          {
+              public static MissingTypeForUnityToolCI Value => null;
+          }
+          CS
+
+      - name: Confirm Roslyn failure propagates
+        if: github.event_name == 'pull_request'
+        id: negative_compile
+        continue-on-error: true
+        uses: ApexForge-devz/unity-tool-ci/.github/actions/roslyn-compile@912dfcc5f492a6a990ad3975a8072461001c7113
+        with:
+          profile: projectoptimizer
+          allow-candidate: true
+          unity-version: 6000.0.75f1
+          project-path: .
+          platforms: win
+
+      - name: Assert deliberate compiler error was rejected
+        if: always() && github.event_name == 'pull_request'
+        shell: bash
+        env:
+          NEGATIVE_OUTCOME: ${{ steps.negative_compile.outcome }}
+        run: |
+          if [[ "$NEGATIVE_OUTCOME" != "failure" ]]; then
+            echo "::error::Expected the deliberate missing type to make the Roslyn action fail; got '$NEGATIVE_OUTCOME'."
+            exit 1
+          fi
+          echo "Expected failure confirmed. Inspect the preceding Roslyn log for CS0246 naming MissingTypeForUnityToolCI."
+
+      - name: Remove intentional error fixture
+        if: always() && github.event_name == 'pull_request'
+        shell: bash
+        run: rm -f Tests/Editor/UnityToolCIIntentionalCompileError.cs
