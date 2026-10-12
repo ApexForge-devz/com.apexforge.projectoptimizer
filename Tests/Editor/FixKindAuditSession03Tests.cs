@@ -261,8 +261,15 @@ namespace ApexForge.ProjectOptimizer.Tests
 
             try
             {
-                // Path(Transform) omits the prefab root object, so this child's stored path is just its name.
-                var paths = new List<string> { "GameObject" };
+                // Capture the same root-qualified hierarchy path that production's Path(Transform) records.
+                // Deriving it from the saved prefab avoids assuming Unity preserves a particular root name.
+                var prefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
+                Assert.IsNotNull(prefabAsset, "Saved prefab must be reloadable before verifier checks.");
+                var prefabTarget = prefabAsset.transform.Find("GameObject");
+                Assert.IsNotNull(prefabTarget, "The child target must exist in the saved prefab.");
+                string targetPath = InvokeAnalyzerHelper<string>("Path", new object[] { prefabTarget });
+                Assert.IsFalse(string.IsNullOrEmpty(targetPath), "Path helper must capture the target.");
+                var paths = new List<string> { targetPath };
                 Assert.IsFalse(InvokeAnalyzerHelper<bool>("PathsAreAbsent", new object[] { assetPath, false, paths }),
                     "The postcondition must fail while a captured target path still exists.");
                 var editable = PrefabUtility.LoadPrefabContents(assetPath);
