@@ -103,9 +103,10 @@ namespace ApexForge.ProjectOptimizer
 							why: "Tangents are commonly required by tangent-space normal mapping, but runtime materials and shaders can differ from the materials imported from the model.",
 							fix: "Set imported tangents to None when analyzer-collected material evidence finds no normal-map use; restore tangents on exceptional runtime shader paths.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Verified,
-							confidence: OptimizationConfidence.Heuristic,
-							risk: FixRisk.Unspecified,
+							fixKind: FixKind.Review,
+							confidence: OptimizationConfidence.HighConfidence,
+							recommendationConfidence: OptimizationConfidence.Heuristic,
+							risk: FixRisk.Medium,
 							backupRequired: true
 							);
 
@@ -154,9 +155,10 @@ namespace ApexForge.ProjectOptimizer
 							why: "Imported materials can create project-owned materials derived from the source asset. Extracting embedded materials into standalone project assets provides explicit, reusable material references and makes them independently configurable for optimization and maintenance.",
 							fix: "Extract embedded materials from the model into project-managed .mat assets and remap the model to use the extracted materials.",
 							severity: IssueSeverity.Info,
-							fixKind: FixKind.Verified,
+							fixKind: FixKind.Review,
 							confidence: OptimizationConfidence.HighConfidence,
-							risk: FixRisk.Low,
+							recommendationConfidence: OptimizationConfidence.Heuristic,
+							risk: FixRisk.Medium,
 							backupRequired: true
 							);
 
