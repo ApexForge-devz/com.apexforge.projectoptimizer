@@ -389,7 +389,7 @@ namespace ApexForge.ProjectOptimizer.Tests
             StringAssert.DoesNotContain("entry.AddIssue(\"SHD011\"", shader);
             StringAssert.Contains("mdl015OwnsSkinnedModelOverlap", animation);
             StringAssert.Contains("GetComponentsInChildren<SkinnedMeshRenderer>(true)", sharedModel);
-            StringAssert.Contains("activeBuildTarget != selectedBuildTarget", projectSettings);
+            StringAssert.Contains("activeBuildTarget != PlatformUtility.ToBuildTarget(settings.targetPlatform)", projectSettings);
             StringAssert.Contains("bool developmentIntent = EditorUserBuildSettings.activeBuildTarget == PlatformUtility.ToBuildTarget(settings.targetPlatform)", projectSettings);
             StringAssert.Contains("FilterGenericCcdBodies(facts, settings, entry.Path)", prefab);
             StringAssert.Contains("SetCollisionMode(c, isScene, CollisionDetectionMode.Discrete, continuousBodyPaths)", prefab);
