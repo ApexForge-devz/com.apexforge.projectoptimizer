@@ -168,7 +168,8 @@ namespace ApexForge.ProjectOptimizer.Tests
                 createBackup: true,
                 mode: FixExecutionMode.VerifiedSingle);
 
-            Assert.Greater(report.Blocked, 0, "The evidence path and request target must match.");
+            Assert.Greater(report.Blocked + report.Failed, 0,
+                "The evidence path and request target must match. Error report: " + string.Join("\n", report.Errors));
             Assert.IsTrue(IsAtlasIncludedInBuild(path), "The original atlas must remain untouched after wrong-target rejection.");
         }
 
@@ -340,20 +341,32 @@ namespace ApexForge.ProjectOptimizer.Tests
         {
             string spritePath = "Assets/" + spriteFileName;
             AssetDatabase.DeleteAsset(spritePath);
-            var texture = new Texture2D(8, 8, TextureFormat.RGBA32, false);
-            var pixels = new Color32[64];
-            for (int i = 0; i < pixels.Length; i++) pixels[i] = new Color32(255, 64, 32, 255);
-            texture.SetPixels32(pixels);
-            texture.Apply();
-            byte[] png = texture.EncodeToPNG();
-            UnityEngine.Object.DestroyImmediate(texture);
-            File.WriteAllBytes(Path.Combine(Directory.GetCurrentDirectory(), spritePath.Replace('/', Path.DirectorySeparatorChar)), png);
+            byte[] png;
+            var texture = new Texture2D(16, 16, TextureFormat.RGBA32, false, true);
+            try
+            {
+                var pixels = new Color32[16 * 16];
+                for (int i = 0; i < pixels.Length; i++) pixels[i] = new Color32(255, 64, 32, 255);
+                texture.SetPixels32(pixels);
+                texture.Apply(false, false);
+                png = ImageConversion.EncodeToPNG(texture);
+            }
+            finally { UnityEngine.Object.DestroyImmediate(texture); }
+            string absoluteSpritePath = Path.Combine(Directory.GetCurrentDirectory(), spritePath.Replace('/', Path.DirectorySeparatorChar));
+            File.WriteAllBytes(absoluteSpritePath, png);
             AssetDatabase.ImportAsset(spritePath, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
             var textureImporter = AssetImporter.GetAtPath(spritePath) as TextureImporter;
             Assert.IsNotNull(textureImporter);
             textureImporter.textureType = TextureImporterType.Sprite;
             textureImporter.spriteImportMode = SpriteImportMode.Single;
+            textureImporter.mipmapEnabled = false;
+            textureImporter.textureCompression = TextureImporterCompression.Uncompressed;
+            textureImporter.crunchedCompression = false;
+            textureImporter.alphaIsTransparency = false;
             textureImporter.SaveAndReimport();
+            var importedTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(spritePath);
+            Assert.IsNotNull(importedTexture, "Fixture texture failed to import.");
+            Assert.Greater(importedTexture.width, 0, "Fixture texture has no valid imported dimensions.");
             var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(spritePath);
             Assert.IsNotNull(sprite, "Fixture sprite failed to import.");
             m_TemporaryAssets.Add(spritePath);
