@@ -366,13 +366,25 @@ namespace ApexForge.ProjectOptimizer.Tests
                         throw new InvalidDataException("PNG fixture has an invalid chunk length.");
                     string type = System.Text.Encoding.ASCII.GetString(png, offset + 4, 4);
                     int chunkBytes = checked((int)chunkLength + 12);
-                    if (type == "IHDR" || type == "IDAT" || type == "IEND")
+                    if (type == "IHDR")
                     {
-                        output.Write(png, chunkStart, chunkBytes);
-                        sawHeader |= type == "IHDR";
-                        sawData |= type == "IDAT";
-                        if (type == "IEND") sawEnd = true;
+                        if (sawHeader || offset != 8) throw new InvalidDataException("PNG fixture has an invalid IHDR position.");
+                        sawHeader = true;
                     }
+                    else if (type == "IDAT")
+                    {
+                        if (!sawHeader || sawEnd) throw new InvalidDataException("PNG fixture has an invalid IDAT position.");
+                        sawData = true;
+                    }
+                    else if (type == "IEND")
+                    {
+                        if (!sawData || chunkLength != 0) throw new InvalidDataException("PNG fixture has an invalid IEND.");
+                        sawEnd = true;
+                    }
+
+                    if (type == "IHDR" || type == "IDAT" || type == "IEND")
+                        output.Write(png, chunkStart, chunkBytes);
+
                     offset += chunkBytes;
                     if (type == "IEND") break;
                 }
