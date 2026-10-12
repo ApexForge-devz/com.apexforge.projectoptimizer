@@ -340,6 +340,8 @@ namespace ApexForge.ProjectOptimizer.Tests
                 Assert.IsNotNull(rule, id);
                 Assert.AreEqual(FixKind.Review, rule.FixKind, id + " must keep a review gate for runtime-content or fidelity uncertainty.");
                 Assert.GreaterOrEqual(rule.Confidence, RuleCatalog.MinimumForReviewFix, id + " must meet the Review confidence floor.");
+                Assert.Less(rule.RecommendationConfidence, RuleCatalog.MinimumForAutomaticFix,
+                    id + " must not silently become eligible for automatic execution.");
             }
         }
 
