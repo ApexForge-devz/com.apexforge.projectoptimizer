@@ -28,8 +28,9 @@ namespace ApexForge.ProjectOptimizer.Tests
         [TestCase("ANI007", FixKind.None)]
         [TestCase("ANI008", FixKind.None)]
         [TestCase("ANI009", FixKind.Verified)]
-        [TestCase("ANI010", FixKind.Verified)]
-        [TestCase("ANI011", FixKind.Verified)]
+        // These importer changes can break hierarchy consumers or motion fidelity; keep them Review-only.
+        [TestCase("ANI010", FixKind.Review)]
+        [TestCase("ANI011", FixKind.Review)]
         [TestCase("MDL001", FixKind.Verified)]
         [TestCase("MDL002", FixKind.Verified)]
         [TestCase("MDL003", FixKind.Verified)]
@@ -37,12 +38,14 @@ namespace ApexForge.ProjectOptimizer.Tests
         [TestCase("MDL005", FixKind.Verified)]
         [TestCase("MDL006", FixKind.Verified)]
         [TestCase("MDL007", FixKind.Verified)]
-        [TestCase("MDL008", FixKind.Verified)]
+        // Runtime-assigned materials/shaders are not fully knowable from import-time material evidence.
+        [TestCase("MDL008", FixKind.Review)]
         [TestCase("MDL009", FixKind.None)]
         [TestCase("MDL010", FixKind.Verified)]
         [TestCase("MDL011", FixKind.None)]
         [TestCase("MDL012", FixKind.Verified)]
-        [TestCase("MDL013", FixKind.Verified)]
+        // Extraction creates project assets and remaps material references; it requires explicit review.
+        [TestCase("MDL013", FixKind.Review)]
         [TestCase("MDL014", FixKind.Verified)]
         [TestCase("MDL015", FixKind.Verified)]
         [TestCase("MDL016", FixKind.Verified)]
